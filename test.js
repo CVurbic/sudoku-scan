@@ -35,6 +35,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.strictEqual(await grid(), PRINTED, 'printed OCR');
   await page.click('#setTask');
   const solution = await page.evaluate(() => task.solution.join(''));
+  const pill = await page.$eval('#diff', d => [d.hidden, d.textContent]);
+  assert.ok(!pill[0] && /^Težina\d+% · /.test(pill[1]), 'difficulty pill: ' + pill[1]);
   // Tries during the first step ("5 in the top-right box goes to r2c8"): r1c8 clashes with row 1's 5, r2c8 is right.
   const typeIn = async (cell, d) => {   // tap the cell, then the pad key
     await page.evaluate(cell => document.querySelectorAll('#grid input')[cell].click(), cell);
@@ -50,10 +52,11 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   console.log('scan tries: wrong → "Ne može: 5 već postoji u redu 1…", right → "Točno! Tehnika: Jedino mjesto…"');
 
   // Each step takes 3 presses (where to look → why → answer); the answer must always be right.
-  let steps = 0, reveals = 0;
+  let steps = 0, reveals = 0, celebrated = 0;
   const techs = {};
   for (let press = 0; press < 400; press++) {
     await page.click('#hintBtn');
+    if (await page.evaluate(() => solved.open)) { celebrated++; await page.click('#solvedClose'); }   // the last answer completes the board
     const text = await page.$eval('#explain', e => e.textContent);
     if (text === 'Sve je riješeno!') break;
     if (press < 3) console.log(`first step, level ${press + 1}:`, text.replace(/\n/g, ' | '));
@@ -68,6 +71,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
     assert.strictEqual((await grid())[cell], solution[cell], `step ${steps}: ${text}`);
   }
   assert.strictEqual(await grid(), solution);
+  assert.strictEqual(celebrated, 1, '"Riješeno!" once');
   console.log(`printed: OCR 81/81, solved in ${steps} steps (${reveals} reveals), techniques shown:`, JSON.stringify(techs));
 
   // History: one entry for this puzzle, solved; the same puzzle again stays one entry; opening it brings it back.
@@ -77,13 +81,47 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.strictEqual((await hist()).length, 1, 'no duplicate');
   await page.click('#newBtn');
   await page.click('#historyBtn');
-  assert.strictEqual(await page.$eval('.hmeta b', b => b.textContent), 'Riješeno');
+  assert.strictEqual(await page.$eval('.hmeta b', b => b.textContent), 'Riješeno ✓');
   await page.click('.hrow');
   assert.deepStrictEqual([await page.evaluate(() => task.givens.join('')), await grid()], [PRINTED, solution], 'opened from history');
   console.log('history: one entry per puzzle, solved, reopens');
 
+  // 1a. Daily sudokus: for a date the same three puzzles on every run, each with one solution, easy < medium < hard.
+  const gen = await page.evaluate(() => {
+    const lv = [0, 1, 2].map(l => makeDaily('2026-10-26', l)), again = makeDaily('2026-10-26', 0);
+    return { same: lv[0].givens.join('') === again.givens.join(''), unique: lv.every(p => solve(p.givens).length === 1), diffs: lv.map(p => p.diff) };
+  });
+  assert.ok(gen.same && gen.unique && gen.diffs[0] < 30 && gen.diffs[1] >= 30 && gen.diffs[1] < 55 && gen.diffs[2] >= 55 && gen.diffs[2] < 80, 'daily generator: ' + JSON.stringify(gen));
+  // The card first (rules, three levels, "Kreni"); the clock waits for it. Then solo: no help buttons, a
+  // clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
+  await page.click('#dailyBtn');
+  assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, dailyGo.textContent, !!task?.daily]), [true, 'Kreni', false], 'daily: card before the start');
+  await page.click('#dailyLevels button');   // Lagano
+  await page.click('#dailyGo');
+  await page.waitForFunction(() => task?.daily && !dailyBar.hidden);
+  assert.deepStrictEqual(await page.evaluate(() => ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn'].map(id => $(id).hidden)), [true, true, true, true], 'daily: no help');
+  const clash = await page.evaluate(() => {   // an empty cell + a digit already in its row
+    const i = task.givens.findIndex(d => !d), d = task.givens.find((x, j) => x && (j / 9 | 0) === (i / 9 | 0));
+    sel = i; setCell(d);
+    return [inputs[i].classList.contains('bad'), inputs[i].classList.contains('wrong')];
+  });
+  assert.deepStrictEqual(clash, [true, false], 'daily: duplicate red, nothing judged');
+  await new Promise(r => setTimeout(r, 2200));
+  assert.ok(await page.evaluate(() => daily.elapsed >= 1000), 'daily: the clock runs');
+  await page.click('#dailyBtn');   // the card again: the clock stops while it is open, the level says "U tijeku"
+  const paused = await page.evaluate(() => daily.elapsed);
+  await new Promise(r => setTimeout(r, 2200));
+  assert.deepStrictEqual(await page.evaluate(() => [daily.elapsed, dailyGo.textContent, dailyLevels.children[0].querySelector('small').textContent.startsWith('U tijeku')]),
+    [paused, 'Nastavi', true], 'daily: paused behind its card');
+  await page.click('#dailyGo');
+  await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
+  const card = await page.evaluate(() => [solved.open, solvedText.textContent]);
+  assert.ok(card[0] && /^Riješeno za \d+:\d\d · 1 dan zaredom/.test(card[1]), 'daily solved card: ' + card[1]);
+  await page.click('#solvedClose');
+  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"`);
+
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
-  const hard = await page.evaluate(puzzles => {
+  const hard = await page.evaluate((puzzles, printed) => {
     const techs = {};
     let reveals = 0;
     for (const p of puzzles) {
@@ -95,14 +133,15 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
         g[h.cell] = h.digit;
       }
     }
-    return { techs, reveals };
+    return { techs, reveals, diffs: puzzles.map(p => difficulty([...p].map(Number), solve([...p].map(Number))[0])), easy: (g => difficulty(g, solve(g)[0]))([...printed].map(Number)) };
   }, ['000000010400000000020000000000050407008000300001090000300400200050100000000806000',
     '400000805030000000000700000020000060000080400000010000000603070500200000104000000',
     '100007090030020008009600500005300900010080002600004000300000010040000007007000300',
     '000105000140000670080002400063070010900000003010090520007200080026000035000409000',
-    '000000907000420180000705026100904000050000040000507009920108000034059000507000000']);
+    '000000907000420180000705026100904000050000040000507009920108000034059000507000000'], PRINTED);
   assert.ok(!hard.bad, hard.bad);
-  console.log(`hard puzzles: every step right, techniques ${JSON.stringify(hard.techs)}, reveals ${hard.reveals}`);
+  console.log(`hard puzzles: every step right, techniques ${JSON.stringify(hard.techs)}, reveals ${hard.reveals}; difficulty ${hard.diffs.join('/')}%, printed.jpg ${hard.easy}%`);
+  assert.ok(hard.diffs.every(d => d >= 0 && d <= 100) && hard.easy < Math.max(...hard.diffs), 'difficulty ranks the newspaper puzzle below the hard ones');
   assert.ok(hard.techs['Pokazivački par'] && hard.techs['Goli par'], 'advanced techniques used');
 
   // 2. Handwritten progress: every entry is right, so nothing may be flagged wrong.

@@ -26,6 +26,7 @@
     --positive: #1f6f3a; --hint-bg: #cdebd6;
     --negative: #b3261e; --bad-bg: #fbdcd8; --beam: #fbeae8;
     --unsure-bg: #ffe6a0; --unsure-ink: #5f4200;
+    --easy: #2f8a4c; --medium: #c99a06; --hard: #d9681c; --expert: #c2352b;   /* difficulty bands */
     --radius: 8px; --radius-control: 6px; --gap: 12px; --gutter: 16px;
     --font: "Schibsted Grotesk", system-ui, sans-serif;
   }
@@ -39,6 +40,7 @@
       --positive: #6fcf8f; --hint-bg: #173a23;
       --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
       --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
+      --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
     }
   }
   [hidden] { display: none !important; }
@@ -51,7 +53,11 @@
   .bar { display: flex; align-items: center; gap: 10px; height: 56px; }
   .bar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   .mark { width: 22px; height: 22px; flex: none; color: var(--text); }
-  #historyBtn { margin-left: auto; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; }
+  #dailyBtn, #historyBtn { min-height: 40px; padding: 0 12px; border-color: transparent; background: transparent; }
+  #dailyBtn { margin-left: auto; }
+  #dailyBar { display: flex; align-items: baseline; justify-content: space-between; margin: 0; }
+  #dailyBar span { font-weight: 600; }
+  #timer { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
   /* History: a full-height sheet on the phone, a centred panel on a computer. */
   #history { width: min(100vw, 520px); max-width: none; max-height: 100dvh; height: 100dvh; margin: 0 auto; padding: 0 var(--gutter);
@@ -165,11 +171,13 @@
   @media (min-width: 880px) {
     body { max-width: none; display: grid; justify-content: center; align-content: start; column-gap: 48px; row-gap: var(--gap);
       grid-template-columns: min(600px, calc(100dvh - 140px)) 340px; grid-template-rows: auto auto auto auto auto 1fr;
-      grid-template-areas: "bar bar" "grid status" "grid dock" "grid pad" "grid actions" "grid debug"; padding-bottom: 32px; }
+      grid-template-areas: "bar bar" "grid status" "grid daily" "grid diff" "grid dock" "grid pad" "grid actions" "grid debug"; padding-bottom: 32px; }
     #pad { grid-area: pad; }
     .bar { grid-area: bar; }
     #board { grid-area: grid; align-self: start; }
     #status { grid-area: status; }
+    #diff { grid-area: diff; }
+    #dailyBar { grid-area: daily; }
     .dock { grid-area: dock; position: static; margin: 0; padding: 0; border: 0; background: none; }
     .actions { grid-area: actions; }
     details { grid-area: debug; margin: 0; }
@@ -211,7 +219,43 @@
     font-size: 20px; font-weight: 500; }
   #pad #padKind { grid-column: 1 / -1; min-height: 44px; background: #d1d5db; font-size: 16px; }
 
+  /* Difficulty: a pill filled to the percentage in its band's colour. */
+  .diffpill { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; }
+  .diffpill .dtrack { flex: 1; height: 10px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+  .diffpill .dfill { display: block; height: 100%; border-radius: 999px; background: var(--band); transition: width .3s ease-out; }
+  .diffpill b { font-weight: 600; color: var(--text); white-space: nowrap; }
+  .diffpill span:first-child { color: var(--muted); }
+
+  /* Cards (solved, the daily's start): float over the page, grow in. Solved is a rare moment, so it may
+     celebrate a little: the tick draws itself. */
+  #solved, #dailyDlg { width: min(88vw, 380px); padding: 28px 24px 20px; border: 0; border-radius: 20px; background: var(--surface); color: var(--text);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3); }
+  #solved { text-align: center; }
+  #solved::backdrop, #dailyDlg::backdrop { background: rgba(0, 0, 0, 0.45); }
+  #solved[open], #dailyDlg[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
+  #dailyDlg h2 { margin: 0; font-size: 24px; font-weight: 700; }
+  #dailyDate { margin: 2px 0 12px; color: var(--muted); }
+  #dailyDlg p { margin: 0 0 16px; line-height: 1.5; }
+  #dailyLevels { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  #dailyLevels button { justify-content: flex-start; gap: 12px; min-height: 56px; padding: 0 16px; border-radius: 14px; }
+  #dailyLevels button[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+  #dailyLevels .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  #dailyLevels small { margin-left: auto; color: var(--muted); font-size: 14px; }
+  #dailyDlg .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--gap); }
+  #dailyGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.94); } }
+  #solved .tick { width: 72px; height: 72px; fill: none; stroke: var(--positive); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+  #solved .tick path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .42s .14s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  #solved h2 { margin: 8px 0 4px; font-size: 26px; font-weight: 700; }
+  #solved p { margin: 0 0 16px; color: var(--muted); }
+  #solved #diffSolved { margin: 0 0 20px; }
+  #solved .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  #solvedClose { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .hmeta b.solved { color: var(--positive); }
+
   @media (prefers-reduced-motion: reduce) {
+    #solved[open], #dailyDlg[open], #solved .tick path { animation: none; stroke-dashoffset: 0; }
     *, *::before, *::after { transition: none !important; }
     button:active, .btn:active { transform: none; }
   }
@@ -221,6 +265,7 @@
 <header class="bar">
   <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
   <h1>Sudoku Scan</h1>
+  <button id="dailyBtn">Dnevni</button>
   <button id="historyBtn">Povijest</button>
 </header>
 <dialog id="history" aria-labelledby="historyTitle">
@@ -244,6 +289,27 @@
   </div>
 </div>
 <p id="status">Učitavam OpenCV…</p>
+<p id="dailyBar" hidden><span id="dailyName"></span><b id="timer" aria-label="Vrijeme">0:00</b></p>
+<p id="diff" class="diffpill" hidden></p>
+<dialog id="dailyDlg" aria-labelledby="dailyTitle">
+  <h2 id="dailyTitle">Dnevni sudoku</h2>
+  <p id="dailyDate"></p>
+  <p>Tri nova sudokua svaki dan. Rješavaš sam, bez pomoći: crveno su samo brojevi koji se ponavljaju.
+    Timer kreće kad stisneš Kreni i stoji dok si izvan aplikacije.</p>
+  <div id="dailyLevels">
+    <button><span class="dot" style="background: var(--easy)"></span><b>Lagano</b><small></small></button>
+    <button><span class="dot" style="background: var(--medium)"></span><b>Srednje</b><small></small></button>
+    <button><span class="dot" style="background: var(--hard)"></span><b>Teško</b><small></small></button>
+  </div>
+  <div class="row"><button id="dailyCancel">Odustani</button><button id="dailyGo">Kreni</button></div>
+</dialog>
+<dialog id="solved" aria-labelledby="solvedTitle">
+  <svg class="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23"/><path d="M15 27l7 7 15-16"/></svg>
+  <h2 id="solvedTitle">Riješeno!</h2>
+  <p id="solvedText">Sve je točno.</p>
+  <p id="diffSolved" class="diffpill"></p>
+  <div class="row"><button id="solvedHistory">Povijest</button><button id="solvedClose">Super</button></div>
+</dialog>
 <div id="board">
   <div id="grid"></div>
   <section id="explainBox">
@@ -326,7 +392,10 @@ function setCell(d) {
     i.classList.toggle('given', !!d && !i.classList.contains('entry'));
     entryLabel();
   }
-  if (task && !task.givens[k]) {
+  if (task?.daily) {   // solo: nothing judged, only duplicates show (markConflicts); typing is the progress
+    daily.values = inputs.map(x => +x.value || 0).join('');
+    saveDaily();
+  } else if (task && !task.givens[k]) {
     const flagged = i.classList.contains('maybe') || i.classList.contains('wrong');
     i.classList.remove('ok', 'wrong', 'maybe');
     if (d) i.classList.add(d === task.solution[k] ? 'ok' : 'wrong');
@@ -342,8 +411,7 @@ function setKind() {
   i.classList.toggle('given', !i.classList.toggle('entry'));
   entryLabel();
 }
-try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch {}
-showTask();
+try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch {}   // shown at the end of the script
 
 async function cvReady() {
   if (cv instanceof Promise) cv = await cv;
@@ -355,13 +423,14 @@ async function cvReady() {
   try { printedModel = await tf.loadLayersModel('model/printed/model.json'); } catch {}   // optional: printed vs handwritten
   rebuildMemory();
   $('file').disabled = $('liveBtn').disabled = false;
-  say('Skeniraj sudoku kamerom ili ga učitaj iz galerije.');
+  say('Skeniraj sudoku kamerom, učitaj ga iz galerije ili riješi današnji dnevni sudoku.');
 }
 
 $('file').onchange = async () => {
   const f = $('file').files[0];
   if (!f) return;
   say('Tražim mrežu…');
+  if (task?.daily) { task = null; showTask(); }   // a photo is never today's daily
   const probs = await readGrid(f);
   if (!probs) return say('Mreža nije pronađena. Probaj sliku snimljenu bliže i ravnije, ili skeniraj kamerom.');
   showScan(lastProbs = probs);
@@ -564,7 +633,15 @@ function showTask() {
     inp.classList.remove('entry');
   });
   entryLabel();
-  for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn', 'newBtn']) $(id).hidden = !task;
+  for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn']) $(id).hidden = !task || !!task.daily;   // the daily is solo
+  $('newBtn').hidden = !task;
+  $('dailyBar').hidden = !task?.daily;
+  if (task?.daily) {
+    $('dailyName').textContent = `Dnevni · ${DAILY[task.level][0]} · ` + new Date(task.daily + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' });
+    $('timer').textContent = clock(daily.elapsed);
+  }
+  if (task) diffPill($('diff'), saved().find(e => e.key === task.solution.join(''))?.diff ?? difficulty(task.givens, task.solution));
+  else $('diff').hidden = true;
 }
 
 // Candidates: in every empty cell the digits still possible there (from the givens and right entries).
@@ -738,6 +815,7 @@ function tryMove(k, d) {
 
 $('solveBtn').onclick = () => {
   clearHint();
+  celebrated = task.solution.join('');   // shown, not solved: no "Riješeno!"
   inputs.forEach((x, i) => {
     if (task.givens[i]) return;
     x.value = task.solution[i];
@@ -749,18 +827,20 @@ $('solveBtn').onclick = () => {
 
 // --- History: every sudoku worked on, one entry per puzzle (its solution is the key, so a puzzle scanned
 // again is the same entry), last used first. Entry: { key, givens, done: right digits of the user,
-// both 81-digit strings, first, last: ms }. ---
+// both 81-digit strings, diff: 0-100, first, last: ms, daily: its date, time: ms it took (daily) }. ---
 const HISTORY_MAX = 100;
 function saved() {
   try { return JSON.parse(localStorage.sudokuHistory || '[]'); } catch { return []; }
 }
 // Same puzzle again → merged: fewer givens win (the truly printed ones), right digits add up. → entry
-function remember(solution, givens, done) {
+function remember(solution, givens, done, extra = {}) {
   const key = solution.join(''), list = saved(), old = list.find(e => e.key === key);
   const e = old || { key, givens: givens.join(''), done: '0'.repeat(81), first: Date.now() };
-  if (givens.filter(Boolean).length < [...e.givens].filter(d => +d).length) e.givens = givens.join('');
+  if (givens.filter(Boolean).length < [...e.givens].filter(d => +d).length) { e.givens = givens.join(''); delete e.diff; }
+  e.diff ??= difficulty([...e.givens].map(Number), solution);
   e.done = [...e.done].map((d, i) => +e.givens[i] ? 0 : +d || done[i] || 0).join('');
   e.last = Date.now();
+  Object.assign(e, extra);
   try { localStorage.sudokuHistory = JSON.stringify([e, ...list.filter(x => x !== old)].slice(0, HISTORY_MAX)); } catch {}
   return e;
 }
@@ -772,8 +852,9 @@ function showHistory() {
     const blanks = [...e.givens].filter(d => !+d).length, done = [...e.done].filter(d => +d).length;
     open.className = 'hrow';
     open.append(miniGrid(e), Object.assign(document.createElement('span'), { className: 'hmeta' }));
-    open.lastChild.append(Object.assign(document.createElement('b'), { textContent: done === blanks ? 'Riješeno' : `${done} od ${blanks} polja` }),
-      Object.assign(document.createElement('small'), { textContent: new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }));
+    open.lastChild.append(Object.assign(document.createElement('b'), done === blanks ? { textContent: e.time ? `Riješeno za ${clock(e.time)} ✓` : 'Riješeno ✓', className: 'solved' } : { textContent: `${done} od ${blanks} polja` }),
+      Object.assign(document.createElement('small'), { textContent: (e.daily ? `Dnevni ${DAILY[e.level]?.[0].toLowerCase() ?? ''} · ` : '') + new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        + (e.diff === undefined ? '' : ` · ${diffLevel(e.diff)[1]}`) }));
     open.onclick = () => openTask(e);
     del.className = 'hdel'; del.textContent = 'Obriši';
     del.onclick = () => {
@@ -806,12 +887,14 @@ function miniGrid(e) {
 // A sudoku from the history becomes the task again, with the user's right digits filled in.
 function openTask(e) {
   $('history').close();
+  if (e.daily === dayKey()) return openDaily(e.level ?? 0);   // today's stays solo; older dailies open as practice, with help
   task = { givens: [...e.givens].map(Number), solution: [...e.key].map(Number) };
   try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
   clearHint();
   lastProbs = null;
   lastVecs = Array.from({ length: 81 }, () => []);
   inputs.forEach((x, i) => { x.className = ''; x.value = +e.done[i] || ''; if (+e.done[i]) x.classList.add('ok'); });
+  celebrated = e.key;   // reopening a solved one is no new success
   showTask();
   markConflicts();
   say('Sudoku iz povijesti. Nastavi ovdje ili skeniraj papir za provjeru.');
@@ -885,6 +968,38 @@ const TECH = {
     how: 'Ako dva polja u istom redu, stupcu ili kvadratu mogu imati samo ista dva broja, ta dva broja pripadaju njima. Iz ostalih polja tog reda, stupca ili kvadrata ih precrtaj, pa potraži jedino mjesto ili jedini broj.' },
 };
 const HINT_NEXT = { 1: 'Zašto?', 2: 'Pokaži odgovor', 3: 'Sljedeći korak' };
+
+// How hard a puzzle is for a person, 0-100: solve it with the hints' own techniques, easiest first.
+// The hardest technique needed sets the band (null: beyond them, the cell is revealed). Within it:
+// fewer givens is harder (36 → bottom, 22 → top), and from naked singles up also how often the
+// hardest technique was needed.
+const BANDS = [[TECH.full, 0], [TECH.hidden, 10], [TECH.naked, 30], [TECH.pointing, 55], [TECH.pair, 65], [null, 80]];
+function difficulty(givens, solution) {
+  const g = givens.slice();
+  let hardest = 0, n = 0;
+  while (g.some(d => !d)) {
+    const h = hint(g) || reveal(g, solution), k = BANDS.findIndex(([t]) => t === h.tech);
+    if (k > hardest) { hardest = k; n = 0; }
+    if (k === hardest) n++;
+    g[h.cell] = h.digit;
+  }
+  const lo = BANDS[hardest][1], hi = (BANDS[hardest + 1]?.[1] ?? 100) - 1;   // top of a band stays in it
+  const few = Math.min(1, Math.max(0, (36 - givens.filter(Boolean).length) / 14));
+  return Math.round(lo + (hi - lo) * (hardest <= 1 ? few : (few + Math.min(1, n / 8)) / 2));
+}
+const LEVELS = [[30, 'Lagano', '--easy'], [55, 'Srednje', '--medium'], [80, 'Teško', '--hard'], [101, 'Vrlo teško', '--expert']];
+const diffLevel = pct => LEVELS.find(([top]) => pct < top);
+
+// The pill: "Težina [████░░░] 42% · Srednje", filled in the band's colour.
+function diffPill(el, pct) {
+  const [, name, color] = diffLevel(pct);
+  el.style.setProperty('--band', `var(${color})`);
+  el.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Težina' }),
+    Object.assign(document.createElement('span'), { className: 'dtrack' }), Object.assign(document.createElement('b'), { textContent: `${pct}% · ${name}` }));
+  el.children[1].append(Object.assign(document.createElement('span'), { className: 'dfill', style: `width: ${Math.max(pct, 4)}%` }));
+  el.setAttribute('aria-label', `Težina ${pct} posto, ${name}`);
+  el.hidden = false;
+}
 const cap = s => s[0].toUpperCase() + s.slice(1);
 
 // Human steps. Each returns what a teacher would point at: area/focus (where to look), blockers (digits
@@ -1547,10 +1662,26 @@ function painter(ctx, quad, k, rot) {
   };
 }
 
-// Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn.
+// The whole board right → "Riješeno!", once per puzzle; not when it was opened solved or "Riješi sve" filled it.
+let celebrated = null;
+function checkSolved() {
+  const key = task?.solution.join('');
+  if (!task || celebrated === key || !inputs.every((x, i) => +x.value === task.solution[i])) return;
+  celebrated = key;
+  diffPill($('diffSolved'), saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution));
+  $('solvedText').textContent = task.daily ? dailySolved() : 'Sve je točno.';
+  $('solved').showModal();
+}
+$('solvedClose').onclick = () => $('solved').close();
+$('solvedHistory').onclick = () => { $('solved').close(); showHistory(); $('history').showModal(); };
+
+// Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn,
+// a finished board celebrated.
 function markConflicts() {
-  if (task) remember(task.solution, task.givens, inputs.map((x, i) => x.classList.contains('ok') ? task.solution[i] : 0));
+  if (task) remember(task.solution, task.givens, inputs.map((x, i) => (task.daily ? +x.value === task.solution[i] : x.classList.contains('ok')) ? task.solution[i] : 0),
+    task.daily ? { daily: task.daily, level: task.level } : {});
   drawCands();
+  checkSolved();
   const v = inputs.map(i => i.classList.contains('maybe') ? '' : i.value);   // an unsure reading flags nothing
   inputs.forEach((inp, i) => {
     const r = i / 9 | 0, c = i % 9;
@@ -1558,6 +1689,150 @@ function markConflicts() {
       ((j / 9 | 0) === r || j % 9 === c || ((j / 27 | 0) === (i / 27 | 0) && (j % 9 / 3 | 0) === (c / 3 | 0)))));
   });
 }
+
+// --- Daily sudoku: three a day (Lagano, Srednje, Teško), the same for everyone on a date, generated
+// from the date alone (no server). Solo: no help, only duplicates marked; a full board without
+// duplicates is the solution (it is unique). A card says the rules first; the timer starts on "Kreni"
+// and runs only while the sudoku is on screen. ---
+// Per level: [name, givens to keep, accepted difficulty from, to] (hard: still solvable with the
+// techniques the hints know).
+const DAILY = [['Lagano', 36, 0, 30], ['Srednje', 28, 30, 55], ['Teško', 22, 55, 80]];
+function rng(seed) {   // mulberry32: the same numbers from the same seed on every device
+  let a = seed >>> 0;
+  return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const hash = str => [...str].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261);
+const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = r() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function fullGrid(r) {
+  const g = Array(81).fill(0);
+  (function fill(i) {
+    if (i === 81) return true;
+    for (const d of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9], r)) if (!PEERS[i].some(j => g[j] === d)) { g[i] = d; if (fill(i + 1)) return true; }
+    g[i] = 0;
+    return false;
+  })(0);
+  return g;
+}
+// Date "YYYY-MM-DD" + level → { givens, solution, diff }: a random full grid emptied cell by cell while
+// the solution stays unique; the first try in the level's difficulty range wins, else the closest one.
+// ponytail: up to ~3 s for Teško (computer); made once a day, then kept in the day's save.
+function makeDaily(date, lvl) {
+  const [, keep, lo, hi] = DAILY[lvl];
+  let best = null;
+  for (let k = 0; k < 80; k++) {
+    const r = rng(hash(`${date}#${lvl}#${k}`)), solution = fullGrid(r), givens = solution.slice();
+    for (const i of shuffle([...Array(81).keys()], r)) {
+      if (givens.filter(Boolean).length <= keep) break;
+      const v = givens[i];
+      givens[i] = 0;
+      if (solve(givens, 2).length !== 1) givens[i] = v;
+    }
+    const p = { givens, solution, diff: difficulty(givens, solution) };
+    if (p.diff >= lo && p.diff < hi) return p;
+    if (!best || Math.abs(p.diff - (lo + hi) / 2) < Math.abs(best.diff - (lo + hi) / 2)) best = p;
+  }
+  return best;
+}
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const clock = ms => { const t = Math.floor(ms / 1000), h = t / 3600 | 0, m = t / 60 % 60 | 0, sec = String(t % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
+
+// days: today's { date, levels: 3 × ({ givens, solution, diff, values: 81 digits typed, elapsed: ms, solvedAt: ms | null } | null) };
+// daily: the one being played (one of days.levels).
+let days = null, daily = null;
+function loadDays() {
+  try { days = JSON.parse(localStorage.sudokuDaily || 'null'); } catch { days = null; }
+  if (days?.date !== dayKey() || !days.levels) days = { date: dayKey(), levels: [null, null, null] };
+  return days;
+}
+const saveDaily = () => { try { localStorage.sudokuDaily = JSON.stringify(days); } catch {} };
+const dailyDone = () => { try { return JSON.parse(localStorage.sudokuDailyDone || '{}'); } catch { return {}; } };   // "date/level" → { ms }
+
+// The card before a daily: the rules, the three levels with how far each got, "Kreni" (the clock waits for it).
+let pickLvl = 0;
+function openDaily(lvl) {
+  loadDays();
+  pickLvl = lvl ?? Math.max(0, days.levels.findIndex(st => !st?.solvedAt));
+  $('dailyDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
+  showLevels();
+  $('dailyDlg').showModal();
+}
+function showLevels() {
+  [...$('dailyLevels').children].forEach((b, i) => {
+    const st = days.levels[i];
+    b.ariaPressed = String(i === pickLvl);
+    b.querySelector('small').textContent = st?.solvedAt ? `Riješeno za ${clock(st.elapsed)} ✓` : st?.elapsed ? `U tijeku · ${clock(st.elapsed)}` : 'Nije počet';
+  });
+  const st = days.levels[pickLvl];
+  $('dailyGo').textContent = st?.solvedAt ? 'Pogledaj' : st?.elapsed ? 'Nastavi' : 'Kreni';
+}
+[...$('dailyLevels').children].forEach((b, i) => b.onclick = () => { pickLvl = i; showLevels(); });
+$('dailyCancel').onclick = () => $('dailyDlg').close();
+$('dailyBtn').onclick = () => openDaily(task?.daily === dayKey() ? task.level : undefined);
+$('dailyGo').onclick = async () => {
+  if (!days.levels[pickLvl]) {
+    $('dailyGo').disabled = true;
+    $('dailyGo').textContent = 'Pripremam…';
+    await new Promise(r => setTimeout(r, 30));   // let that show before the work
+    days.levels[pickLvl] = { ...makeDaily(days.date, pickLvl), values: '0'.repeat(81), elapsed: 0, solvedAt: null };
+    saveDaily();
+    $('dailyGo').disabled = false;
+  }
+  $('dailyDlg').close();
+  playDaily(pickLvl);
+};
+
+// Put one of today's dailies on the board.
+function playDaily(lvl) {
+  daily = days.levels[lvl];
+  task = { givens: daily.givens, solution: daily.solution, daily: days.date, level: lvl };
+  try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
+  clearHint();
+  lastProbs = null;
+  lastVecs = Array.from({ length: 81 }, () => []);
+  inputs.forEach((x, i) => { x.className = ''; x.value = +daily.values[i] || ''; });
+  celebrated = daily.solvedAt ? daily.solution.join('') : null;
+  showTask();
+  markConflicts();
+  say(daily.solvedAt ? `Riješeno za ${clock(daily.elapsed)}. Novi dnevni sudokui stižu sutra.`
+    : 'Rješavaš sam, bez pomoći. Crveno su samo brojevi koji se ponavljaju.');
+}
+
+// A daily done: stop the clock, keep the record. → the card's line: time, streak (days with at least
+// one daily solved), best of this level.
+function dailySolved() {
+  daily.solvedAt = Date.now();
+  saveDaily();
+  const done = dailyDone();
+  done[`${days.date}/${task.level}`] = { ms: daily.elapsed };
+  try { localStorage.sudokuDailyDone = JSON.stringify(done); } catch {}
+  remember(task.solution, task.givens, task.solution, { daily: days.date, level: task.level, time: daily.elapsed });
+  const dates = new Set(Object.keys(done).map(k => k.slice(0, 10)));
+  let streak = 0;
+  for (const d = new Date(); dates.has(dayKey(d)); d.setDate(d.getDate() - 1)) streak++;
+  const same = Object.entries(done).filter(([k]) => k.endsWith('/' + task.level)).map(([, r]) => r.ms), best = Math.min(...same);
+  return `Riješeno za ${clock(daily.elapsed)} · ${streak} ${streak % 10 === 1 && streak % 100 !== 11 ? 'dan' : 'dana'} zaredom`
+    + (same.length < 2 ? '' : best === daily.elapsed ? ' · novi rekord!' : ` · najbolje (${DAILY[task.level][0].toLowerCase()}): ${clock(best)}`);   // a record needs a second one
+}
+
+// The clock: counts only while one of today's dailies is on the board, unsolved, the page on screen
+// (another app or a locked phone stops it; a gap over 5 s means the page slept) and no card over it.
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now(), dt = now - lastTick;
+  lastTick = now;
+  if (task?.daily !== days?.date || !daily || daily.solvedAt || document.hidden || dt > 5000 || $('dailyDlg').open) return;
+  daily.elapsed += dt;
+  saveDaily();
+  $('timer').textContent = clock(daily.elapsed);
+}, 1000);
+
+// The saved task, now that everything it needs exists. Today's daily comes back paused, behind its
+// card ("Nastavi"); one from an earlier day goes on as an ordinary task.
+if (task?.daily === dayKey() && loadDays().levels[task.level]) {
+  playDaily(task.level);
+  if (!daily.solvedAt) openDaily(task.level);
+} else { if (task) delete task.daily; showTask(); }
 </script>
 <script async src="vendor/opencv.js" onload="cvReady()" onerror="say('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
 </body>
