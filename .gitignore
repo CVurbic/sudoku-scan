@@ -1,0 +1,7 @@
+node_modules/
+.mnist/
+.data/
+# not published: photos of magazine/newspaper pages (others' copyright) and own training photos
+test/
+moje-slike/
+.taste-skill/

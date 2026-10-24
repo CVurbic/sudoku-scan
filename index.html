@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f3f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
+<title>Sudoku Scan</title>
+<style>
+  /* Everything is served from this site (no font or script CDN): visitors talk to no one else. */
+  @font-face { font-family: "Schibsted Grotesk"; font-weight: 400 700; font-display: swap;
+    src: url(fonts/schibsted-grotesk-latin.woff2) format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: "Schibsted Grotesk"; font-weight: 400 700; font-display: swap;   /* č ć đ š ž */
+    src: url(fonts/schibsted-grotesk-latin-ext.woff2) format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  /* Newsprint: ink on stone paper, chrome without colour. Colour only on cell states; the one blue marks where to look. */
+  :root {
+    color-scheme: light dark;
+    --ground: #f4f3f1; --surface: #ffffff; --raised: #e9e8e5; --control: #cfcecb;
+    --text: #121212; --muted: #5e5e5b; --pencil: #4b5057;   /* own entries: graphite, givens: ink */
+    --line: #d4d3cf; --box: #121212;                       /* cell lines / 3×3 box lines */
+    --printed: #dcdbd7;                                    /* cells with a printed digit */
+    --primary: #141414; --on-primary: #ffffff;
+    --hue: #1d5fbf; --area: #e3ebf8; --focus: #bfd2f1;
+    --positive: #1f6f3a; --hint-bg: #cdebd6;
+    --negative: #b3261e; --bad-bg: #fbdcd8; --beam: #fbeae8;
+    --unsure-bg: #ffe6a0; --unsure-ink: #5f4200;
+    --radius: 8px; --radius-control: 6px; --gap: 12px; --gutter: 16px;
+    --font: "Schibsted Grotesk", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #111110; --surface: #1b1b1a; --raised: #282826; --control: #3d3d3a;
+      --text: #f0efec; --muted: #a9a8a3; --pencil: #c4c7cc;
+      --line: #353533; --box: #d9d8d4; --printed: #33332f;
+      --primary: #f0efec; --on-primary: #121212;
+      --hue: #7fa8f0; --area: #1a2638; --focus: #284572;
+      --positive: #6fcf8f; --hint-bg: #173a23;
+      --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
+      --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
+    }
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; background: var(--ground); }
+  body { margin: 0 auto; max-width: 520px; min-height: 100dvh; display: flex; flex-direction: column; gap: var(--gap);
+    padding: env(safe-area-inset-top) max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
+    background: var(--ground); color: var(--text); font: 400 16px/1.45 var(--font); -webkit-tap-highlight-color: transparent; }
+
+  .bar { display: flex; align-items: center; gap: 10px; height: 56px; }
+  .bar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .mark { width: 22px; height: 22px; flex: none; color: var(--text); }
+  #historyBtn { margin-left: auto; min-height: 40px; padding: 0 14px; border-color: transparent; background: transparent; }
+
+  /* History: a full-height sheet on the phone, a centred panel on a computer. */
+  #history { width: min(100vw, 520px); max-width: none; max-height: 100dvh; height: 100dvh; margin: 0 auto; padding: 0 var(--gutter);
+    border: 0; background: var(--ground); color: var(--text); }
+  #history::backdrop { background: rgba(0, 0, 0, 0.5); }
+  @media (min-width: 880px) { #history { height: min(80dvh, 720px); margin: auto; border-radius: 16px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25); } }
+  .hhead { position: sticky; top: 0; display: flex; align-items: center; height: 64px; background: var(--ground); }
+  .hhead h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  #historyClose { margin-left: auto; min-height: 40px; border-color: transparent; background: transparent; }
+  #historyList { margin: 0; padding: 0 0 24px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  #historyList li { display: flex; align-items: center; gap: 4px; padding-right: 4px; border-radius: 12px; background: var(--surface); }
+  .hrow { flex: 1; justify-content: flex-start; gap: 14px; min-height: 0; padding: 10px; border: 0; background: transparent; text-align: left; }
+  .hrow canvas { width: 56px; height: 56px; flex: none; border-radius: 4px; }
+  .hmeta { display: flex; flex-direction: column; gap: 2px; }
+  .hmeta b { font-weight: 600; }
+  .hmeta small { color: var(--muted); font-size: 14px; }
+  .hdel { min-height: 40px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
+  #historyEmpty { margin: 8px 0; color: var(--muted); }
+
+  #status { margin: 0; min-height: 2.9em; font-size: 15px; }
+
+  /* The board: 81 inputs, thin cell lines, ink lines after the 3rd and 6th column and row. */
+  #grid { display: grid; grid-template-columns: repeat(9, 1fr); aspect-ratio: 1; width: 100%; flex: none;
+    border: 2px solid var(--box); border-radius: 4px; overflow: hidden; background: var(--surface); container-type: inline-size; }
+  #grid input { appearance: none; width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background-color: var(--surface); color: var(--pencil); caret-color: var(--hue); text-align: center;
+    font-family: var(--font); font-weight: 400; line-height: 1.5; font-size: clamp(18px, 6vw, 32px); font-size: 6.4cqi;
+    text-decoration-thickness: 2px; text-underline-offset: 0.14em; outline: none;
+    transition: background-color .14s ease-out, color .14s ease-out; }
+  #grid input:nth-child(9n) { border-right: 0; }
+  #grid input:nth-child(n+73) { border-bottom: 0; }
+  #grid input:nth-child(9n+3), #grid input:nth-child(9n+6) { border-right: 2px solid var(--box); }
+  #grid input:nth-child(n+19):nth-child(-n+27), #grid input:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--box); }
+  #grid input:focus { outline: 3px solid var(--hue); outline-offset: -3px; }
+  #grid input { cursor: pointer; }
+  #grid input.sel { outline: 3px solid var(--hue); outline-offset: -3px; }   /* picked for the pad */
+
+  /* Cell states. Each one also differs by more than colour: weight, dotted underline, bottom bar, ring or cross. */
+  #grid input.given { color: var(--text); font-weight: 700; background-color: var(--printed); }   /* printed: grey square */
+  #grid input.entry { color: var(--hue); font-style: italic; }   /* scanned before a task: read as handwritten */
+  #grid input.ok { color: var(--positive); }
+  #grid input.area { background-color: var(--area); }
+  #grid input.focus { background-color: var(--focus); box-shadow: inset 0 0 0 2px var(--hue); }
+  #grid input.beam { background-color: var(--beam); }
+  #grid input.crossed { background-image: linear-gradient(45deg, transparent 46%, var(--negative) 46% 54%, transparent 54%),
+    linear-gradient(-45deg, transparent 46%, var(--negative) 46% 54%, transparent 54%); background-size: 56% 56%;
+    background-position: center; background-repeat: no-repeat; }
+  #grid input.blocker { background-image: radial-gradient(circle closest-side, transparent 80%, var(--negative) 82% 94%, transparent 96%); }
+  #grid input.low, #grid input.maybe { background-color: var(--unsure-bg); color: var(--unsure-ink); text-decoration-line: underline; text-decoration-style: dotted; }
+  #grid input.bad, #grid input.wrong { background-color: var(--bad-bg); color: var(--negative); box-shadow: inset 0 -4px 0 var(--negative); }
+  #grid input.hint { background-color: var(--hint-bg); color: var(--positive); font-weight: 700; }
+
+  /* Buttons: one filled primary at a time — Skeniraj until there is a task, then the step button. */
+  button, .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px;
+    border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); color: var(--text);
+    font: 500 16px/1.2 var(--font); text-align: center; cursor: pointer; user-select: none;
+    transition: transform .12s ease-out, background-color .14s ease-out, border-color .14s ease-out; }
+  button:active, .btn:active { transform: scale(.97); }
+  #liveBtn, #hintBtn { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  body:has(#hintBtn:not([hidden])) #liveBtn { background: var(--surface); border-color: var(--control); color: var(--text); }
+  button:disabled, #file:disabled + label[for="file"].btn { background: var(--raised); border-color: var(--raised); color: var(--muted);
+    cursor: default; transform: none; }
+  :focus-visible, #file:focus-visible + .btn { outline: 3px solid var(--hue); outline-offset: 2px; }
+  #file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 6px; }
+  #setTask, #hintBtn { grid-column: 1 / -1; }
+  #candsBtn[aria-pressed="true"], #explainBtn[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+  #solveBtn, #candsBtn, #explainBtn, #newBtn { min-height: 40px; padding: 0 4px; border-color: transparent; background: transparent; color: var(--muted); font-size: 14px; }
+
+  /* The explanation: a speech bubble floating over the board, its tail on the marked cells (placeBubble).
+     It floats, so it alone gets a shadow. */
+  #board { position: relative; }
+  #explainBox { position: absolute; left: 8px; right: 8px; z-index: 2; display: flex; flex-direction: column;
+    padding: 6px 6px 14px 16px; background: var(--surface); border: 1px solid var(--control); border-radius: 18px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28); }
+  #explainBox:has(#explain:empty) { display: none; }
+  #explainBox .tail { position: absolute; width: 16px; height: 16px; background: var(--surface); transform: rotate(45deg);
+    border: 1px solid var(--control); }
+  #explainBox.up .tail { top: -9px; border-right: 0; border-bottom: 0; }      /* bubble under the cells, tail points up */
+  #explainBox.down .tail { bottom: -9px; border-left: 0; border-top: 0; }     /* bubble over the cells, tail points down */
+  #explainBox.free .tail { display: none; }
+  #explain { overflow-y: auto; }
+  .ehead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; font-weight: 500; }
+  #explainToggle { min-height: 36px; padding: 0 12px; border-color: transparent; background: transparent; font-size: 15px; }
+  #explain { margin: 0; padding-right: 10px; white-space: pre-line; font-size: 14px; line-height: 1.45; }
+  #explainBox.quiet { display: none; }
+  #explainBox { transition: opacity .12s ease-out; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    touch-action: none; }   /* a held finger peeks, it doesn't scroll */
+  #explainBox.peek { opacity: 0.08; }   /* held: the board shows through */
+
+  /* Candidates: small digits over the empty cells, in their 3×3 spots. Taps go through to the cells. */
+  #grid { position: relative; }
+  #cands { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr);
+    pointer-events: none; }
+  #cands > span { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.4cqi; color: var(--muted);
+    font-size: 2.6cqi; font-weight: 500; line-height: 1; text-align: center; align-items: center; }
+
+  details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+  summary { cursor: pointer; padding: 6px 0; }
+  .credits { margin: 6px 0; line-height: 1.5; }
+  .credits a { color: inherit; }
+  canvas { max-width: 100%; }
+  #warped { display: block; margin-top: 8px; border-radius: 4px; }
+
+  /* Capture dock: on the phone it stays under the thumb. */
+  .dock { position: sticky; bottom: 0; margin: auto calc(-1 * var(--gutter)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
+    padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: var(--ground); border-top: 1px solid var(--line); }
+
+  @media (min-width: 880px) {
+    body { max-width: none; display: grid; justify-content: center; align-content: start; column-gap: 48px; row-gap: var(--gap);
+      grid-template-columns: min(600px, calc(100dvh - 140px)) 340px; grid-template-rows: auto auto auto auto auto 1fr;
+      grid-template-areas: "bar bar" "grid status" "grid dock" "grid pad" "grid actions" "grid debug"; padding-bottom: 32px; }
+    #pad { grid-area: pad; }
+    .bar { grid-area: bar; }
+    #board { grid-area: grid; align-self: start; }
+    #status { grid-area: status; }
+    .dock { grid-area: dock; position: static; margin: 0; padding: 0; border: 0; background: none; }
+    .actions { grid-area: actions; }
+    details { grid-area: debug; margin: 0; }
+  }
+
+  /* Live camera (the scanner): always dark. The frozen reading sits on black between the status (top)
+     and an opaque sheet (bottom: pad, Skeniraj ponovo / Potvrdi, tools), sized to the space between
+     them so nothing covers it. Colour only on the digits; Potvrdi is the one light button. */
+  #live { --sheet: #151514; --key: #2a2a28; --key-on: #45443f; --dim: #b0afa9; --ink: #f0efec;
+    --ease: cubic-bezier(0.23, 1, 0.32, 1);
+    position: fixed; inset: 0; z-index: 10; background: #000; color: var(--ink); }
+  #live video, #live canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: contain;
+    transition: transform .28s var(--ease); transform-origin: 0 0; }   /* liftGrid */
+  #liveTip { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left));
+    right: calc(76px + env(safe-area-inset-right)); margin: 0; padding: 10px 14px; border-radius: 16px;
+    background: rgba(21, 21, 20, 0.92); display: flex; flex-direction: column; gap: 2px; }   /* opaque enough over the camera */
+  #tipMain { font: 600 16px/1.3 var(--font); }
+  #tipSub { font: 400 14px/1.4 var(--font); color: var(--dim); }
+  #tipMain:empty, #tipSub:empty { display: none; }
+  #liveClose { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right));
+    width: 48px; height: 48px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(21, 21, 20, 0.92); color: var(--ink); font-size: 20px; }
+  #liveBottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 10px;
+    padding: 12px calc(16px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    border-radius: 20px 20px 0 0; background: var(--sheet); }
+  #liveBottom > * { width: 100%; max-width: 560px; margin: 0 auto; }
+  #liveBar { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+  #liveBar button { min-height: 52px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--key); color: var(--ink); }
+  #liveBar #liveConfirm { background: var(--ink); color: #121211; font-weight: 600; }
+  #liveBar #liveConfirm:disabled { background: var(--key); color: #6f6e6a; }
+  #liveTools { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+  #liveTools button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--dim); font-size: 15px; }
+  #liveTools button[aria-pressed="true"] { background: var(--key); color: var(--ink); }
+  #live #pad { padding: 0; background: none; }
+  #live #pad button { border-radius: 12px; background: var(--key); color: var(--ink); }
+  #live #pad #padKind { background: var(--key-on); }
+  #pad { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; width: 100%; max-width: 480px;
+    padding: 6px; border-radius: 12px; background: rgba(14, 14, 13, 0.85); }
+  #pad button { min-height: 48px; padding: 0; border: 0; border-radius: var(--radius-control); background: #fff; color: #121212;
+    font-size: 20px; font-weight: 500; }
+  #pad #padKind { grid-column: 1 / -1; min-height: 44px; background: #d1d5db; font-size: 16px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+    button:active, .btn:active { transform: none; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
+  <h1>Sudoku Scan</h1>
+  <button id="historyBtn">Povijest</button>
+</header>
+<dialog id="history" aria-labelledby="historyTitle">
+  <div class="hhead"><h2 id="historyTitle">Povijest</h2><button id="historyClose">Zatvori</button></div>
+  <ul id="historyList"></ul>
+  <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
+</dialog>
+<div id="live" hidden>
+  <video id="video" playsinline muted></video><canvas id="overlay"></canvas>
+  <p id="liveTip"><b id="tipMain"></b><span id="tipSub"></span></p>
+  <button id="liveClose" aria-label="Zatvori">✕</button>
+  <div id="liveBottom">
+    <div id="liveBar" hidden>
+      <button id="liveRescan">Skeniraj ponovo</button>
+      <button id="liveConfirm">Potvrdi</button>
+    </div>
+    <div id="liveTools">
+      <button id="liveTorch" hidden aria-pressed="false">Svjetlo</button>
+      <button id="liveView">Papir</button>
+    </div>
+  </div>
+</div>
+<p id="status">Učitavam OpenCV…</p>
+<div id="board">
+  <div id="grid"></div>
+  <section id="explainBox">
+    <span class="tail"></span>
+    <div class="ehead"><span>Drži za pogled ispod</span><button id="explainToggle">Sakrij</button></div>
+    <p id="explain"></p>
+  </section>
+</div>
+<div id="pad" hidden></div>   <!-- number pad; moves into the live camera while it is open -->
+<div class="actions">
+  <button id="setTask">Ovo je zadatak</button>
+  <button id="hintBtn" hidden>Sljedeći korak</button>
+  <button id="solveBtn" hidden>Riješi sve</button>
+  <button id="candsBtn" hidden aria-pressed="false">Kandidati</button>
+  <button id="explainBtn" hidden aria-pressed="true">Objašnjenje</button>
+  <button id="newBtn" hidden>Očisti</button>
+</div>
+<details><summary>O aplikaciji</summary>
+  <p class="credits">Sve radi u tvom pregledniku: slike i sudokui ne napuštaju uređaj.</p>
+  <p class="credits">Čitanje brojki naučeno je na skupu MNIST (Y. LeCun, C. Cortes, C. J. C. Burges, CC BY-SA 3.0), a razlikovanje tiskanih i rukom pisanih na
+    <a href="https://github.com/wichtounet/sudoku_dataset">Sudoku datasetu</a> Baptistea Wichta (CC BY 4.0).
+    Koristi OpenCV.js i TensorFlow.js (Apache 2.0) i font Schibsted Grotesk (SIL Open Font License 1.1); licence su u mapama vendor/ i fonts/.</p>
+  <canvas id="warped" aria-label="Zadnja izravnana mreža"></canvas>
+</details>
+<div class="dock">
+  <input type="file" id="file" accept="image/*" disabled>
+  <label for="file" class="btn">Iz galerije</label>
+  <button id="liveBtn" disabled>Skeniraj</button>
+</div>
+
+<script src="vendor/tf.min.js"></script>   <!-- TensorFlow.js 4.22.0 -->
+<script>
+const S = 64, N = S * 9;   // cell px, warped grid px
+const $ = id => document.getElementById(id);
+const say = t => $('status').textContent = t;
+// Cells are typed into with the number pad (as in the live camera), not the phone keyboard; on a
+// computer the keys 1-9 and Backspace work too.
+const inputs = Array.from({ length: 81 }, (_, k) => {
+  const i = document.createElement('input');
+  i.readOnly = true; i.inputMode = 'none';
+  i.onclick = () => pick(k);
+  i.onkeydown = e => {
+    const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1;
+    if (d < 0 || task?.givens[k]) return;
+    sel = k; setCell(d);
+  };
+  $('grid').append(i);
+  return i;
+});
+// Candidates layer over the cells (drawCands); after the inputs, so their nth-child borders hold.
+const candCells = (() => {
+  const layer = $('grid').appendChild(Object.assign(document.createElement('div'), { id: 'cands', hidden: true }));
+  return inputs.map(() => layer.appendChild(document.createElement('span')));
+})();
+let model, featModel, printedModel = null, task = null;   // task = { givens, solution }: 81 numbers each, 0 = empty
+let sel = null;   // cell picked for the pad
+
+// Tap on a cell → pick it and show the pad (a task's printed digits are fixed); same cell again → put away.
+function pick(k) {
+  if (task?.givens[k]) k = null;
+  sel = k === sel ? null : k;
+  inputs.forEach((x, i) => x.classList.toggle('sel', i === sel));
+  $('pad').hidden = sel === null;
+  $('padKind').hidden = sel === null || !!task || !inputs[sel].value;
+  if (sel !== null) $('padKind').textContent = inputs[sel].classList.contains('entry') ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
+}
+
+// Pad digit (0 = empty) into the picked cell.
+function setCell(d) {
+  const k = sel, i = inputs[k];
+  pick(null);
+  i.value = d || '';
+  if (hintState?.level < 3 && !task.givens[k]) {   // a try during "Sljedeći korak"
+    if (d) tryMove(k, d); else i.classList.remove('ok', 'wrong', 'maybe');
+    return markConflicts();
+  }
+  clearHint();
+  if (!task) {   // a digit typed in counts as printed
+    if (!d) i.classList.remove('entry');
+    i.classList.toggle('given', !!d && !i.classList.contains('entry'));
+    entryLabel();
+  }
+  if (task && !task.givens[k]) {
+    const flagged = i.classList.contains('maybe') || i.classList.contains('wrong');
+    i.classList.remove('ok', 'wrong', 'maybe');
+    if (d) i.classList.add(d === task.solution[k] ? 'ok' : 'wrong');
+    if (flagged && d) learn([[k, d]]);   // typed = what is written on paper
+  }
+  markConflicts();
+}
+
+// Pad "Ovo je moj broj / tiskani broj": the picked digit, printed (grey) ↔ handwritten (blue).
+function setKind() {
+  const i = inputs[sel];
+  pick(null);
+  i.classList.toggle('given', !i.classList.toggle('entry'));
+  entryLabel();
+}
+try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch {}
+showTask();
+
+async function cvReady() {
+  if (cv instanceof Promise) cv = await cv;
+  else if (!cv.Mat) await new Promise(r => cv.onRuntimeInitialized = r);
+  say('Učitavam model…');
+  try { model = await tf.loadLayersModel('model/model.json'); }
+  catch { return say('Model nije pronađen (pokreni train.js).'); }
+  featModel = tf.model({ inputs: model.inputs, outputs: model.layers[model.layers.length - 2].output });
+  try { printedModel = await tf.loadLayersModel('model/printed/model.json'); } catch {}   // optional: printed vs handwritten
+  rebuildMemory();
+  $('file').disabled = $('liveBtn').disabled = false;
+  say('Skeniraj sudoku kamerom ili ga učitaj iz galerije.');
+}
+
+$('file').onchange = async () => {
+  const f = $('file').files[0];
+  if (!f) return;
+  say('Tražim mrežu…');
+  const probs = await readGrid(f);
+  if (!probs) return say('Mreža nije pronađena. Probaj sliku snimljenu bliže i ravnije, ili skeniraj kamerom.');
+  showScan(lastProbs = probs);
+};
+
+// Photo → 81 entries: null (empty cell) or 9 digit probabilities. null if no grid found. Also used by bench.js.
+async function readGrid(file) {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, 1000 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = img.width * k | 0; c.height = img.height * k | 0;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+
+  const grid = findGrid(cv.imread(c));
+  return grid && readTurns(grid.warped).probs;
+}
+
+// Warped RGBA grid (deleted here) → readCells result of the best of 4 turns, plus rot = clockwise turns.
+// Paper may lie rotated: keep the turn the model is most sure about.
+function readTurns(warped) {
+  let best = null, color = warped, gray = new cv.Mat();
+  cv.cvtColor(color, gray, cv.COLOR_RGBA2GRAY);
+  for (let r = 0; r < 4; r++) {
+    if (r) [gray, color] = [gray, color].map(m => { const t = new cv.Mat(); cv.rotate(m, t, cv.ROTATE_90_CLOCKWISE); m.delete(); return t; });
+    const res = readCells(gray, color);
+    if (!best || res.upright > best.upright + 0.05) { best = { ...res, rot: r }; cv.imshow('warped', gray); }   // +0.05: photos are usually upright
+  }
+  gray.delete(); color.delete();
+  lastVecs = best.vecs; lastFeats = best.feats; lastPrinted = best.printed;
+  return best;
+}
+
+// Each cell is binarised twice: a small window keeps thin pen strokes, a large one keeps blurry print whole.
+const THRESHOLDS = [[31, 10], [51, 10]];
+
+// Warped grid → { probs (as readGrid), upright: mean probability that a found digit is not turned,
+// vecs: per cell the model inputs (one per binarisation that saw a digit) }.
+// Model outputs 10 classes: digits 1-9 and "turned" (digit rotated 90/180/270°); a cell's
+// probabilities are the average over its binarisations. A digit seen in only one of them must be
+// read with ≥90% certainty, and its ink must be at least a third as dark as the grid's typical
+// digit; else it is noise (paper texture, specks, creases).
+function readCells(warped, color) {
+  const found = [], bin = new cv.Mat();
+  for (const [block, c] of THRESHOLDS) {
+    cv.adaptiveThreshold(warped, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, block, c);
+    for (let i = 0; i < 81; i++) {
+      const d = cellDigit(bin, warped, color, i / 9 | 0, i % 9);
+      if (d) found.push([i, d]);
+    }
+  }
+  bin.delete();
+  const sum = Array(81).fill(null), hits = Array(81).fill(0), ink = Array(81).fill(0);
+  if (found.length) {
+    const xs = new Float32Array(found.length * 784);
+    found.forEach(([, d], k) => xs.set(d.v, k * 784));
+    const p = tf.tidy(() => model.predict(tf.tensor4d(xs, [found.length, 28, 28, 1])).arraySync());
+    recall(xs, p);
+    found.forEach(([i, d], k) => { hits[i]++; ink[i] = Math.max(ink[i], d.ink); sum[i] = sum[i] ? sum[i].map((x, j) => x + p[k][j]) : p[k]; });
+  }
+  let upright = 0;
+  const inks = ink.filter(Boolean).sort((a, b) => a - b), typical = inks[inks.length >> 1];
+  const probs = sum.map((s, i) => {
+    if (!s || hits[i] < THRESHOLDS.length && Math.max(...s) < 0.9 || ink[i] < typical / 3) return null;
+    const total = s.reduce((a, b) => a + b), turned = s[9] / total;
+    upright += (1 - turned) / 81;   // /81 not /found: a turn that hides digits (90°) scores lower too
+    return s.slice(0, 9).map(x => x / (total - s[9] || 1));
+  });
+  const vecs = Array.from({ length: 81 }, () => []);
+  found.forEach(([i, d]) => probs[i] && vecs[i].push(d.v));
+  // Printed or handwritten: shape (first binarisation's digit) + ink colourfulness, ink/paper brightness,
+  // height and darkness relative to the grid's typical digit.
+  const feats = Array(81).fill(null);
+  for (const [i, d] of found) if (probs[i] && !feats[i]) feats[i] = { v: d.v, s: [d.chroma, d.lum, d.h, ink[i] / typical] };
+  const p = Array(81).fill(null), idx = feats.flatMap((f, i) => f ? [i] : []);
+  if (printedModel && idx.length) {
+    const out = tf.tidy(() => printedModel.predict([
+      tf.tensor4d(idx.flatMap(i => Array.from(feats[i].v)), [idx.length, 28, 28, 1]),
+      tf.tensor2d(idx.flatMap(i => feats[i].s), [idx.length, 4])]).dataSync());
+    idx.forEach((i, k) => p[i] = out[k]);
+  }
+  return { probs, upright, vecs, feats, printed: printedKinds(p, feats) };
+}
+
+// P(printed) per cell → true printed / false handwritten / null empty. Printed digits on one paper look
+// alike (same ink, size), so each cell also leans to the nearer of the grid's two groups (sure ones
+// as centres). Only 1-2 "handwritten" digits: more likely misreadings than a started sudoku → all printed.
+function printedKinds(p, feats) {
+  const idx = p.flatMap((x, i) => x === null ? [] : [i]);
+  const groups = [idx.filter(i => p[i] > 0.8), idx.filter(i => p[i] < 0.2)];
+  if (groups.every(g => g.length >= 3)) {
+    const sd = [0, 1, 2, 3].map(d => {
+      const xs = idx.map(i => feats[i].s[d]), m = xs.reduce((a, b) => a + b) / xs.length;
+      return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / xs.length) || 1;
+    });
+    const [mp, mh] = groups.map(g => sd.map((_, d) => g.reduce((a, i) => a + feats[i].s[d], 0) / g.length));
+    const dist = (i, m) => Math.hypot(...m.map((x, d) => (feats[i].s[d] - x) / sd[d]));
+    p = p.map((x, i) => x === null ? null : (x + 1 / (1 + Math.exp(4 * (dist(i, mp) - dist(i, mh))))) / 2);
+  }
+  const printed = p.map(x => x === null ? null : x > 0.5);
+  return printed.filter(x => x === false).length > 2 ? printed : printed.map(x => x === null ? null : true);
+}
+
+// --- Learning from use. Cells whose digit became known (confirmed givens, own entries matching the
+// solution, digits typed into flagged cells) are remembered on the device; a new cell that looks like
+// remembered ones (close in the model's feature space) leans towards their digit. The model itself
+// never changes, so a bad memory can't break it. ---
+const MEMORY_MAX = 2000, K = 5, SIM = 0.95, PULL = 0.7;
+let memory = [], memFeat = null, lastVecs = Array.from({ length: 81 }, () => []);
+let lastFeats = Array(81).fill(null), lastPrinted = Array(81).fill(null);   // of the last scan: features, printed? (printedKinds)
+let lastProbs = null;   // readGrid result of the last photo
+try {
+  memory = JSON.parse(localStorage.sudokuMemory || '[]')
+    .map(([x, d]) => ({ x: Uint8Array.from(atob(x), ch => ch.charCodeAt(0)), d }));
+} catch {}
+
+// n model inputs → unit-length feature rows [n, 64].
+const features = (xs, n) => tf.tidy(() => {
+  const f = featModel.predict(tf.tensor4d(xs, [n, 28, 28, 1]));
+  return f.div(f.norm('euclidean', 1, true).add(1e-6));
+});
+
+function rebuildMemory() {
+  memFeat?.dispose(); memFeat = null;
+  if (!memory.length || !featModel) return;
+  const xs = new Float32Array(memory.length * 784);
+  memory.forEach((m, k) => xs.set(Float32Array.from(m.x, b => b / 255), k * 784));
+  memFeat = features(xs, memory.length);
+}
+
+// [[cell, digit], ...] for cells of the last scan → remembered.
+function learn(pairs) {
+  let added = 0;
+  for (const [i, d] of pairs) for (const v of lastVecs[i]) {
+    memory.push({ x: Uint8Array.from(v, p => Math.round(p * 255)), d });
+    added++;
+  }
+  if (!added) return;
+  memory = memory.slice(-MEMORY_MAX);
+  try { localStorage.sudokuMemory = JSON.stringify(memory.map(m => [btoa(String.fromCharCode(...m.x)), m.d])); } catch {}
+  rebuildMemory();
+}
+
+// Model outputs p (rows of 10, edited in place) for inputs xs: pull towards the digit of the K nearest
+// remembered cells, if at least 2 of them are very similar.
+function recall(xs, p) {
+  if (!memFeat) return;
+  const f = features(xs, p.length);
+  const top = tf.tidy(() => tf.topk(tf.matMul(f, memFeat, false, true), Math.min(K, memory.length)));
+  const sims = top.values.arraySync(), idx = top.indices.arraySync();
+  [f, top.values, top.indices].forEach(t => t.dispose());
+  p.forEach((pk, k) => {
+    const vote = Array(9).fill(0);
+    let n = 0;
+    idx[k].forEach((j, t) => { if (sims[k][t] > SIM) { vote[memory[j].d - 1] += sims[k][t]; n++; } });
+    if (n < 2) return;
+    const total = vote.reduce((a, b) => a + b), digit = 1 - pk[9];
+    for (let j = 0; j < 9; j++) pk[j] = (1 - PULL) * pk[j] + PULL * digit * vote[j] / total;
+  });
+}
+
+const best = p => p ? p.indexOf(Math.max(...p)) + 1 : 0;
+// Own entry vs known solution digit: the model only has to confirm it, not name it.
+// 'wrong' only when the model is also sure it sees another digit (scribbles, crossed-out tries → 'maybe').
+const judge = (p, sol) => p[sol - 1] >= 0.3 ? 'ok' : p[sol - 1] < 0.01 && Math.max(...p) > 0.9 ? 'wrong' : 'maybe';
+
+// No task yet: show the model's best guess. With a task: givens come from the task, own entries are judged.
+function showScan(probs) {
+  clearHint();
+  let off = 0;
+  probs.forEach((p, i) => {
+    const inp = inputs[i], b = best(p);
+    inp.classList.remove('low', 'ok', 'wrong', 'maybe', 'entry');
+    if (!task) {
+      inp.value = b || '';
+      inp.classList.toggle('low', !!p && p[b - 1] < 0.8);
+      inp.classList.toggle('entry', lastPrinted[i] === false);
+      inp.classList.toggle('given', !!b && lastPrinted[i] !== false);
+      return;
+    }
+    if (task.givens[i]) { if (b !== task.givens[i]) off++; return; }
+    if (!p) { inp.value = ''; return; }
+    const j = judge(p, task.solution[i]);
+    inp.value = j === 'ok' ? task.solution[i] : b;
+    inp.classList.add(j);
+  });
+  if (task) learn(inputs.map((x, i) => [i, task.solution[i]]).filter(([i]) => inputs[i].classList.contains('ok')));
+  markConflicts();
+  if (!task && entryLabel()) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".');
+  if (!task) return say('Žuto = nesigurno, crveno = duplikat. Ispravi, obriši brojeve upisane rukom i stisni "Ovo je zadatak".');
+  if (off > task.givens.filter(Boolean).length / 3) return say('Ovo izgleda kao drugi sudoku. Za novi stisni "Novi zadatak".');
+  const n = cls => inputs.filter(x => x.classList.contains(cls)).length;
+  say(`Točno: ${n('ok')}, krivo: ${n('wrong')} (crveno), nesigurno: ${n('maybe')} (žuto, provjeri ručno).`);
+}
+
+function showTask() {
+  inputs.forEach((inp, i) => {
+    const g = task?.givens[i];
+    inp.classList.toggle('given', !!g);
+    if (g) inp.value = g;
+    inp.classList.remove('entry');
+  });
+  entryLabel();
+  for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn', 'newBtn']) $(id).hidden = !task;
+}
+
+// Candidates: in every empty cell the digits still possible there (from the givens and right entries).
+let showCands = false;
+function drawCands() {
+  $('cands').hidden = !showCands || !task;
+  if ($('cands').hidden) return;
+  const g = knownGrid();
+  candCells.forEach((c, i) => {
+    const ds = inputs[i].value ? [] : candidates(g, i);
+    c.replaceChildren(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => Object.assign(document.createElement('span'), { textContent: ds.includes(d) ? d : '' })));
+  });
+}
+$('candsBtn').onclick = () => {
+  showCands = !showCands;
+  $('candsBtn').ariaPressed = String(showCands);
+  drawCands();
+};
+
+// The explanation: closed, the user solves alone; the marks on the board stay. Remembered.
+// Off: no bubble at all (the marks on the board stay); the "Objašnjenje" toggle brings it back.
+const setQuiet = q => {
+  $('explainBox').classList.toggle('quiet', q);
+  $('explainBtn').ariaPressed = String(!q);
+  placeBubble();
+  try { localStorage.sudokuQuiet = q ? '1' : '0'; } catch {}
+};
+$('explainToggle').onclick = () => setQuiet(true);
+$('explainBtn').onclick = () => setQuiet(!$('explainBox').classList.contains('quiet'));
+// Held (not on its button): nearly see-through, to read the cells under it, until the finger lifts,
+// wherever it moves meanwhile (captured; touch-action: none keeps the page from scrolling instead).
+$('explainBox').onpointerdown = e => {
+  if (e.target.closest('button')) return;
+  try { $('explainBox').setPointerCapture(e.pointerId); } catch {}   // a pointer already gone
+  $('explainBox').classList.add('peek');
+};
+for (const ev of ['pointerup', 'pointercancel']) $('explainBox').addEventListener(ev, () => $('explainBox').classList.remove('peek'));
+try { setQuiet(localStorage.sudokuQuiet === '1'); } catch {}
+
+let hintState = null;   // { h, level } of the step being explained: 1 where to look, 2 why, 3 answer
+
+function clearHint() {
+  inputs.forEach(x => x.classList.remove('hint', 'area', 'focus', 'beam', 'blocker', 'crossed'));
+  $('explain').textContent = '';
+  hintState = null;
+  $('hintBtn').textContent = 'Sljedeći korak';
+}
+
+// Handwritten digits on the board? The task button then checks them. → whether there are any.
+function entryLabel() {
+  const any = inputs.some(x => x.classList.contains('entry'));
+  $('setTask').textContent = any ? 'Provjeri moje brojeve' : 'Ovo je zadatak';
+  $('setTask').hidden = !!task || !inputs.some(x => x.value);
+  return any;
+}
+
+// Task = the printed digits; handwritten ones are then judged against its solution. If the printed ones
+// alone don't make a sudoku, the split was off: all digits are the task.
+$('setTask').onclick = () => {
+  const g = inputs.map(x => +x.value || 0), mine = inputs.map(x => x.classList.contains('entry'));
+  let givens = g.map((d, i) => mine[i] ? 0 : d), sols = mine.some(Boolean) ? solve(givens) : [];
+  const check = sols.length === 1 && !!lastProbs;
+  if (!check) { givens = g; sols = solve(g); }
+  if (!sols.length) return say('Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.');
+  if (sols.length > 1) return say('Ima više rješenja: vjerojatno fali neki broj.');
+  task = { givens, solution: sols[0] };
+  learn(givens.map((d, i) => [i, d]).filter(([, d]) => d));
+  try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
+  inputs.forEach(x => x.classList.remove('low'));
+  showTask();
+  if (check) return showScan(lastProbs);
+  say((mine.some(Boolean) ? 'Tiskani brojevi sami nemaju jedno rješenje, pa su svi brojevi uzeti kao zadatak. ' : '') +
+    'Zadatak spremljen. Rješavaj na papiru ili ovdje; za provjeru papira skeniraj ponovno.');
+};
+
+// Highlights of a step in the grid: where to look, and from level 2 on what rules cells out.
+function markStep(h, level) {
+  inputs.forEach(x => x.classList.remove('hint', 'area', 'focus', 'beam', 'blocker', 'crossed'));
+  if (!h) return;
+  h.area.forEach(j => inputs[j].classList.add('area'));
+  h.focus.forEach(j => inputs[j].classList.add('focus'));
+  if (level < 2) return;
+  h.beams.forEach(v => v.cells.forEach(j => inputs[j].classList.add('beam')));
+  h.blockers.forEach(j => inputs[j].classList.add('blocker'));
+  h.crossed.forEach(j => inputs[j].classList.add('crossed'));
+}
+
+// Givens and correct entries; wrong or unsure entries count as empty.
+const knownGrid = () => inputs.map((x, i) => task.givens[i] || (+x.value === task.solution[i] ? task.solution[i] : 0));
+
+// "Sljedeći korak" teaches: each press goes one level deeper (where to look → why → answer), then on
+// to the next step. Meanwhile the user may type a try (tryMove).
+$('hintBtn').onclick = () => {
+  if (hintState && hintState.level < 3) hintState.level++;
+  else {
+    clearHint();
+    const g = knownGrid();
+    if (g.every(Boolean)) return explainAt('Sve je riješeno!', []);
+    const h = hint(g) || reveal(g, task.solution);
+    hintState = { h, level: h.tech ? 1 : 3 };
+  }
+  const { h, level } = hintState;
+  markStep(h, level);
+  if (level === 3) {
+    const inp = inputs[h.cell];
+    inp.value = h.digit;
+    inp.classList.remove('wrong', 'maybe');
+    inp.classList.add('hint', 'ok');
+    markConflicts();
+  }
+  const wrong = inputs.filter(x => x.classList.contains('wrong')).length;
+  say(level < 3 ? 'Upiši svoj odgovor u polje: reći ću ti je li točan i zašto.' : 'Za idući korak stisni Sljedeći korak.');
+  explainAt((wrong ? `Pazi: ${wrong} polja su kriva (crveno).\n` : '') + hintText(h, level),
+    level === 3 ? [h.cell] : h.focus.length ? h.focus : h.area,   // keep the area and, from "why" on, the reasons in sight
+    level === 1 ? h.area : [...h.area, ...h.focus, ...h.blockers, ...h.blockers, ...h.crossed]);   // twice: the reasons matter most
+  $('hintBtn').textContent = HINT_NEXT[level];
+};
+
+// The explanation bubble: text, its tail on the main cells, kept clear of the marked ones (avoid).
+// No cells: centred, no tail.
+let bubbleAt = { main: [], avoid: [] };
+function explainAt(text, main, avoid = []) {
+  $('explain').textContent = text;
+  bubbleAt = { main, avoid: [...main, ...avoid] };
+  placeBubble();
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches)   // grows out of its tail
+    $('explainBox').animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+}
+// Where the bubble goes: full text, board-wide, at the height that covers the fewest marked cells
+// (avoid; the main ones count triple), nearest the main cells on a tie. It may cover the status line
+// above the board, never the buttons below it. The tail points at the main cells from whichever side
+// the bubble ended up on (class up: bubble below them, down: above; free: no cells, or on them).
+function placeBubble() {
+  const box = $('explainBox'), tail = box.querySelector('.tail'), ex = $('explain'), b = $('board').getBoundingClientRect();
+  const H = $('grid').offsetHeight;
+  if (!ex.textContent) return;
+  ex.style.maxHeight = '40vh';
+  const h = box.offsetHeight, roof = 8 - b.top;   // roof: top of the screen
+  const span = i => { const r = inputs[i].getBoundingClientRect(); return [r.top - b.top, r.bottom - b.top]; };
+  const main = bubbleAt.main.map(span), mT = Math.min(...main.map(s => s[0])), mB = Math.max(...main.map(s => s[1]));
+  const cost = top => bubbleAt.avoid.reduce((c, i) => { const [t, btm] = span(i); return c + (t < top + h && btm > top ? (bubbleAt.main.includes(i) ? 3 : 1) : 0); }, 0) * 1e4
+    + (main.length ? Math.max(top - mB, mT - (top + h), 0) : Math.abs(top - (H - h) / 2));
+  let best = Math.min(roof, H - h - 8);
+  for (let top = roof; top <= H - h - 8; top += 4) if (cost(top) < cost(best)) best = top;
+  const side = !main.length ? 'free' : best >= mB - 2 ? 'up' : best + h <= mT + 2 ? 'down' : 'free';
+  box.classList.remove('up', 'down', 'free');
+  box.classList.add(side);
+  box.style.top = best + 'px';
+  const r = bubbleAt.main.map(i => inputs[i].getBoundingClientRect()), cx = r.length ? (Math.min(...r.map(x => x.left)) + Math.max(...r.map(x => x.right))) / 2 - b.left : b.width / 2;
+  tail.style.left = Math.min(Math.max(cx - box.offsetLeft - 8, 14), box.offsetWidth - 30) + 'px';
+  box.style.transformOrigin = `${cx - box.offsetLeft}px ${side === 'down' ? '100%' : 0}`;
+}
+addEventListener('resize', placeBubble);
+
+// A digit typed while a step is being explained is the user's try: say why it is right or wrong.
+function tryMove(k, d) {
+  const g = knownGrid(), inp = inputs[k];
+  g[k] = 0;
+  const res = judgeMove(g, k, d, task.solution);
+  markStep(res.step, 2);
+  if (res.conflict !== undefined) inputs[res.conflict].classList.add('blocker');
+  inp.classList.remove('ok', 'wrong', 'maybe');
+  inp.classList.add(res.ok ? 'ok' : 'wrong');
+  if (res.ok && k === hintState.h.cell) { inp.classList.add('hint'); hintState.level = 3; }
+  else if (res.ok) hintState = null;   // another right move: the next press looks for the next step
+  const s = res.step;
+  explainAt(res.text + (res.ok ? '' : '\nObriši broj i pokušaj ponovno.'), [k],
+    [...(s ? [...s.area, ...s.focus, ...s.blockers, ...s.crossed] : []), ...(res.conflict !== undefined ? [res.conflict] : [])]);
+  $('hintBtn').textContent = HINT_NEXT[hintState?.level ?? 3];
+}
+
+$('solveBtn').onclick = () => {
+  clearHint();
+  inputs.forEach((x, i) => {
+    if (task.givens[i]) return;
+    x.value = task.solution[i];
+    x.classList.remove('wrong', 'maybe');
+    x.classList.add('ok');
+  });
+  markConflicts();
+};
+
+// --- History: every sudoku worked on, one entry per puzzle (its solution is the key, so a puzzle scanned
+// again is the same entry), last used first. Entry: { key, givens, done: right digits of the user,
+// both 81-digit strings, first, last: ms }. ---
+const HISTORY_MAX = 100;
+function saved() {
+  try { return JSON.parse(localStorage.sudokuHistory || '[]'); } catch { return []; }
+}
+// Same puzzle again → merged: fewer givens win (the truly printed ones), right digits add up. → entry
+function remember(solution, givens, done) {
+  const key = solution.join(''), list = saved(), old = list.find(e => e.key === key);
+  const e = old || { key, givens: givens.join(''), done: '0'.repeat(81), first: Date.now() };
+  if (givens.filter(Boolean).length < [...e.givens].filter(d => +d).length) e.givens = givens.join('');
+  e.done = [...e.done].map((d, i) => +e.givens[i] ? 0 : +d || done[i] || 0).join('');
+  e.last = Date.now();
+  try { localStorage.sudokuHistory = JSON.stringify([e, ...list.filter(x => x !== old)].slice(0, HISTORY_MAX)); } catch {}
+  return e;
+}
+
+function showHistory() {
+  const list = saved(), ul = $('historyList');
+  ul.replaceChildren(...list.map(e => {
+    const li = document.createElement('li'), open = document.createElement('button'), del = document.createElement('button');
+    const blanks = [...e.givens].filter(d => !+d).length, done = [...e.done].filter(d => +d).length;
+    open.className = 'hrow';
+    open.append(miniGrid(e), Object.assign(document.createElement('span'), { className: 'hmeta' }));
+    open.lastChild.append(Object.assign(document.createElement('b'), { textContent: done === blanks ? 'Riješeno' : `${done} od ${blanks} polja` }),
+      Object.assign(document.createElement('small'), { textContent: new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }));
+    open.onclick = () => openTask(e);
+    del.className = 'hdel'; del.textContent = 'Obriši';
+    del.onclick = () => {
+      try { localStorage.sudokuHistory = JSON.stringify(saved().filter(x => x.key !== e.key)); } catch {}
+      showHistory();
+    };
+    li.append(open, del);
+    return li;
+  }));
+  $('historyEmpty').hidden = list.length > 0;
+}
+
+// The puzzle at a glance: printed digits as dark cells, the user's right digits in blue.
+function miniGrid(e) {
+  const c = document.createElement('canvas'), x = c.getContext('2d'), u = 8;
+  c.width = c.height = 9 * u + 2;
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 81; i++) {
+    if (!+e.givens[i] && !+e.done[i]) continue;
+    x.fillStyle = +e.givens[i] ? '#3a3a38' : '#1d5fbf';
+    x.fillRect(1 + i % 9 * u + 1, 1 + (i / 9 | 0) * u + 1, u - 2, u - 2);
+  }
+  x.strokeStyle = '#121212'; x.lineWidth = 1;
+  for (let j = 0; j <= 9; j += 3) {
+    x.beginPath(); x.moveTo(1 + j * u, 0); x.lineTo(1 + j * u, c.height); x.moveTo(0, 1 + j * u); x.lineTo(c.width, 1 + j * u); x.stroke();
+  }
+  return c;
+}
+
+// A sudoku from the history becomes the task again, with the user's right digits filled in.
+function openTask(e) {
+  $('history').close();
+  task = { givens: [...e.givens].map(Number), solution: [...e.key].map(Number) };
+  try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
+  clearHint();
+  lastProbs = null;
+  lastVecs = Array.from({ length: 81 }, () => []);
+  inputs.forEach((x, i) => { x.className = ''; x.value = +e.done[i] || ''; if (+e.done[i]) x.classList.add('ok'); });
+  showTask();
+  markConflicts();
+  say('Sudoku iz povijesti. Nastavi ovdje ili skeniraj papir za provjeru.');
+}
+
+$('historyBtn').onclick = () => { showHistory(); $('history').showModal(); };
+$('historyClose').onclick = () => $('history').close();
+
+$('newBtn').onclick = () => {
+  task = null;
+  try { localStorage.removeItem('sudokuTask'); } catch {}
+  clearHint();
+  lastVecs = Array.from({ length: 81 }, () => []);
+  inputs.forEach(x => { x.value = ''; x.className = ''; });
+  showTask();
+  say('Skeniraj novi sudoku.');
+};
+
+// --- Sudoku logic. Grid = array of 81 numbers, 0 = empty. ---
+
+const BOX_NAME = ['gornji lijevi', 'gornji srednji', 'gornji desni', 'srednji lijevi', 'središnji', 'srednji desni',
+  'donji lijevi', 'donji srednji', 'donji desni'];
+const BOX_LOC = ['gornjem lijevom', 'gornjem srednjem', 'gornjem desnom', 'srednjem lijevom', 'središnjem',
+  'srednjem desnom', 'donjem lijevom', 'donjem srednjem', 'donjem desnom'];
+const ROWS = [], COLS = [], BOXES = [];
+for (let k = 0; k < 9; k++) {
+  const idx = f => Array.from({ length: 9 }, (_, j) => f(j));
+  ROWS.push({ kind: 'row', name: `red ${k + 1}`, loc: `redu ${k + 1}`, cells: idx(j => k * 9 + j) });
+  COLS.push({ kind: 'col', name: `stupac ${k + 1}`, loc: `stupcu ${k + 1}`, cells: idx(j => j * 9 + k) });
+  BOXES.push({ kind: 'box', name: `${BOX_NAME[k]} kvadrat`, loc: `${BOX_LOC[k]} kvadratu`, cells: idx(j => (k / 3 | 0) * 27 + k % 3 * 3 + (j / 3 | 0) * 9 + j % 3) });
+}
+const UNITS = [...BOXES, ...ROWS, ...COLS];   // hint search order: boxes are easiest to spot
+const PEERS = Array.from({ length: 81 }, (_, i) => [...new Set(UNITS.filter(u => u.cells.includes(i)).flatMap(u => u.cells))].filter(j => j !== i));
+const cellName = i => `polje (red ${(i / 9 | 0) + 1}, stupac ${i % 9 + 1})`;
+
+// ex: candidates ruled out by an advanced step, as cell * 10 + digit.
+function candidates(g, i, ex) {
+  if (g[i]) return [];
+  const used = new Set(PEERS[i].map(j => g[j]));
+  return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => !used.has(d) && !ex?.has(i * 10 + d));
+}
+
+// Backtracking, fewest-candidates cell first. Returns up to `limit` solutions (2 = enough to detect "not unique").
+function solve(g, limit = 2) {
+  const a = g.slice(), sols = [];
+  if (a.some((d, i) => d && PEERS[i].some(j => a[j] === d))) return sols;
+  (function rec() {
+    let best = -1, bc;
+    for (let i = 0; i < 81; i++) if (!a[i]) {
+      const c = candidates(a, i);
+      if (!c.length) return;
+      if (best < 0 || c.length < bc.length) { best = i; bc = c; }
+    }
+    if (best < 0) return sols.push(a.slice());
+    for (const d of bc) { a[best] = d; rec(); if (sols.length >= limit) break; }
+    a[best] = 0;
+  })();
+  return sols;
+}
+
+const TECH = {
+  full: { name: 'Zadnje prazno polje', en: 'Full House',
+    how: 'Kad u kvadratu, redu ili stupcu ostane samo jedno prazno polje, u njega ide broj koji tamo još fali.' },
+  hidden: { name: 'Jedino mjesto', en: 'Hidden Single',
+    how: 'Uzmi broj koji fali u kvadratu (ili redu, stupcu). Precrtaj polja čiji red, stupac ili kvadrat već ima taj broj. Ako ostane samo jedno polje, broj ide tamo.' },
+  naked: { name: 'Jedini broj', en: 'Naked Single',
+    how: 'Izaberi polje oko kojeg ima puno brojeva. Skupi brojeve iz njegovog reda, stupca i kvadrata. Ako je to 8 različitih brojeva, deveti je odgovor.' },
+  pointing: { name: 'Pokazivački par', en: 'Pointing',
+    how: 'Ako u kvadratu neki broj može ići samo u jedan red (ili stupac), taj broj iz kvadrata sigurno zauzima taj red. Zato ga u ostatku tog reda precrtaj, pa potraži jedino mjesto ili jedini broj.' },
+  pair: { name: 'Goli par', en: 'Naked Pair',
+    how: 'Ako dva polja u istom redu, stupcu ili kvadratu mogu imati samo ista dva broja, ta dva broja pripadaju njima. Iz ostalih polja tog reda, stupca ili kvadrata ih precrtaj, pa potraži jedino mjesto ili jedini broj.' },
+};
+const HINT_NEXT = { 1: 'Zašto?', 2: 'Pokaži odgovor', 3: 'Sljedeći korak' };
+const cap = s => s[0].toUpperCase() + s.slice(1);
+
+// Human steps. Each returns what a teacher would point at: area/focus (where to look), blockers (digits
+// that rule cells out), beams (their row/column/box), crossed (empty cells ruled out), and texts:
+// look, why, answer. null if the technique doesn't apply there.
+const missing = (g, u) => [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => !u.cells.some(i => g[i] === d));
+
+function fullHouse(g, u) {
+  const empty = u.cells.filter(i => !g[i]);
+  if (empty.length !== 1) return null;
+  const t = empty[0], d = missing(g, u)[0];
+  return { cell: t, digit: d, unit: u, tech: TECH.full, area: u.cells, focus: [], blockers: [], beams: [], crossed: [],
+    look: `Pogledaj ${u.name}. Koliko je praznih polja ostalo?`,
+    why: `U ${u.loc} je ostalo samo jedno prazno polje, a od brojeva 1–9 fali još samo ${d}.`,
+    answer: `Zato u ${cellName(t)} ide ${d}.` };
+}
+
+function hiddenSingle(g, u, d, ex) {
+  if (u.cells.some(i => g[i] === d)) return null;
+  const empty = u.cells.filter(i => !g[i]), spots = empty.filter(i => candidates(g, i, ex).includes(d));
+  if (spots.length !== 1) return null;
+  const t = spots[0], crossed = empty.filter(i => i !== t), beams = new Map(), gone = [];   // blocking unit → cell holding d
+  for (const i of crossed) {
+    const v = UNITS.find(v => v !== u && v.cells.includes(i) && v.cells.some(j => g[j] === d));
+    if (v) beams.set(v, v.cells.find(j => g[j] === d)); else gone.push(i);   // gone: ruled out by the advanced step
+  }
+  const where = (v, j) => v.kind === 'row' ? `stupac ${j % 9 + 1}` : v.kind === 'col' ? `red ${(j / 9 | 0) + 1}` : `red ${(j / 9 | 0) + 1}, stupac ${j % 9 + 1}`;
+  const lines = [...beams].map(([v, j]) =>
+    `• ${d} u ${v.loc} (${where(v, j)}) → ${v.kind === 'box' ? 'taj kvadrat otpada' : `cijeli ${v.name} otpada`}.`);
+  if (gone.length) lines.push(`• ${cap(gone.map(cellName).join(' i '))} → otpada (vidi gore).`);
+  return { cell: t, digit: d, unit: u, tech: TECH.hidden, area: u.cells, focus: [], blockers: [...new Set(beams.values())], beams: [...beams.keys()], crossed,
+    look: `Pogledaj ${u.name}. U njemu još fali ${d}. Gdje sve ${d} može ići?`,
+    why: `Precrtaj polja u kojima ${d} ne može biti:\n${lines.join('\n')}\nOstaje samo jedno slobodno polje.`,
+    answer: `Zato ${d} ide u ${cellName(t)}.` };
+}
+
+function nakedSingle(g, i, ex) {
+  const c = candidates(g, i, ex), gone = candidates(g, i).filter(d => !c.includes(d));
+  if (c.length !== 1) return null;
+  const row = ROWS[i / 9 | 0], col = COLS[i % 9], box = BOXES.find(u => u.cells.includes(i)), blockers = [];
+  for (let x = 1; x <= 9; x++) {   // one cell per ruled-out digit, row first
+    const j = [row, col, box].map(u => u.cells.find(j => g[j] === x)).find(j => j !== undefined);
+    if (j !== undefined) blockers.push(j);
+  }
+  const has = u => u.cells.map(j => g[j]).filter(Boolean).sort().join(', ') || 'ništa';
+  const all = [...new Set(PEERS[i].map(j => g[j]).filter(Boolean))].sort();
+  return { cell: i, digit: c[0], tech: TECH.naked, area: PEERS[i], focus: [i], blockers, beams: [], crossed: [],
+    look: `Pogledaj ${cellName(i)}. Koji su brojevi već u njegovom redu, stupcu i kvadratu?`,
+    why: `${cap(row.name)}: ${has(row)}\n${cap(col.name)}: ${has(col)}\n${cap(box.name)}: ${has(box)}\nZajedno: ${all.join(', ')}. ` +
+      (gone.length ? `Uz to ovdje ne može ni ${gone.join(' ni ')} (vidi gore). Ostaje samo ${c[0]}.` : `To je 8 različitih brojeva, fali samo ${c[0]}.`),
+    answer: `Zato u ${cellName(i)} ide ${c[0]}.` };
+}
+
+// Advanced steps place nothing themselves: they rule out candidates, then a single follows.
+// → [{ tech, area, focus, removed: [[cell, digit]], look, why }]
+function eliminations(g) {
+  const out = [];
+  for (const box of BOXES) for (const d of missing(g, box)) {   // pointing: d of a box only in one row/column
+    const spots = box.cells.filter(i => candidates(g, i).includes(d));
+    if (spots.length < 2) continue;
+    for (const line of [...ROWS, ...COLS]) {
+      if (!spots.every(i => line.cells.includes(i))) continue;
+      const removed = line.cells.filter(i => !box.cells.includes(i) && candidates(g, i).includes(d));
+      if (removed.length) out.push({ tech: TECH.pointing, area: box.cells, focus: spots, removed: removed.map(i => [i, d]),
+        look: `Pogledaj ${box.name}. Gdje sve u njemu može ići ${d}?`,
+        why: `U ${box.loc} ${d} može ići samo u ${line.loc} (plava polja). Taj ${d} sigurno zauzima ${line.name}, pa ${d} ne može nigdje drugdje u ${line.loc} (izvan tog kvadrata).` });
+    }
+  }
+  for (const u of UNITS) {   // naked pair: two cells of a unit with the same two candidates
+    const two = u.cells.filter(i => candidates(g, i).length === 2);
+    for (const a of two) for (const b of two) {
+      const pair = candidates(g, a);
+      if (b <= a || pair.join() !== candidates(g, b).join()) continue;
+      const removed = u.cells.filter(i => i !== a && i !== b).flatMap(i => pair.filter(d => candidates(g, i).includes(d)).map(d => [i, d]));
+      if (removed.length) out.push({ tech: TECH.pair, area: u.cells, focus: [a, b], removed,
+        look: `Pogledaj ${u.name}. Nađi dva polja u kojima mogu biti samo ista dva broja.`,
+        why: `${cap(cellName(a))} i ${cellName(b)} mogu imati samo ${pair[0]} ili ${pair[1]}. Ta dva broja sigurno zauzimaju ta dva polja, pa ${pair[0]} i ${pair[1]} ne mogu nigdje drugdje u ${u.loc}.` });
+    }
+  }
+  return out;
+}
+
+// An advanced step plus the single it opens up (only for `cell`, if given). → step or null.
+// ponytail: one elimination per step; chains of them fall back to reveal().
+function advanced(g, cell = -1) {
+  const fits = s => s && (cell < 0 || s.cell === cell);
+  for (const e of eliminations(g)) {
+    const ex = new Set(e.removed.map(([i, d]) => i * 10 + d));
+    const s = UNITS.flatMap(u => missing(g, u).map(d => hiddenSingle(g, u, d, ex))).find(fits)
+      || Array.from({ length: 81 }, (_, i) => nakedSingle(g, i, ex)).find(fits);
+    if (s) return { ...s, tech: e.tech, area: [...new Set([...e.area, ...s.area])], focus: [...e.focus, ...s.focus],
+      look: e.look, why: `${e.why}\n\n${s.why}` };
+  }
+  return null;
+}
+
+// Next step, easiest technique first. → step or null.
+function hint(g) {
+  for (const u of UNITS) { const s = fullHouse(g, u); if (s) return s; }
+  for (const u of UNITS) for (const d of missing(g, u)) { const s = hiddenSingle(g, u, d); if (s) return s; }
+  for (let i = 0; i < 81; i++) { const s = nakedSingle(g, i); if (s) return s; }
+  return advanced(g);
+}
+
+// The user put d in empty cell i (g = known digits): why is that right or wrong? Clearest reason first.
+// → { ok, text, step (marks to draw) or conflict (cell already holding d) }
+function judgeMove(g, i, d, solution) {
+  const units = UNITS.filter(u => u.cells.includes(i));
+  if (d === solution[i]) {
+    const step = units.map(u => fullHouse(g, u)).find(s => s?.cell === i)
+      || units.map(u => hiddenSingle(g, u, d)).find(s => s?.cell === i) || nakedSingle(g, i) || advanced(g, i);
+    return step ? { ok: true, step, text: `Točno! Tehnika: ${step.tech.name} (${step.tech.en})\n${step.why}` }
+      : { ok: true, text: `Točno! Ali u ovom polju je zasad moguće više brojeva (${candidates(g, i).join(', ')}), pa se to još ne može sigurno zaključiti: bilo je i malo sreće. Traži polje ili broj gdje ostaje samo jedna mogućnost.` };
+  }
+  for (const u of units) {
+    const j = u.cells.find(j => j !== i && g[j] === d);
+    if (j !== undefined) return { ok: false, conflict: j,
+      text: `Ne može: ${d} već postoji u ${u.loc} (red ${(j / 9 | 0) + 1}, stupac ${j % 9 + 1}). Svaki broj smije biti samo jednom u redu, stupcu i kvadratu.` };
+  }
+  const elsewhere = units.map(u => hiddenSingle(g, u, d)).find(s => s && s.cell !== i);
+  if (elsewhere) return { ok: false, step: elsewhere,
+    text: `Ne može: u ${elsewhere.unit.loc} broj ${d} mora ići u ${cellName(elsewhere.cell)}.\n${elsewhere.why}` };
+  const forced = units.map(u => fullHouse(g, u)).find(s => s?.cell === i) || nakedSingle(g, i);
+  if (forced) return { ok: false, step: forced, text: `Ne može: ovo polje mora biti ${forced.digit}.\n${forced.why}` };
+  return { ok: false, text: `${d} se ovdje ni s čim ne sukobljava, ali nije točan. U ovom polju je zasad moguće više brojeva (${candidates(g, i).join(', ')}), pa bi to bilo nagađanje. Vrati se na označeno područje: tamo postoji siguran korak.` };
+}
+
+// ponytail: nothing explainable left → reveal the cell with fewest candidates. Add more techniques
+// (box/line, hidden pairs, X-wing) to eliminations() when hard puzzles need them.
+function reveal(g, solution) {
+  let best = -1;
+  for (let i = 0; i < 81; i++) if (!g[i] && (best < 0 || candidates(g, i).length < candidates(g, best).length)) best = i;
+  return { cell: best, digit: solution[best], tech: null, area: [], focus: [best], blockers: [], beams: [], crossed: [],
+    answer: `Ovdje treba naprednija tehnika koju još ne znam objasniti. Otkrivam jedno polje: ${cellName(best)} = ${solution[best]}.` };
+}
+
+// Text of a step at a teaching level: 1 where to look, 2 why, 3 answer.
+function hintText(h, level) {
+  if (!h.tech) return h.answer;
+  const head = `Tehnika: ${h.tech.name} (${h.tech.en})\n`;
+  if (level === 1) return head + h.look;
+  if (level === 2) return head + h.why;
+  return `${h.answer}\n\nKako radi ${h.tech.name.toLowerCase()}: ${h.tech.how}\nSljedeći korak pokušaj pronaći istom tehnikom.`;
+}
+
+// Candidate corner sets from the raw and the line-thickened (gaps closed) binary image: outer contour
+// as a 4-gon, its extreme points, and the extreme points of the cells (square holes between grid
+// lines; immune to thick frames or labels glued to the border). Each is warped and scored by
+// lineScore; best wins. Returns { warped: N×N RGBA Mat, quad: its corners in src } or null.
+function findGrid(src) {
+  const gray = new cv.Mat(), bin = new cv.Mat(), thick = new cv.Mat(), k3 = cv.Mat.ones(3, 3, cv.CV_8U);
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+  cv.GaussianBlur(gray, bin, new cv.Size(5, 5), 0);
+  cv.adaptiveThreshold(bin, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+  cv.dilate(bin, thick, k3);
+  const minArea = 0.03 * src.rows * src.cols;   // small enough for live mode to say "come closer"
+  const quads = [...gridQuads(bin, minArea), ...gridQuads(thick, minArea)];
+
+  let out = null, quad, bestScore = 0.2;   // below this no candidate looks like a grid
+  const wb = new cv.Mat();
+  for (const q of quads) {
+    const M = perspective(q);
+    cv.warpPerspective(bin, wb, M, new cv.Size(N, N));
+    const s = lineScore(wb);
+    if (s > bestScore) {
+      bestScore = s; quad = q;
+      out?.delete(); out = new cv.Mat();
+      cv.warpPerspective(src, out, M, new cv.Size(N, N));
+    }
+    M.delete();
+  }
+  [wb, src, gray, bin, thick, k3].forEach(m => m.delete());
+  return out && { warped: out, quad };
+}
+
+function gridQuads(bin, minArea) {
+  const cs = new cv.MatVector(), h = new cv.Mat(), quads = [];
+  cv.findContours(bin, cs, h, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+  const all = [];
+  for (let i = 0; i < cs.size(); i++) {
+    const cnt = cs.get(i);
+    all.push({ cnt, a: cv.contourArea(cnt), r: cv.boundingRect(cnt) });
+  }
+  const outer = all.reduce((m, x) => x.a > m.a ? x : m, { a: 0 });
+  if (outer.a > minArea) {
+    quads.push(corners(outer.cnt.data32S));
+    const approx = new cv.Mat();
+    cv.approxPolyDP(outer.cnt, approx, 0.02 * cv.arcLength(outer.cnt, true), true);
+    if (approx.rows === 4) quads.push(corners(approx.data32S));
+    approx.delete();
+    const cells = all.filter(x => {
+      const { x: rx, y: ry, width: w, height: hh } = x.r;
+      return x !== outer && w / hh > 0.7 && w / hh < 1.4 && x.a > 0.7 * w * hh &&
+        x.a > outer.a / 400 && x.a < outer.a / 40 &&
+        cv.pointPolygonTest(outer.cnt, new cv.Point(rx + w / 2, ry + hh / 2), false) > 0;
+    });
+    const med = cells.map(x => x.a).sort((a, b) => a - b)[cells.length >> 1];
+    const good = cells.filter(x => x.a > 0.6 * med && x.a < 1.6 * med);
+    if (good.length >= 20) quads.push(corners(good.flatMap(x => Array.from(x.cnt.data32S))));
+  }
+  all.forEach(x => x.cnt.delete());
+  cs.delete(); h.delete();
+  return quads;
+}
+
+// Flat [x,y,...] points → [tl, tr, br, bl] corners as a flat array.
+function corners(pts) {
+  let tl, tr, br, bl;
+  for (let i = 0; i < pts.length; i += 2) {
+    const x = pts[i], y = pts[i + 1];
+    if (!tl || x + y < tl[0] + tl[1]) tl = [x, y];
+    if (!br || x + y > br[0] + br[1]) br = [x, y];
+    if (!tr || x - y > tr[0] - tr[1]) tr = [x, y];
+    if (!bl || y - x > bl[1] - bl[0]) bl = [x, y];
+  }
+  return [...tl, ...tr, ...br, ...bl];
+}
+
+// Corners q → the N×N square (or back, if inverse).
+function perspective(q, inverse) {
+  const from = cv.matFromArray(4, 1, cv.CV_32FC2, q), to = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, N, 0, N, N, 0, N]);
+  const M = inverse ? cv.getPerspectiveTransform(to, from) : cv.getPerspectiveTransform(from, to);
+  from.delete(); to.delete();
+  return M;
+}
+
+// Warped binary image → how grid-like it is: coverage of the 20 expected grid lines minus
+// coverage of the 18 lines through cell middles (busy backgrounds cover both equally).
+function lineScore(wb) {
+  const band = new cv.Mat(), cover = pos => {
+    let s = 0;
+    for (const p0 of pos) {
+      const p = Math.min(N - 7, Math.max(0, Math.round(p0) - 3));
+      for (const [rect, axis] of [[new cv.Rect(0, p, N, 7), 0], [new cv.Rect(p, 0, 7, N), 1]]) {
+        const roi = wb.roi(rect);
+        cv.reduce(roi, band, axis, cv.REDUCE_MAX);
+        s += cv.countNonZero(band) / N;
+        roi.delete();
+      }
+    }
+    return s / (2 * pos.length);
+  };
+  const s = cover([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => k * S)) - cover([0, 1, 2, 3, 4, 5, 6, 7, 8].map(k => (k + 0.5) * S));
+  band.delete();
+  return s;
+}
+
+// Digit = tallest stroke touching the cell centre (the anchor) + strokes nearly as tall or
+// horizontal bars over it (detached top of a 5). Margin drops grid lines; dots and small corner
+// notes are skipped. → { v: 28×28 MNIST-style vector, ink: how much darker the strokes are than
+// the paper, chroma: ink colourfulness, lum: ink/paper brightness, h: digit height / cell }, or null
+// if the cell is empty.
+function cellDigit(bin, gray, color, r, c) {
+  const m = 4, w = S - 2 * m, lo = 0.3 * w, hi = 0.7 * w, rect = new cv.Rect(c * S + m, r * S + m, w, w);
+  const view = bin.roi(rect), cell = view.clone();
+  view.delete();   // an undeleted roi keeps the whole parent image alive
+  const cs = new cv.MatVector(), h = new cv.Mat(), grp = new cv.Mat(), k3 = cv.Mat.ones(3, 3, cv.CV_8U);
+  cv.dilate(cell, grp, k3);   // group on thickened strokes: blurry print breaks into pieces
+  cv.findContours(grp, cs, h, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+  const parts = [];
+  for (let i = 0; i < cs.size(); i++) {
+    const cnt = cs.get(i), b = cv.boundingRect(cnt);
+    cnt.delete();
+    if (b.width < 0.15 * S && b.height < 0.15 * S) continue;
+    if (b.x > hi || b.x + b.width < lo || b.y > hi || b.y + b.height < lo) continue;
+    if (b.width >= w - 2 || b.height >= w - 2) continue;
+    parts.push({ i, b });
+  }
+  const A = parts.reduce((t, p) => p.b.height > (t?.b.height ?? 0) ? p : t, null)?.b;
+  let out = null;
+  if (A && A.height > 0.3 * S) {
+    const mask = cv.Mat.zeros(w, w, cv.CV_8U), digit = new cv.Mat();
+    let y0 = w, y1 = 0;
+    for (const { i, b } of parts) {
+      const cx = b.x + b.width / 2, bar = b.width > b.height && cx > A.x && cx < A.x + A.width && b.y < A.y + A.height / 2;
+      if (b.height >= 0.5 * A.height || bar) {
+        cv.drawContours(mask, cs, i, new cv.Scalar(255), cv.FILLED);
+        y0 = Math.min(y0, b.y); y1 = Math.max(y1, b.y + b.height);
+      }
+    }
+    cv.bitwise_and(cell, mask, digit);
+    const g = gray.roi(rect), col = color.roi(rect), paper = new cv.Mat();
+    cv.bitwise_not(grp, paper);
+    const [R, G, B] = cv.mean(col, digit), [pR, pG, pB] = cv.mean(col, paper), lum = (r, g, b) => 0.3 * r + 0.59 * g + 0.11 * b;
+    out = { v: toMnist(digit), ink: cv.mean(g, paper)[0] - cv.mean(g, digit)[0],
+      chroma: (Math.max(R, G, B) - Math.min(R, G, B)) / 255, lum: lum(R, G, B) / (lum(pR, pG, pB) || 1), h: (y1 - y0) / S };
+    [mask, digit, g, col, paper].forEach(x => x.delete());
+  }
+  [cs, h, grp, k3, cell].forEach(x => x.delete());
+  return out;
+}
+
+// White-on-black digit → MNIST layout: fit in 20×20, centre of mass at (14,14) in 28×28. Also used by train.js.
+function toMnist(bin) {
+  const r = cv.boundingRect(bin), k = 20 / Math.max(r.width, r.height);
+  const roi = bin.roi(r), small = new cv.Mat(), img = cv.Mat.zeros(28, 28, cv.CV_8U);
+  cv.resize(roi, small, new cv.Size(Math.max(1, Math.round(r.width * k)), Math.max(1, Math.round(r.height * k))), 0, 0, cv.INTER_AREA);
+  const mo = cv.moments(small);
+  const x = Math.min(28 - small.cols, Math.max(0, Math.round(14 - mo.m10 / mo.m00)));
+  const y = Math.min(28 - small.rows, Math.max(0, Math.round(14 - mo.m01 / mo.m00)));
+  const dst = img.roi(new cv.Rect(x, y, small.cols, small.rows));
+  small.copyTo(dst);
+  const v = Float32Array.from(img.data, p => p / 255);
+  roi.delete(); small.delete(); dst.delete(); img.delete();
+  return v;
+}
+
+// --- Live camera, full screen: the scanner. Find the grid in every frame; once two readings in a row
+// agree, freeze it, straightened. The user checks the reading (tap a cell to fix a digit or mark it
+// printed / own), then "Potvrdi" puts it on the home board, where the solving happens. ---
+let live = null;   // { stream, digital: draw the board over the paper, last: previous reading, lost: frames without grid, frozen }
+// frozen = { still: straightened upright grid picture, rot, digits, conf, probs, printed, sel: tapped cell,
+//   board: { solution } | null, givens, entry (see resolve), why }
+const frame = document.createElement('canvas');
+// Status over the camera: a short headline and, if needed, one line of detail.
+const tip = (t, sub = '') => { $('tipMain').textContent = t; $('tipSub').textContent = sub; };
+
+for (const d of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
+  const b = document.createElement('button');
+  b.textContent = d || '⌫';
+  if (!d) b.ariaLabel = 'Prazno';
+  b.onclick = () => live ? fixCell(d) : setCell(d);
+  $('pad').append(b);
+}
+{
+  const b = document.createElement('button');
+  b.id = 'padKind';
+  b.onclick = () => {   // the selected digit: printed ↔ handwritten
+    const f = live?.frozen;
+    if (!live) return setKind();
+    if (!f || f.sel === null) return;
+    f.printed[f.sel] = f.printed[f.sel] === false;
+    f.sel = null;
+    $('pad').hidden = true;
+    resolve();
+    showFrozen();
+  };
+  $('pad').append(b);
+}
+
+$('liveBtn').onclick = async () => {
+  pick(null);
+  $('liveBar').before($('pad'));
+  $('live').hidden = false;
+  document.body.style.overflow = 'hidden';
+  $('live').requestFullscreen?.().catch(() => {});   // Android; iPhone keeps the fixed full-page layer
+  tip('Pokrećem kameru…');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } }); }
+  catch { closeLive(); return say('Kamera nije dostupna (treba dozvola i https). Možeš učitati sliku iz galerije.'); }
+  $('video').srcObject = stream;
+  await $('video').play();
+  live = { stream, digital: true, last: null, lost: 0, frozen: null,
+    canTorch: !!stream.getVideoTracks()[0].getCapabilities?.().torch, torch: false };   // torch: Android Chrome, not iPhone
+  $('liveView').textContent = 'Papir';
+  liveButtons();
+  while (live) {
+    const t = performance.now();
+    if (!live.frozen) liveFrame();
+    await new Promise(r => setTimeout(r, Math.max(30, 150 - (performance.now() - t))));   // ≤ ~7 fps, leaves the phone some air
+  }
+};
+
+function closeLive() {
+  live?.stream.getTracks().forEach(t => t.stop());
+  live = null;
+  $('live').hidden = $('pad').hidden = true;
+  $('board').after($('pad'));
+  setLift(0);
+  $('video').style.visibility = '';
+  document.body.style.overflow = '';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+$('liveClose').onclick = closeLive;
+
+$('liveView').onclick = () => {
+  if (!live) return;
+  live.digital = !live.digital;
+  $('liveView').textContent = live.digital ? 'Papir' : 'Digitalno';
+  if (live.frozen) showFrozen();
+};
+$('liveRescan').onclick = () => {
+  if (!live) return;
+  live.frozen = live.last = null;
+  setLift(0);
+  $('video').style.visibility = '';
+  $('pad').hidden = true;
+  liveButtons();
+  $('video').play();
+};
+
+// "Potvrdi": the reading as checked here becomes the task on the home board: printed digits as givens,
+// the user's own digits judged, earlier progress of the same puzzle (history) filled in.
+$('liveConfirm').onclick = () => {
+  const f = live?.frozen;
+  if (!f?.board) return;
+  task = { givens: f.givens, solution: f.board.solution };
+  try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
+  learn(f.digits.map((d, i) => [i, d]).filter(([i, d]) => d && (f.givens[i] || f.entry[i] === 'ok')));
+  const e = remember(task.solution, task.givens, f.digits.map((d, i) => f.entry[i] === 'ok' ? d : 0));
+  clearHint();
+  lastProbs = null;
+  inputs.forEach((x, i) => {
+    x.className = '';
+    x.value = f.entry[i] ? f.digits[i] : +e.done[i] || '';
+    if (f.entry[i]) x.classList.add(f.entry[i]); else if (+e.done[i]) x.classList.add('ok');
+  });
+  closeLive();
+  showTask();
+  markConflicts();
+  const n = c => inputs.filter(x => x.classList.contains(c)).length;
+  say((f.entry.some(Boolean) ? `Tvoji brojevi: ${n('ok')} točno, ${n('wrong')} krivo, ${n('maybe')} nesigurno. ` : 'Sudoku je učitan. ') +
+    'Za pomoć stisni Sljedeći korak.');
+};
+
+function liveButtons() {
+  $('liveBar').hidden = !live?.frozen;
+  $('liveTorch').hidden = !live?.canTorch || !!live.frozen;
+}
+
+// Flashlight while scanning; switched off as soon as the reading freezes.
+function setTorch(on) {
+  live.torch = on;
+  $('liveTorch').ariaPressed = String(on);
+  live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: on }] }).catch(() => {});
+}
+$('liveTorch').onclick = () => live && setTorch(!live.torch);
+
+function liveFrame() {
+  const v = $('video'), o = $('overlay');
+  if (!v.videoWidth) return;
+  o.width = v.videoWidth; o.height = v.videoHeight;   // also clears the overlay
+  const k = Math.min(1, 1000 / Math.max(v.videoWidth, v.videoHeight));   // same scale as photos: thin lines vanish below ~800 px
+  frame.width = v.videoWidth * k | 0; frame.height = v.videoHeight * k | 0;
+  frame.getContext('2d', { willReadFrequently: true }).drawImage(v, 0, 0, frame.width, frame.height);
+  const grid = findGrid(cv.imread(frame));
+  if (!grid) {
+    if (++live.lost > 10) live.last = null;   // ~1.5 s away: maybe a different sudoku next
+    return tip(live.lost > 3 ? frameAdvice() : 'Tražim sudoku…');
+  }
+  live.lost = 0;
+  const ctx = o.getContext('2d'), advice = gridAdvice(grid.quad);
+  if (advice) {
+    grid.warped.delete();
+    live.last = null;
+    painter(ctx, grid.quad, k, 0).outline(AMBER);
+    return tip(advice);
+  }
+  const r = readTurns(grid.warped), digits = r.probs.map(best), conf = r.probs.map(p => p ? Math.max(...p) : 0);
+  const same = live.last?.join() === digits.join();
+  live.last = digits;
+  if (!same) {
+    const pen = painter(ctx, grid.quad, k, r.rot);
+    pen.outline(AMBER);
+    render(pen, digits, conf);
+    return tip('Čitam… drži mirno', `${digits.filter(Boolean).length} brojeva`);
+  }
+  // Stable reading: freeze. From now on the overlay is the grid itself, cut out of this frame,
+  // straightened and turned upright (still), at 2× the reading size for sharp digits.
+  v.pause();
+  v.style.visibility = 'hidden';
+  if (live.torch) setTorch(false);
+  const still = document.createElement('canvas'), src = cv.imread(frame), M = perspective(grid.quad);
+  let flat = new cv.Mat();
+  cv.warpPerspective(src, flat, M, new cv.Size(N, N));
+  for (let i = 0; i < r.rot; i++) { const t = new cv.Mat(); cv.rotate(flat, t, cv.ROTATE_90_CLOCKWISE); flat.delete(); flat = t; }
+  cv.imshow(still, flat);
+  [src, M, flat].forEach(m => m.delete());
+  o.width = o.height = 2 * N;
+  live.frozen = { still, rot: r.rot, digits, conf, probs: r.probs, printed: r.printed, sel: null };
+  liveButtons();
+  resolve();
+  showFrozen();
+}
+
+// Frozen: move and zoom the square grid so it fills the screen width right under the tip, above the
+// buttons. Layout sizes, not getBoundingClientRect: that would include a move still running. Taps
+// still land right: cellAt measures the moved overlay.
+function liftGrid() {
+  const o = $('overlay'), W = o.clientWidth, H = o.clientHeight;   // #live fills the screen from its top
+  const w = Math.min(W, H), x0 = (W - w) / 2, y0 = (H - w) / 2;   // the square canvas, contained
+  const top = $('liveTip').getBoundingClientRect().bottom + 12, room = $('liveBottom').getBoundingClientRect().top - 12 - top;
+  const size = Math.min(W - 32, room), z = size / w;   // right under the status, as large as the room allows
+  setLift(`translate(${(W - size) / 2 - z * x0}px, ${top - z * y0}px) scale(${z})`);
+}
+const setLift = t => $('overlay').style.transform = t || '';
+
+// Solve the frozen reading. Handwritten digits are checked against the printed ones' solution
+// (f.entry: 'ok' | 'wrong' | 'maybe'). Printed ones alone not a sudoku → the split was off, all
+// digits are the task.
+function resolve() {
+  const f = live.frozen, n = f.digits.filter(Boolean).length;
+  const mine = f.digits.map((d, i) => !!d && f.printed[i] === false), givens = f.digits.map((d, i) => mine[i] ? 0 : d);
+  let sols = mine.some(Boolean) ? solve(givens) : [];
+  f.entry = Array(81).fill(null);
+  f.givens = sols.length === 1 ? givens : f.digits.slice();   // the task: printed digits, or all if they don't make one
+  if (sols.length === 1) mine.forEach((m, i) => {
+    if (!m) return;
+    const sol = sols[0][i];
+    f.entry[i] = f.conf[i] === 1 ? (f.digits[i] === sol ? 'ok' : 'wrong') : judge(f.probs[i], sol);   // conf 1: set by the user
+    if (f.entry[i] === 'ok') f.digits[i] = sol;
+  });
+  else sols = n >= 17 ? solve(f.digits) : [];   // fewer than 17 givens is never a proper sudoku
+  f.board = sols.length === 1 ? { solution: sols[0] } : null;
+  f.why = n < 17 ? `Vidim samo ${n} brojeva, premalo za sudoku.` : sols.length ? 'Ima više rješenja: možda neki broj nije pročitan.' : 'Nema rješenja.';
+}
+
+// The frozen view: the straightened picture with the reading over it, to be checked before "Potvrdi";
+// then fitted under the status (whose height the text just set).
+function showFrozen() {
+  drawFrozen();
+  liftGrid();
+}
+function drawFrozen() {
+  const f = live.frozen, o = $('overlay'), ctx = o.getContext('2d'), b = f.board;
+  ctx.drawImage(f.still, 0, 0, o.width, o.height);
+  const pen = painter(ctx), sel = f.sel === null ? [] : [[f.sel, 'rgba(59, 130, 246, 0.5)']];
+  $('liveConfirm').disabled = !b;
+  if (!b) {
+    // Unsolvable: duplicates are the usual culprit (misread, or a wrong entry on paper);
+    // of each clashing pair the less certain reading is marked.
+    const dup = f.digits.map((d, i) => d && PEERS[i].some(j => f.digits[j] === d && f.conf[j] >= f.conf[i]));
+    pen.outline(RED);
+    render(pen, f.digits, f.conf, [...dup.map((x, i) => x && [i, 'rgba(239, 68, 68, 0.5)']).filter(Boolean), ...sel]);
+    return tip(dup.some(Boolean) ? 'Isti broj dvaput (crveno)' : f.why, 'Dodirni polje i ispravi broj, ili skeniraj ponovo.');
+  }
+  pen.outline(GREEN);
+  const count = e => f.entry.filter(x => x === e).length;
+  render(pen, f.digits, f.conf, [...f.entry.flatMap((e, i) => e === 'wrong' ? [[i, 'rgba(239, 68, 68, 0.5)']] : e === 'maybe' ? [[i, 'rgba(255, 224, 138, 0.6)']] : []), ...sel],
+    f.entry.map(e => e && ENTRY_INK[e]));   // own entries: blue right, red wrong, brown unsure
+  if (f.entry.some(Boolean)) return tip(`Tvoji brojevi: ${count('ok')} točno · ${count('wrong')} krivo · ${count('maybe')} nesigurno`,
+    'Je li sve dobro pročitano? Dodirni broj da ga ispraviš ili označiš tiskani / tvoj. Zatim Potvrdi.');
+  tip('Je li sve dobro pročitano?', 'Sivo = tiskano, žuto = nesigurno. Dodirni broj da ga ispraviš ili označiš kao svoj. Zatim Potvrdi.');
+}
+
+// Tap on the frozen picture → select that cell and show the number pad.
+$('overlay').onclick = e => {
+  const f = live?.frozen;
+  if (!f) return;
+  const i = cellAt(e.clientX, e.clientY);
+  f.sel = i === f.sel ? null : i;
+  $('pad').hidden = f.sel === null;
+  $('padKind').hidden = f.sel === null || !f.digits[f.sel];
+  if (f.sel !== null) $('padKind').textContent = f.printed[f.sel] === false ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
+  showFrozen();
+};
+
+// Screen point → cell of the frozen (straightened) grid, or null. Undoes object-fit: contain, the move
+// and zoom (both in the bounding rect).
+function cellAt(cx, cy) {
+  const o = $('overlay'), r = o.getBoundingClientRect(), s = Math.min(r.width / o.width, r.height / o.height);
+  const x = (cx - r.left - (r.width - o.width * s) / 2) / s * N / o.width, y = (cy - r.top - (r.height - o.height * s) / 2) / s * N / o.height;
+  return x >= 0 && y >= 0 && x < N && y < N ? (y / S | 0) * 9 + (x / S | 0) : null;
+}
+
+// Number pad: set the selected cell (0 = empty), remember the correction, solve again.
+function fixCell(d) {
+  const f = live?.frozen;
+  if (!f || f.sel === null) return;
+  if (d && lastVecs[f.sel].length) learn([[f.sel, d]]);   // the user says what is written there
+  f.digits[f.sel] = d;
+  f.conf[f.sel] = 1;
+  f.sel = null;
+  $('pad').hidden = true;
+  resolve();
+  showFrozen();
+}
+
+// The board as the app reads it, drawn over the paper: white board + grid, read digits in dark (cell
+// yellow if unsure) and marked cells. ink: per cell colour for read digits (own entries). Printed
+// digits sit on a grey square (all of them while still reading).
+// With live.digital off the paper stays visible and only the marks are drawn.
+function render(pen, digits, conf, marks = [], ink = []) {
+  if (live.digital) {
+    pen.board();
+    digits.forEach((d, i) => d && live.frozen?.printed[i] !== false && pen.cell(i, 'rgba(120, 120, 120, 0.4)'));   // printed: grey square
+    digits.forEach((d, i) => d && conf[i] < 0.8 && !marks.some(([j]) => j === i) && pen.cell(i, 'rgba(255, 224, 138, 0.6)'));
+  }
+  marks.forEach(([i, color]) => pen.cell(i, color));
+  if (live.digital) digits.forEach((d, i) => d && pen.digit(i, d, ink[i] || '#111827'));
+}
+
+const AMBER = '#f59e0b', GREEN = '#22c55e', RED = '#ef4444';
+const ENTRY_INK = { ok: '#1d4ed8', wrong: '#dc2626', maybe: '#92400e' };
+
+// No grid in view: say why, if the picture shows it. Only extremes get a specific tip: the darkest
+// (brightness ~90) and blurriest (Laplacian variance ~5) photos in the test set still read fine.
+function frameAdvice() {
+  const src = cv.imread(frame), g = new cv.Mat(), lap = new cv.Mat(), m = new cv.Mat(), sd = new cv.Mat();
+  cv.cvtColor(src, g, cv.COLOR_RGBA2GRAY);
+  cv.Laplacian(g, lap, cv.CV_64F);
+  cv.meanStdDev(lap, m, sd);
+  const light = cv.mean(g)[0], sharp = sd.data64F[0] ** 2;
+  [src, g, lap, m, sd].forEach(x => x.delete());
+  if (light < 50) return 'Premalo svjetla. Upali svjetlo.';
+  if (sharp < 4) return 'Slika je mutna. Drži mirno i malo odmakni mobitel.';
+  return 'Ne vidim sudoku. Približi se tako da mreža ispuni veći dio ekrana.';
+}
+
+// Grid found but framed badly (corners as [x,y,...] in frame px) → tip, or null if fine.
+function gridAdvice(q) {
+  const W = frame.width, H = frame.height, edge = 0.01 * Math.max(W, H);
+  let area = 0;
+  for (let i = 0; i < 8; i += 2) area += q[i] * q[(i + 3) % 8] - q[(i + 2) % 8] * q[i + 1];
+  if (Math.abs(area) / 2 < 0.12 * W * H) return 'Približi se, sudoku je premalen.';
+  if (q.some((x, i) => x < edge || x > (i % 2 ? H : W) - edge)) return 'Odmakni se malo, cijeli sudoku mora biti u kadru.';
+  return null;
+}
+
+// Drawing into the video: grid coordinates → undo the turn → inverse perspective → frame px → video px (÷k).
+// No quad: the canvas is the straightened, upright grid itself (frozen view), so just scale.
+function painter(ctx, quad, k, rot) {
+  let P = (x, y) => [x * ctx.canvas.width / N, y * ctx.canvas.height / N];
+  if (quad) {
+    const Mi = perspective(quad, true), h = Array.from(Mi.data64F);
+    Mi.delete();
+    P = (x, y) => {
+      for (let i = 0; i < rot; i++) [x, y] = [y, N - x];   // undo one clockwise turn
+      const w = h[6] * x + h[7] * y + h[8];
+      return [(h[0] * x + h[1] * y + h[2]) / w / k, (h[3] * x + h[4] * y + h[5]) / w / k];
+    };
+  }
+  return {
+    P,
+    board() {
+      ctx.beginPath();
+      [[0, 0], [N, 0], [N, N], [0, N]].forEach(([x, y]) => ctx.lineTo(...P(x, y)));
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';   // see-through: the paper stays faintly visible
+      ctx.fill();
+      for (let j = 0; j <= 9; j++) {
+        ctx.beginPath();
+        ctx.moveTo(...P(j * S, 0)); ctx.lineTo(...P(j * S, N));
+        ctx.moveTo(...P(0, j * S)); ctx.lineTo(...P(N, j * S));
+        ctx.lineWidth = Math.max(1, ctx.canvas.width / (j % 3 ? 600 : 250)); ctx.strokeStyle = '#374151';
+        ctx.stroke();
+      }
+    },
+    outline(color) {
+      ctx.beginPath();
+      [[0, 0], [N, 0], [N, N], [0, N]].forEach(([x, y]) => ctx.lineTo(...P(x, y)));
+      ctx.closePath();
+      ctx.lineWidth = Math.max(3, ctx.canvas.width / 150); ctx.strokeStyle = color;
+      ctx.stroke();
+    },
+    cell(i, color) {
+      const x = i % 9 * S, y = (i / 9 | 0) * S;
+      ctx.beginPath();
+      [[x, y], [x + S, y], [x + S, y + S], [x, y + S]].forEach(([px, py]) => ctx.lineTo(...P(px, py)));
+      ctx.fillStyle = color;
+      ctx.fill();
+    },
+    digit(i, d, color) {
+      const cx = (i % 9 + 0.5) * S, cy = (i / 9 | 0) * S, top = P(cx, cy), bottom = P(cx, cy + S);
+      const size = Math.hypot(bottom[0] - top[0], bottom[1] - top[1]) * 0.7, [x, y] = P(cx, cy + S / 2);
+      ctx.font = `bold ${size}px system-ui, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = size / 8; ctx.strokeStyle = '#fff'; ctx.strokeText(d, x, y);
+      ctx.fillStyle = color; ctx.fillText(d, x, y);
+    },
+  };
+}
+
+// Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn.
+function markConflicts() {
+  if (task) remember(task.solution, task.givens, inputs.map((x, i) => x.classList.contains('ok') ? task.solution[i] : 0));
+  drawCands();
+  const v = inputs.map(i => i.classList.contains('maybe') ? '' : i.value);   // an unsure reading flags nothing
+  inputs.forEach((inp, i) => {
+    const r = i / 9 | 0, c = i % 9;
+    inp.classList.toggle('bad', v[i] !== '' && v.some((x, j) => j !== i && x === v[i] &&
+      ((j / 9 | 0) === r || j % 9 === c || ((j / 27 | 0) === (i / 27 | 0) && (j % 9 / 3 | 0) === (c / 3 | 0)))));
+  });
+}
+</script>
+<script async src="vendor/opencv.js" onload="cvReady()" onerror="say('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
+</body>
+</html>

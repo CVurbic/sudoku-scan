@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "scripts": { "train": "node train.js" },
+  "devDependencies": { "puppeteer-core": "^23.11.1" }
+}
