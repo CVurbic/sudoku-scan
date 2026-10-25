@@ -9,7 +9,7 @@ const PRINTED = '070500106001040000005701000102000030304912605050000201000109400
 const HW_GIVENS = '000000082830060017010090003000700051020508030540003000300080060690030074450000000';
 const HW_FULL = '764351982839264517215897643983726451126548739547913826372489165698135274451672398';
 
-const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.url === '/' ? 'index.html' : q.url),
+const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u => u === '/' ? 'index.html' : u)(q.url.split('?')[0])),   // ?s= share links
   (e, d) => e ? (s.writeHead(404), s.end()) : (s.writeHead(200), s.end(d)))).listen(8768);
 
 (async () => {
@@ -29,8 +29,41 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   const grid = () => page.evaluate(() => [...document.querySelectorAll('#grid input')].map(i => i.value || '0').join(''));
   const cls = c => page.evaluate(c => [...document.querySelectorAll('#grid input')].map((x, i) => x.classList.contains(c) ? i : -1).filter(i => i >= 0), c);
 
-  // 1. Printed puzzle: exact OCR, unique solution, hints step to the end and are always right.
+  // 0. "Instaliraj" in a browser tab once Chrome offers the install (it does here too: no service worker
+  //    needed); the tap opens Chrome's prompt (faked: a real one would wait for a click) and the button goes.
+  //    Safari on iPhone (navigator.standalone false) has no such event: the button gives instructions.
   await open(null);
+  await page.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => { window.prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); dispatchEvent(e); });
+  assert.strictEqual(await page.evaluate(() => installBtn.hidden), false, 'install: offered → button');
+  await page.click('#installBtn');
+  assert.deepStrictEqual(await page.evaluate(() => [window.prompted, installBtn.hidden]), [true, true], 'install: prompt, then gone');
+  const ios = await browser.newPage();
+  await ios.evaluateOnNewDocument(() => {   // Safari: navigator.standalone, and never a beforeinstallprompt
+    Object.defineProperty(Navigator.prototype, 'standalone', { get: () => false });
+    addEventListener('beforeinstallprompt', e => e.stopImmediatePropagation(), true);
+  });
+  await ios.goto('http://localhost:8768/');
+  await ios.click('#installBtn');
+  assert.ok(await ios.evaluate(() => /Dodaj na početni zaslon/.test(msg.textContent)), 'install: iPhone instructions');
+  await ios.close();
+  console.log('install: button on the offer, Chrome prompt, then gone; iPhone instructions');
+
+  // 0b. Share: ⋯ → Podijeli gives a link (?s=) to this very sudoku; opened elsewhere (no history) it is a
+  //     game with help; the address drops ?s; a broken link says so.
+  await page.evaluate(() => { localStorage.sudokuTask = JSON.stringify({ givens: [...'070500106001040000005701000102000030304912605050000201000109400000030500503006090'].map(Number), solution: solve([...'070500106001040000005701000102000030304912605050000201000109400000030500503006090'].map(Number))[0] }); localStorage.sudokuView = 'game'; });
+  await page.reload();
+  const link = await page.evaluate(() => shareLink(task.givens));
+  assert.ok(/\?s=[0-9a-z]{40,55}$/.test(link), 'share link: ' + link);
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(link);
+  assert.deepStrictEqual(await page.evaluate(() => [task.givens.join(''), task.random, game.hidden, location.search, gameName.textContent.startsWith('Nova igra · ')]),
+    [PRINTED, true, false, '', true], 'shared link opens that sudoku as a game');
+  await page.goto('http://localhost:8768/?s=zz');
+  assert.ok(await page.evaluate(() => !menu.hidden && /ne vodi/.test(msg.textContent)), 'broken link: menu + message');
+  console.log('share: link to this sudoku, opens as a game elsewhere, ?s dropped, broken link says so');
+  await open(null);
+
+  // 1. Printed puzzle: exact OCR, unique solution, hints step to the end and are always right.
   await scan('printed.jpg');
   assert.strictEqual(await grid(), PRINTED, 'printed OCR');
   await page.click('#setTask');
@@ -122,6 +155,10 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   const waited = await page.evaluate(() => task.elapsed);
   await new Promise(r => setTimeout(r, 1500));
   assert.strictEqual(await page.evaluate(() => task.elapsed), waited, 'clock stops in the menu');
+  // A reload in the menu stays in the menu (the game waits behind Nastavi).
+  await page.reload();
+  await page.waitForFunction(() => !document.getElementById('file').disabled, { timeout: 120000 });
+  assert.deepStrictEqual(await page.evaluate(() => [menu.hidden, game.hidden, homeResume.hidden]), [false, true, false], 'reload in the menu: still the menu');
   // Nedavno: two rows at most; all of them behind "Sva povijest".
   await page.evaluate(() => { localStorage.sudokuHistory = JSON.stringify([...saved(), ...[1, 2, 3].map(k => ({ key: 'x' + k, givens: '0'.repeat(81), done: '0'.repeat(81), first: k, last: k, diff: 10 }))]); showMenu(); });
   assert.deepStrictEqual(await page.evaluate(() => [recent.children.length, historyAll.textContent.startsWith('Sva povijest (5)')]), [2, true], 'Nedavno: 2 rows, all in Sva povijest');

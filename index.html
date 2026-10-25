@@ -58,6 +58,8 @@
   .bar { display: flex; align-items: center; gap: 10px; height: 56px; }
   .bar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   .mark { width: 22px; height: 22px; flex: none; color: var(--text); }
+  #installBtn { gap: 6px; margin: 0 -8px 0 auto; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
+  #installBtn svg { width: 20px; height: 20px; }
   svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
   /* The game's top bar: back to the menu, the clock, ⋯. */
@@ -434,6 +436,7 @@
     <button id="explainBtn" aria-pressed="true">Objašnjenje u oblačiću<span class="sw"></span></button>
     <button id="candsBtn" aria-pressed="false">Kandidati<span class="sw"></span></button>
     <button id="paperBtn" disabled>Provjeri papir kamerom</button>
+    <button id="shareBtn"><span>Podijeli sudoku<small>link vodi na ovaj isti sudoku</small></span></button>
     <hr>
     <button id="restartBtn"><span>Počni ispočetka<small>briše tvoje brojeve</small></span></button>
     <button id="solveBtn">Riješi sve</button>
@@ -444,6 +447,7 @@
   <header class="bar">
     <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
     <h1>Sudoku Scan</h1>
+    <button id="installBtn" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Instaliraj</button>
   </header>
   <div id="home">
     <button id="homeResume" hidden><canvas></canvas><span class="hmeta"><b>Nastavi</b><small id="resumeText"></small></span></button>
@@ -882,7 +886,7 @@ function showTask() {
 // The name row: what is being played (and its date), or before a task what is being typed and how many digits.
 function gameHead() {
   const n = inputs.filter(x => x.value).length;
-  $('gameName').textContent = !task ? (lastProbs ? 'Provjeri očitanje' : 'Upiši sudoku') : gameKind() + (task.daily || task.random ? ` · ${DAILY[task.level][0]}` : '');
+  $('gameName').textContent = !task ? (lastProbs ? 'Provjeri očitanje' : 'Upiši sudoku') : gameKind() + (task.daily || task.random ? ` · ${LEVELS[task.level][1]}` : '');
   $('gameSide').textContent = !task ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'broj' : n % 10 > 1 && n % 10 < 5 && (n % 100 < 12 || n % 100 > 14) ? 'broja' : 'brojeva'}`
     : task.daily ? new Date(task.daily + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
 }
@@ -1146,9 +1150,11 @@ function showHistory() {
 }
 
 // Menu or game. Going between them animates nothing and keeps everything: the game stays on the board.
+// Remembered, so a reload (or the app opened again) comes back where the user was.
 let view = 'menu';
 function go(v) {
   view = v;
+  try { localStorage.sudokuView = v; } catch {}
   $('menu').hidden = v !== 'menu';
   $('game').hidden = v !== 'game';
   say('');   // a message belongs to the screen it was said on
@@ -1168,7 +1174,7 @@ function showMenu() {
   $('homeResume').hidden = !key;
   if (key) {
     const done = inputs.map((x, i) => task.givens[i] ? 0 : +x.value || 0), blanks = task.givens.filter(d => !d).length;
-    const level = task.daily || task.random ? DAILY[task.level][0] : diffLevel(saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution))[1];
+    const level = task.daily || task.random ? LEVELS[task.level][1] : diffLevel(saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution))[1];
     $('homeResume').firstChild.replaceWith(miniGrid({ givens: task.givens.join(''), done: done.join('') }));
     $('resumeText').textContent = [gameKind(), level, `${done.filter(Boolean).length} od ${blanks}`, ...task.daily || task.random ? [clock(state().elapsed)] : []].join(' · ');
   }
@@ -1183,6 +1189,22 @@ $('homeDaily').onclick = () => openDaily();
 $('manualBtn').onclick = () => { clearBoard(); go('game'); };
 $('aboutBtn').onclick = () => $('about').showModal();
 $('aboutClose').onclick = () => $('about').close();
+
+// "Instaliraj", only in a browser tab: never once the app runs installed. Chrome says when it can install
+// (beforeinstallprompt, kept for the button, its own bar suppressed); Safari on iPhone / iPad has no such
+// event, so there the button says how. Elsewhere (Firefox) nothing to offer, no button.
+let installEvt = null;
+const installed = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+$('installBtn').hidden = installed() || navigator.standalone !== false;   // navigator.standalone: iOS Safari only
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('installBtn').hidden = installed(); });
+addEventListener('appinstalled', () => { installEvt = null; $('installBtn').hidden = true; });
+$('installBtn').onclick = async () => {
+  if (!installEvt) return say('Na iPhoneu: dodirni *Dijeli* (kvadrat sa strelicom), pa *Dodaj na početni zaslon*.', 8000);
+  installEvt.prompt();
+  await installEvt.userChoice;   // installed or not, the event is used up
+  installEvt = null;
+  $('installBtn').hidden = true;
+};
 
 // ‹ Izbornik: the game stays (saved, and "Nastavi" brings it back). A sudoku still being typed in or
 // checked has no task yet: it is dropped, and the saved game comes back on the board.
@@ -2104,7 +2126,7 @@ function checkSolved() {
   $('solved').showModal();
 }
 $('solvedClose').onclick = () => $('solved').close();
-$('solvedNext').onclick = () => newRandom(task.level, $('solvedNext'));
+$('solvedNext').onclick = () => newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
 $('solvedMenu').onclick = () => { $('solved').close(); go('menu'); };
 
 // Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn,
@@ -2254,6 +2276,12 @@ async function newRandom(lvl, btn) {
   keys.forEach(b => b.disabled = false);
   btn.lastChild.textContent = label;
   $('solved').close();
+  startGame(p, lvl);
+}
+[...$('newLevels').children].forEach((b, i) => b.onclick = () => newRandom(i, b));
+
+// A sudoku ({ givens, solution }) on the board as a game: with help and a clock (level: LEVELS index).
+function startGame(p, lvl) {
   task = { givens: p.givens, solution: p.solution, random: true, level: lvl, elapsed: 0 };
   clearHint();
   lastProbs = null;
@@ -2269,7 +2297,32 @@ async function newRandom(lvl, btn) {
   try { tips = +localStorage.sudokuTips || 0; if (tips < 3) localStorage.sudokuTips = tips + 1; } catch {}
   if (tips < 3) { say('Zapneš li, *Savjet* pokaže sljedeći potez i objasni zašto. Koristi ga koliko god želiš: ništa ne gubiš.', 6000); tipOn = true; }
 }
-[...$('newLevels').children].forEach((b, i) => b.onclick = () => newRandom(i, b));
+
+// --- Sharing: a link holds the sudoku's printed digits (81, as one base-36 number), so every link leads
+// to that one sudoku, for everyone, scanned ones too; no server, no generator involved. ---
+const shareLink = givens => `${location.origin}${location.pathname}?s=${BigInt(givens.join('')).toString(36)}`;
+$('shareBtn').onclick = async () => {
+  $('more').close();
+  const url = shareLink(task.givens), text = `Sudoku (${$('diff').querySelector('b').textContent.split('· ')[1]}). Možeš li ga riješiti?`;
+  if (navigator.share) try { return await navigator.share({ title: 'Sudoku Scan', text, url }); } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); say('Link je kopiran. Tko ga otvori, dobije ovaj isti sudoku.'); }
+  catch { say(url, Infinity); }   // no clipboard: the link itself, to copy by hand
+};
+// A link opened (?s=): that sudoku, checked (a link is outside input). Already the game on the board or
+// in the history: go on with it; else a new game. The address loses ?s, so a reload goes on, not over.
+function openShared() {
+  const s = new URLSearchParams(location.search).get('s');
+  if (s === null) return false;
+  history.replaceState(null, '', location.pathname);
+  const g = /^[0-9a-z]{1,60}$/.test(s) && [...[...s].reduce((n, c) => n * 36n + BigInt(parseInt(c, 36)), 0n).toString().padStart(81, '0')].map(Number);
+  const sols = g && g.length === 81 && g.filter(Boolean).length >= 17 ? solve(g) : [];
+  if (sols.length !== 1) { go('menu'); say('Ovaj link ne vodi na ispravan sudoku.', Infinity); return true; }
+  const key = sols[0].join(''), e = saved().find(x => x.key === key);
+  if (task?.solution.join('') === key) { go('game'); if (task.daily && !daily.solvedAt) openDaily(task.level); }
+  else if (e) openTask(e);
+  else startGame({ givens: g, solution: sols[0] }, LEVELS.indexOf(diffLevel(difficulty(g, sols[0]))));
+  return true;
+}
 
 // A daily done: stop the clock, keep the record. → the card's line: time, streak (days with at least
 // one daily solved), best of this level.
@@ -2310,13 +2363,17 @@ setInterval(() => {
 }, 1000);
 addEventListener('pointerdown', () => $('nudge').hidden = true, true);   // any tap puts it away
 
-// The saved game, now that everything it needs exists, as it was left. Today's daily comes back
-// paused, behind its card ("Nastavi"). Nothing to go on with: the menu.
+// The saved game, now that everything it needs exists, as it was left. Back where the user was: the
+// game only if they were in it and it is unfinished (today's daily paused, behind its card), else the menu.
 loadSaved();
-if (task && celebrated !== task.solution.join('')) {
-  go('game');
-  if (task.daily && !daily.solvedAt) openDaily(task.level);
-} else go('menu');
+let wasIn = null;
+try { wasIn = localStorage.sudokuView; } catch {}
+if (!openShared()) {   // a shared link wins
+  if (wasIn !== 'menu' && task && celebrated !== task.solution.join('')) {
+    go('game');
+    if (task.daily && !daily.solvedAt) openDaily(task.level);
+  } else go('menu');
+}
 </script>
 <script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>   <!-- offline + install (sw.js) -->
 <script async src="vendor/opencv.js" onload="cvReady()" onerror="loading('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
