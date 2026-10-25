@@ -375,15 +375,30 @@
   .field { width: 100%; min-width: 0; min-height: 48px; padding: 0 12px; border: 1px solid var(--control); border-radius: var(--radius-control);
     background: var(--surface); color: var(--text); font: 400 16px/1.2 var(--font); }   /* 16px: no zoom on iPhone */
   #aboutName { margin-bottom: 8px; }
-  #lbList { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
-  #lbList li { display: grid; grid-template-columns: 3ch 1fr auto; gap: 10px; margin: 0 -8px; padding: 4px 8px; border-radius: 6px;
+  .lblist { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+  .lblist li { display: grid; grid-template-columns: 3ch 1fr auto; gap: 10px; margin: 0 -8px; padding: 4px 8px; border-radius: 6px;
     animation: rise .2s cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i) * 40ms) backwards; }
-  #lbList li span:first-child { color: var(--muted); text-align: right; }
-  #lbList li span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #lbList li.me { background: var(--area); font-weight: 600; }
-  #lbList li.apart { margin-top: 6px; }   /* below the top five: the gap says places are skipped */
+  .lblist li span:first-child { color: var(--muted); text-align: right; }
+  .lblist li span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lblist li.me { background: var(--area); font-weight: 600; }
+  .lblist li.apart { margin-top: 6px; }   /* below the top five: the gap says places are skipped */
+  .lblist li { --i: 0; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
   @keyframes fade { from { opacity: 0; } }
+  /* Ljestvica in the menu, below Nedavno: a day (‹ ›, a week back) and all three levels at once, each its
+     top three and you. The menu is seen often: rows fade in only when they change, and on a new day the
+     old ones stay, dimmed, until the new ones are in. */
+  #ranksTop { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 -10px; }   /* the 44 px day buttons, not the text, set its height */
+  #home #ranksTop h2 { margin: 0; }
+  #ranksDay { display: flex; align-items: center; margin-right: -12px; font-size: 15px; font-weight: 600; }
+  #ranksDay button { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
+  #ranksDay button:disabled { background: transparent; color: var(--control); }
+  #ranksDay svg { width: 18px; height: 18px; }
+  #ranks { display: flex; flex-direction: column; gap: 16px; padding: 12px 14px; border-radius: 14px; background: var(--surface); transition: opacity .15s ease-out; }
+  #ranks[aria-busy="true"] { opacity: .5; }
+  #ranks > div > b { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; font-size: 15px; font-weight: 600; }
+  #ranks small { margin-left: auto; color: var(--muted); font-size: 14px; font-weight: 500; }
+  #ranks li { animation: fade .15s ease-out; }
   .hmeta b.solved { color: var(--positive); }
 
   /* Reduced motion: nothing travels or grows; fades stay. */
@@ -394,7 +409,7 @@
     #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }
     @starting-style { #more[open] { transform: none; } }
     button:active, .btn:active { transform: none; }
-    #lbList li { animation-name: fade; }
+    .lblist li { animation-name: fade; }
   }
 </style>
 </head>
@@ -442,7 +457,7 @@
     <b id="lbHead"></b>
     <form id="lbJoin" hidden><input id="lbName" class="field" maxlength="20" autocomplete="nickname" placeholder="Ime ili nadimak" aria-label="Ime na ljestvici"><button>Pošalji</button>
       <small>Ime i vrijeme bit će javni. Promijeniti ili isključiti: O aplikaciji.</small></form>
-    <ol id="lbList"></ol>
+    <ol id="lbList" class="lblist"></ol>
   </div>
   <div class="row"><button id="solvedMenu" autofocus>Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
 </dialog>
@@ -492,6 +507,19 @@
     <h2 id="recentTitle">Nedavno</h2>
     <ul id="recent" class="hlist"></ul>
     <button id="historyAll"><span></span><span aria-hidden="true">›</span></button>
+    <div id="ranksTop">
+      <h2>Ljestvica</h2>
+      <span id="ranksDay">
+        <button id="ranksPrev" aria-label="Dan prije"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <span id="ranksDate" aria-live="polite">Danas</span>
+        <button id="ranksNext" aria-label="Dan poslije"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+      </span>
+    </div>
+    <div id="ranks">
+      <div><b><span class="dot" style="background: var(--easy)"></span>Lagano<small></small></b><ol class="lblist"></ol></div>
+      <div><b><span class="dot" style="background: var(--medium)"></span>Srednje<small></small></b><ol class="lblist"></ol></div>
+      <div><b><span class="dot" style="background: var(--hard)"></span>Teško<small></small></b><ol class="lblist"></ol></div>
+    </div>
     <div class="links"><button id="manualBtn">Upiši ručno</button><button id="aboutBtn">O aplikaciji</button></div>
   </div>
   <div class="dock">
@@ -1211,6 +1239,8 @@ function showMenu() {
   $('recentTitle').hidden = !recent.length;
   $('historyAll').hidden = !list.length;
   $('historyAll').firstChild.textContent = `Sva povijest (${list.length})`;
+  ranksOff = 0;
+  showRanks();
 }
 $('homeResume').onclick = () => task.daily === dayKey() ? openDaily(task.level) : go('game');   // today's daily: its card, the clock waits for it
 $('homeDaily').onclick = () => openDaily();
@@ -2403,8 +2433,26 @@ async function lbFlush() {
   }
   return true;
 }
-// The solved card's panel: the name first if there is none; else the top five and your own row below
-// them if you are further down (equal times share a place).
+// A day and level's top n as list rows, your own (mine: { name, ms }) marked, or below them if you are
+// further down (equal times share a place). → { rows, all: players }; rejects when it did not load.
+async function lbRows(day, level, n, mine) {
+  const where = `day=eq.${day}&level=eq.${level}`, ok = r => r.ok ? r : Promise.reject(),
+    count = q => lb(`select=id&${q}`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).then(ok).then(r => +r.headers.get('content-range').split('/')[1]);
+  const [top, faster, all] = await Promise.all([lb(`select=name,ms&${where}&order=ms,created_at&limit=${n}`).then(ok).then(r => r.json()),
+    mine ? count(`${where}&ms=lt.${mine.ms}`) : 0, count(where)]);
+  const row = (place, r, cls = '') => {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.append(...[place, r.name, clock(r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
+    return li;
+  };
+  const me = mine ? top.findIndex(r => r.name === mine.name && r.ms === mine.ms) : -1,
+    rows = top.map((r, i) => row(top.findIndex(x => x.ms === r.ms) + 1, r, i === me ? 'me' : ''));
+  if (mine && me < 0 && all) rows.push(row(faster + 1, mine, 'me apart'));
+  return { rows, all };
+}
+const players = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'igrač' : 'igrača'}`;
+// The solved card's panel: the name first if there is none; else the top five and you.
 async function lbShow(day, level, ms) {
   const name = lbName(), head = t => $('lbHead').textContent = t;
   $('lboard').hidden = false;
@@ -2413,24 +2461,40 @@ async function lbShow(day, level, ms) {
   if (!name) return head('Upiši se na današnju ljestvicu');
   head('Učitavam…');
   if (!await lbFlush()) return head('Bez mreže: rezultat se šalje kad se vratiš.');
-  const where = `day=eq.${day}&level=eq.${level}`, ok = r => r.ok ? r : Promise.reject(),
-    count = q => lb(`select=id&${q}`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).then(ok).then(r => +r.headers.get('content-range').split('/')[1]);
-  let top, faster, all;
-  try { [top, faster, all] = await Promise.all([lb(`select=name,ms&${where}&order=ms,created_at&limit=5`).then(ok).then(r => r.json()), count(`${where}&ms=lt.${ms}`), count(where)]); }
-  catch { return head('Ljestvica se nije učitala.'); }
-  const row = (place, r, cls = '') => {
-    const li = document.createElement('li');
-    li.className = cls;
-    li.append(...[place, r.name, clock(r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
-    return li;
-  };
-  const me = top.findIndex(r => r.name === name && r.ms === ms),
-    rows = top.map((r, i) => row(top.findIndex(x => x.ms === r.ms) + 1, r, i === me ? 'me' : ''));
-  if (me < 0) rows.push(row(faster + 1, { name, ms }, 'me apart'));
-  rows.forEach((li, i) => li.style.setProperty('--i', i));
-  head(`Danas, ${DAILY[level][0].toLowerCase()} · ${all} ${all % 10 === 1 && all % 100 !== 11 ? 'igrač' : 'igrača'}`);
-  $('lbList').replaceChildren(...rows);
+  let b;
+  try { b = await lbRows(day, level, 5, { name, ms }); } catch { return head('Ljestvica se nije učitala.'); }
+  b.rows.forEach((li, i) => li.style.setProperty('--i', i));   // one after another
+  head(`Danas, ${DAILY[level][0].toLowerCase()} · ${players(b.all)}`);
+  $('lbList').replaceChildren(...b.rows);
 }
+
+// The menu's Ljestvica: a day (today, or up to a week back), each level's top three and you. Your row comes
+// from your own record of that day (ponytail: shown even if that time was solved before the name was
+// set, so never sent; a sent flag in the record if that ever confuses). Asked again on every menu
+// (ponytail: 9 small requests; a short cache if Supabase's free tier ever minds).
+let ranksOff = 0, ranksAsk = 0;
+async function showRanks() {
+  const d = new Date();
+  d.setDate(d.getDate() - ranksOff);
+  const day = dayKey(d), ask = ++ranksAsk, done = dailyDone(), name = lbName();
+  $('ranksDate').textContent = ranksOff === 0 ? 'Danas' : ranksOff === 1 ? 'Jučer' : d.toLocaleDateString('hr', { weekday: 'short', day: 'numeric', month: 'numeric' });
+  $('ranksPrev').disabled = ranksOff === 6;
+  $('ranksNext').disabled = ranksOff === 0;
+  const res = await Promise.all(DAILY.map((_, lvl) => {
+    const mine = done[`${day}/${lvl}`];
+    return lbRows(day, lvl, 3, name && mine ? { name, ms: mine.ms } : null).catch(() => null);
+  }));
+  if (ask !== ranksAsk) return;   // another day was asked for meanwhile
+  $('ranks').ariaBusy = 'false';
+  [...$('ranks').children].forEach((el, lvl) => {
+    const b = res[lvl], ol = el.querySelector('ol'), rows = b?.rows ?? [];
+    el.querySelector('small').textContent = !b ? 'Nije se učitalo' : b.all ? players(b.all) : 'Još nitko';
+    if (ol.innerHTML !== rows.map(li => li.outerHTML).join('')) ol.replaceChildren(...rows);   // the same rows stay put (no fade)
+  });
+}
+const stepRanks = by => { ranksOff += by; $('ranks').ariaBusy = 'true'; showRanks(); };   // the old rows stay, dimmed, until the new ones are in
+$('ranksPrev').onclick = () => stepRanks(1);
+$('ranksNext').onclick = () => stepRanks(-1);
 $('lbJoin').onsubmit = e => {
   e.preventDefault();
   const name = $('lbName').value.trim();

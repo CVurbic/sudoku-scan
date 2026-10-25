@@ -120,6 +120,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual((await hist()).length, 1, 'no duplicate');
   await page.click('#backBtn');
   assert.deepStrictEqual(await page.evaluate(() => [menu.hidden, game.hidden, homeResume.hidden, recent.children.length]), [false, true, true, 1], 'menu: solved, so no Nastavi; in Nedavno');
+  await page.$eval('#historyAll', b => b.scrollIntoView({ block: 'center' }));   // out from under the sticky dock (600 px window)
   await page.click('#historyAll');
   assert.strictEqual(await page.$eval('#historyList .hmeta b', b => b.textContent), 'Riješeno ✓');
   await page.click('#historyList .hrow');
@@ -228,7 +229,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
       if (o.method === 'POST') return rows.some(r => r.device === b.device && r.day === b.day && r.level === b.level) ? new Response('', { status: 409 }) : (rows.push(b), new Response(null, { status: 201 }));
       const hit = rows.filter(r => r.day === q.get('day').slice(3) && r.level === +q.get('level').slice(3) && (!q.get('ms') || r.ms < +q.get('ms').slice(3)));
       if (o.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${hit.length}` } });
-      return Response.json(hit.sort((x, y) => x.ms - y.ms).slice(0, 5).map(({ name, ms }) => ({ name, ms })));
+      return Response.json(hit.sort((x, y) => x.ms - y.ms).slice(0, +q.get('limit')).map(({ name, ms }) => ({ name, ms })));
     };
   });
   await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
@@ -251,8 +252,16 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return [...off, await lbFlush(), localStorage.sudokuLbQueue, lbDb.filter(r => r.level === 1 && r.name === 'Chris').length];
   });
   assert.deepStrictEqual(queue, [false, 1, true, '[]', 1], 'board: offline queue, 409');
-  await page.click('#solvedClose');
-  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue`);
+  await page.click('#solvedMenu');
+  // The menu's Ljestvica: all three levels, top three + you (marked where your own record says so); a day back; a week at most.
+  const ranks = () => page.evaluate(async () => { await showRanks();
+    return [ranksDate.textContent, ...[...ranks.children].map(el => el.querySelector('small').textContent + '=' + [...el.querySelectorAll('li')].map(li => li.className + ':' + li.children[1].textContent).join(','))]; });
+  assert.deepStrictEqual(await ranks(), ['Danas', '7 igrača=:P0,:P1,:P2,me apart:Chris', '1 igrač=:Chris', 'Još nitko='], 'ranks: today');
+  await page.evaluate(() => ranksPrev.click());
+  assert.deepStrictEqual(await ranks(), ['Jučer', 'Još nitko=', 'Još nitko=', 'Još nitko='], 'ranks: yesterday');
+  await page.evaluate(() => { for (let i = 0; i < 6; i++) ranksPrev.click(); });
+  assert.deepStrictEqual(await page.evaluate(() => [ranksPrev.disabled, ranksNext.disabled]), [true, false], 'ranks: a week back at most');
+  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels`);
 
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
   const hard = await page.evaluate((puzzles, printed) => {
