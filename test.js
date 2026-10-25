@@ -87,6 +87,39 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.deepStrictEqual([await page.evaluate(() => task.givens.join('')), await grid()], [PRINTED, solution], 'opened from history');
   console.log('history: one entry per puzzle, solved, reopens');
 
+  // 1b. "Nova igra": a random sudoku with help and a clock; notes, undo, same-digit light, spent digits,
+  //     the board (wrong digits and notes too) back after a reload.
+  await page.click('#newBtn');
+  await page.click('#newLevels button');   // Lagano
+  await page.waitForFunction(() => task?.random && !dailyBar.hidden);
+  assert.deepStrictEqual(await page.evaluate(() => [hintBtn.hidden, undoBtn.hidden, undoBtn.disabled, solve(task.givens).length]), [false, false, true, 1], 'game: help, undo, one solution');
+  const empty = await page.evaluate(() => task.givens.findIndex(d => !d));
+  await page.evaluate(i => inputs[i].click(), empty);
+  await page.click('#padNotes');
+  for (const d of ['3', '5']) await page.evaluate(d => [...document.querySelectorAll('#pad button')].find(b => b.textContent === d).click(), d);
+  assert.deepStrictEqual(await page.evaluate(i => [notes[i], sel, cands.classList.contains('mine'), candCells[i].textContent], empty), [[3, 5], empty, true, '35'], 'notes: pencilled in, pad stays');
+  await page.click('#padNotes');
+  const wrongD = await page.evaluate(i => task.solution[i] % 9 + 1, empty);
+  await page.evaluate(d => [...document.querySelectorAll('#pad button')].find(b => b.textContent === String(d)).click(), wrongD);
+  assert.deepStrictEqual(await page.evaluate(i => [inputs[i].classList.contains('wrong'), notes[i].length], empty), [true, 0], 'game: judged, notes gone');
+  await page.click('#undoBtn');
+  assert.deepStrictEqual(await page.evaluate(i => [inputs[i].value, notes[i]], empty), ['', [3, 5]], 'undo: digit out, notes back');
+  const given = await page.evaluate(() => task.givens.findIndex(Boolean));
+  await page.evaluate(i => inputs[i].click(), given);
+  assert.ok(await page.evaluate(i => inputs.every((x, j) => x.classList.contains('same') === (x.value === inputs[i].value)) && inputs.some(x => x.classList.contains('peer')), given), 'same digit + peers lit');
+  await page.evaluate(([i, d]) => { sel = i; setCell(d); }, [empty, wrongD]);
+  await new Promise(r => setTimeout(r, 1300));
+  await page.reload();
+  await page.waitForFunction(() => !document.getElementById('file').disabled, { timeout: 120000 });
+  assert.deepStrictEqual(await page.evaluate(i => [task.random, inputs[i].classList.contains('wrong'), task.elapsed > 0, dailyName.textContent], empty), [true, true, true, 'Nova igra · Lagano'], 'game back after reload');
+  await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
+  const won = await page.evaluate(() => [solved.open, solvedText.textContent, solvedNext.hidden, solvedHistory.hidden, padKeys.slice(0, 9).every(b => b.classList.contains('spent')), saved()[0].random]);
+  assert.ok(won[0] && /^Vrijeme: \d+:\d\d$/.test(won[1]) && !won[2] && won[3] && won[4] && won[5], 'game won: ' + JSON.stringify(won));
+  await page.click('#solvedNext');
+  await page.waitForFunction(k => task?.random && task.solution.join('') !== k && !task.elapsed, {}, solution);
+  console.log('game: help, notes, undo, light, reload, won, next one');
+  await page.click('#newBtn');
+
   // 1a. Daily sudokus: for a date the same three puzzles on every run, each with one solution, easy < medium < hard.
   const gen = await page.evaluate(() => {
     const lv = [0, 1, 2].map(l => makeDaily('2026-10-26', l)), again = makeDaily('2026-10-26', 0);
