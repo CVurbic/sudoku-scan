@@ -366,6 +366,24 @@
   #solvedTechs small { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   #solved .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
   #solvedClose, #solvedNext { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  /* The daily's leaderboard: a tone step like the techniques; your row on the same-digit blue. The rows
+     rise in one after another (a rare moment). */
+  #lboard { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: var(--ground); text-align: left; }
+  #lbHead { display: block; margin-bottom: 6px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  #lbJoin { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  #lbJoin small { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
+  .field { width: 100%; min-width: 0; min-height: 48px; padding: 0 12px; border: 1px solid var(--control); border-radius: var(--radius-control);
+    background: var(--surface); color: var(--text); font: 400 16px/1.2 var(--font); }   /* 16px: no zoom on iPhone */
+  #aboutName { margin-bottom: 8px; }
+  #lbList { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+  #lbList li { display: grid; grid-template-columns: 3ch 1fr auto; gap: 10px; margin: 0 -8px; padding: 4px 8px; border-radius: 6px;
+    animation: rise .2s cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i) * 40ms) backwards; }
+  #lbList li span:first-child { color: var(--muted); text-align: right; }
+  #lbList li span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #lbList li.me { background: var(--area); font-weight: 600; }
+  #lbList li.apart { margin-top: 6px; }   /* below the top five: the gap says places are skipped */
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes fade { from { opacity: 0; } }
   .hmeta b.solved { color: var(--positive); }
 
   /* Reduced motion: nothing travels or grows; fades stay. */
@@ -376,6 +394,7 @@
     #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }
     @starting-style { #more[open] { transform: none; } }
     button:active, .btn:active { transform: none; }
+    #lbList li { animation-name: fade; }
   }
 </style>
 </head>
@@ -419,7 +438,13 @@
   <p id="solvedText">Sve je točno.</p>
   <p id="diffSolved" class="diffpill"></p>
   <div id="solvedTechs" hidden><b>Tehnike iz savjeta</b><div id="techList"></div></div>
-  <div class="row"><button id="solvedMenu">Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
+  <div id="lboard" hidden>
+    <b id="lbHead"></b>
+    <form id="lbJoin" hidden><input id="lbName" class="field" maxlength="20" autocomplete="nickname" placeholder="Ime ili nadimak" aria-label="Ime na ljestvici"><button>Pošalji</button>
+      <small>Ime i vrijeme bit će javni. Promijeniti ili isključiti: O aplikaciji.</small></form>
+    <ol id="lbList"></ol>
+  </div>
+  <div class="row"><button id="solvedMenu" autofocus>Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
 </dialog>
 <dialog id="about" aria-labelledby="aboutTitle">
   <h2 id="aboutTitle">O aplikaciji</h2>
@@ -427,6 +452,9 @@
   <p class="credits">Čitanje brojki naučeno je na skupu MNIST (Y. LeCun, C. Cortes, C. J. C. Burges, CC BY-SA 3.0), a razlikovanje tiskanih i rukom pisanih na
     <a href="https://github.com/wichtounet/sudoku_dataset">Sudoku datasetu</a> Baptistea Wichta (CC BY 4.0).
     Koristi OpenCV.js i TensorFlow.js (Apache 2.0) i font Schibsted Grotesk (SIL Open Font License 1.1); licence su u mapama vendor/ i fonts/.</p>
+  <label class="credits" for="aboutName">Ime na ljestvici dnevnog</label>
+  <input id="aboutName" class="field" maxlength="20" autocomplete="nickname" placeholder="Prazno: ništa se ne šalje">
+  <p class="credits">S imenom svaki riješeni dnevni ide na javnu ljestvicu: ime, vrijeme i nasumični broj ovog uređaja (Supabase, Frankfurt).</p>
   <canvas id="warped" aria-label="Zadnja izravnana mreža"></canvas>
   <button id="aboutClose">Zatvori</button>
 </dialog>
@@ -1187,7 +1215,7 @@ function showMenu() {
 $('homeResume').onclick = () => task.daily === dayKey() ? openDaily(task.level) : go('game');   // today's daily: its card, the clock waits for it
 $('homeDaily').onclick = () => openDaily();
 $('manualBtn').onclick = () => { clearBoard(); go('game'); };
-$('aboutBtn').onclick = () => $('about').showModal();
+$('aboutBtn').onclick = () => { $('aboutName').value = lbName(); $('about').showModal(); };
 $('aboutClose').onclick = () => $('about').close();
 
 // "Instaliraj", only in a browser tab: never once the app runs installed. Chrome says when it can install
@@ -2112,6 +2140,7 @@ function checkSolved() {
   celebrated = key;
   diffPill($('diffSolved'), saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution));
   if (task.random) { task.solvedAt = Date.now(); saveState(); }
+  $('lboard').hidden = true;   // only today's daily shows it (dailySolved)
   $('solvedText').textContent = task.daily ? dailySolved() : task.random ? `Vrijeme: ${clock(task.elapsed)}` : 'Sve je točno.';
   // Savjet is no minus: what it taught is listed instead.
   const techs = Object.entries(task.techs || {}).sort((a, b) => b[1] - a[1]);
@@ -2337,6 +2366,8 @@ function dailySolved() {
   done[`${days.date}/${task.level}`] = { ms: daily.elapsed };
   try { localStorage.sudokuDailyDone = JSON.stringify(done); } catch {}
   remember(task.solution, task.givens, task.solution, { daily: days.date, level: task.level, time: daily.elapsed });
+  if (lbName()) lbQueue(days.date, task.level, daily.elapsed);
+  lbShow(days.date, task.level, daily.elapsed);
   const dates = new Set(Object.keys(done).map(k => k.slice(0, 10)));
   let streak = 0;
   for (const d = new Date(); dates.has(dayKey(d)); d.setDate(d.getDate() - 1)) streak++;
@@ -2344,6 +2375,73 @@ function dailySolved() {
   return `Riješeno za ${clock(daily.elapsed)} · ${streak} ${streak % 10 === 1 && streak % 100 !== 11 ? 'dan' : 'dana'} zaredom`
     + (same.length < 2 ? '' : best === daily.elapsed ? ' · novi rekord!' : ` · najbolje (${DAILY[task.level][0].toLowerCase()}): ${clock(best)}`);   // a record needs a second one
 }
+
+// --- Ljestvica: today's dailies by time, on Supabase (the factoriotree project, schema sudokuscan: one row
+// per device, day and level; insert and read only, the device id is never served). The name is the
+// opt-in: asked once on the solved card, then every solved daily goes, through a queue kept until the
+// network takes it. ---
+const LB = 'https://fgllmnemukhouwyebfop.supabase.co/rest/v1/scores?', LB_KEY = 'sb_publishable_TM5hyGtUvXFuuljv8oKcBg_8HJCdpyB';   // a publishable key: public by design
+const lb = (q, o = {}) => fetch(LB + q, { ...o, headers: { apikey: LB_KEY, 'Accept-Profile': 'sudokuscan', 'Content-Profile': 'sudokuscan',
+  'Content-Type': 'application/json', ...o.headers } });
+const lbName = () => { try { return localStorage.sudokuName || ''; } catch { return ''; } };
+function lbQueue(day, level, ms) {
+  try {
+    const q = JSON.parse(localStorage.sudokuLbQueue || '[]'), device = localStorage.sudokuDevice ||= crypto.randomUUID();
+    localStorage.sudokuLbQueue = JSON.stringify([...q, { day, level, name: lbName(), ms, device }]);
+  } catch {}
+}
+// Send what waits, oldest first. Kept only without network or on a server error; anything else is done
+// with (409: it is in already; 400: the table's checks refused it).
+async function lbFlush() {
+  let q = [];
+  try { q = JSON.parse(localStorage.sudokuLbQueue || '[]'); } catch {}
+  while (q.length) {
+    const r = await lb('', { method: 'POST', body: JSON.stringify(q[0]) }).catch(() => null);
+    if (!r || r.status >= 500) return false;
+    q.shift();
+    try { localStorage.sudokuLbQueue = JSON.stringify(q); } catch {}
+  }
+  return true;
+}
+// The solved card's panel: the name first if there is none; else the top five and your own row below
+// them if you are further down (equal times share a place).
+async function lbShow(day, level, ms) {
+  const name = lbName(), head = t => $('lbHead').textContent = t;
+  $('lboard').hidden = false;
+  $('lbJoin').hidden = !!name;
+  $('lbList').replaceChildren();
+  if (!name) return head('Upiši se na današnju ljestvicu');
+  head('Učitavam…');
+  if (!await lbFlush()) return head('Bez mreže: rezultat se šalje kad se vratiš.');
+  const where = `day=eq.${day}&level=eq.${level}`, ok = r => r.ok ? r : Promise.reject(),
+    count = q => lb(`select=id&${q}`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).then(ok).then(r => +r.headers.get('content-range').split('/')[1]);
+  let top, faster, all;
+  try { [top, faster, all] = await Promise.all([lb(`select=name,ms&${where}&order=ms,created_at&limit=5`).then(ok).then(r => r.json()), count(`${where}&ms=lt.${ms}`), count(where)]); }
+  catch { return head('Ljestvica se nije učitala.'); }
+  const row = (place, r, cls = '') => {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.append(...[place, r.name, clock(r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
+    return li;
+  };
+  const me = top.findIndex(r => r.name === name && r.ms === ms),
+    rows = top.map((r, i) => row(top.findIndex(x => x.ms === r.ms) + 1, r, i === me ? 'me' : ''));
+  if (me < 0) rows.push(row(faster + 1, { name, ms }, 'me apart'));
+  rows.forEach((li, i) => li.style.setProperty('--i', i));
+  head(`Danas, ${DAILY[level][0].toLowerCase()} · ${all} ${all % 10 === 1 && all % 100 !== 11 ? 'igrač' : 'igrača'}`);
+  $('lbList').replaceChildren(...rows);
+}
+$('lbJoin').onsubmit = e => {
+  e.preventDefault();
+  const name = $('lbName').value.trim();
+  if (!name) return $('lbName').focus();
+  try { localStorage.sudokuName = name; } catch {}
+  lbQueue(days.date, task.level, daily.elapsed);
+  lbShow(days.date, task.level, daily.elapsed);
+};
+$('aboutName').onchange = () => { try { const n = $('aboutName').value.trim(); if (n) localStorage.sudokuName = n; else delete localStorage.sudokuName; } catch {} };
+lbFlush();
+addEventListener('online', lbFlush);
 
 // The clock: counts only while a game or one of today's dailies is played, unsolved, the page on screen
 // (another app or a locked phone stops it; a gap over 5 s means the page slept), not from the menu

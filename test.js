@@ -216,11 +216,43 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(await page.evaluate(() => [daily.elapsed, dailyGo.textContent, dailyLevels.children[0].querySelector('small').textContent.startsWith('U tijeku')]),
     [paused, 'Nastavi', true], 'daily: paused behind its card');
   await page.click('#dailyGo');
+  // Ljestvica against a stand-in for Supabase (fetch replaced in the page: nothing reaches the real table):
+  // six players faster than you, one unique row per device/day/level, offline on demand.
+  await page.evaluate(() => {
+    const real = fetch, rows = [100, 200, 200, 400, 500, 600].map((ms, i) => ({ day: dayKey(), level: 0, name: 'P' + i, ms, device: 'd' + i }));
+    window.lbDb = rows; window.lbOffline = false;
+    window.fetch = async (url, o = {}) => {
+      if (!String(url).startsWith(LB)) return real(url, o);
+      if (lbOffline) throw new TypeError('Failed to fetch');
+      const q = new URLSearchParams(url.slice(LB.length)), b = o.body && JSON.parse(o.body);
+      if (o.method === 'POST') return rows.some(r => r.device === b.device && r.day === b.day && r.level === b.level) ? new Response('', { status: 409 }) : (rows.push(b), new Response(null, { status: 201 }));
+      const hit = rows.filter(r => r.day === q.get('day').slice(3) && r.level === +q.get('level').slice(3) && (!q.get('ms') || r.ms < +q.get('ms').slice(3)));
+      if (o.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${hit.length}` } });
+      return Response.json(hit.sort((x, y) => x.ms - y.ms).slice(0, 5).map(({ name, ms }) => ({ name, ms })));
+    };
+  });
   await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
   const card = await page.evaluate(() => [solved.open, solvedText.textContent]);
   assert.ok(card[0] && /^Riješeno za \d+:\d\d · 1 dan zaredom/.test(card[1]), 'daily solved card: ' + card[1]);
+  // No name yet: asked, nothing sent. Named: top five (equal times share a place) + your row apart.
+  assert.deepStrictEqual(await page.evaluate(() => [lboard.hidden, lbJoin.hidden, lbHead.textContent, lbDb.length]), [false, false, 'Upiši se na današnju ljestvicu', 6], 'board: name asked first');
+  await page.type('#lbName', '  Chris ');
+  await page.click('#lbJoin button');
+  await page.waitForFunction(() => lbList.children.length);
+  const board = await page.evaluate(() => [lbJoin.hidden, lbHead.textContent, [...lbList.children].map(li => li.className + ':' + [...li.children].map(s => s.textContent).join('|'))]);
+  assert.deepStrictEqual(board.slice(0, 2), [true, 'Danas, lagano · 7 igrača'], 'board: head');
+  assert.deepStrictEqual(board[2].slice(0, 4), [':1|P0|0:00', ':2|P1|0:00', ':2|P2|0:00', ':4|P3|0:00'], 'board: top, shared place');
+  assert.ok(/^me apart:7\|Chris\|\d+:\d\d$/.test(board[2][5]), 'board: your row ' + board[2][5]);
+  // The queue: kept offline, sent when back; a second send of the same (409) is done with too.
+  const queue = await page.evaluate(async () => {
+    lbOffline = true; lbQueue(dayKey(), 1, 90000);
+    const off = [await lbFlush(), JSON.parse(localStorage.sudokuLbQueue).length];
+    lbOffline = false; lbQueue(dayKey(), 1, 90000);
+    return [...off, await lbFlush(), localStorage.sudokuLbQueue, lbDb.filter(r => r.level === 1 && r.name === 'Chris').length];
+  });
+  assert.deepStrictEqual(queue, [false, 1, true, '[]', 1], 'board: offline queue, 409');
   await page.click('#solvedClose');
-  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"`);
+  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue`);
 
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
   const hard = await page.evaluate((puzzles, printed) => {
