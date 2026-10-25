@@ -60,6 +60,11 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     [PRINTED, true, false, '', true], 'shared link opens that sudoku as a game');
   await page.goto('http://localhost:8768/?s=zz');
   assert.ok(await page.evaluate(() => !menu.hidden && /ne vodi/.test(msg.textContent)), 'broken link: menu + message');
+  // A daily's link: that day, its card on the level (solo); another day, a game like any link.
+  await page.goto(await page.evaluate(l => l + `&d=${dayKey()}.2`, link));
+  assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, pickLvl, location.search]), [true, 2, ''], 'shared daily today: its card');
+  await page.goto(link + '&d=2000-01-01.2');
+  assert.deepStrictEqual(await page.evaluate(() => [task.random, dailyDlg.open]), [true, false], 'shared daily of another day: a game');
   console.log('share: link to this sudoku, opens as a game elsewhere, ?s dropped, broken link says so');
   await open(null);
 

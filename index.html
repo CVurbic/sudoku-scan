@@ -2299,21 +2299,25 @@ function startGame(p, lvl) {
 }
 
 // --- Sharing: a link holds the sudoku's printed digits (81, as one base-36 number), so every link leads
-// to that one sudoku, for everyone, scanned ones too; no server, no generator involved. ---
-const shareLink = givens => `${location.origin}${location.pathname}?s=${BigInt(givens.join('')).toString(36)}`;
+// to that one sudoku, for everyone, scanned ones too; no server, no generator involved. A daily's link
+// also says its day and level (&d=YYYY-MM-DD.level): opened that same day, it is the daily, solo. ---
+const shareLink = (givens, day) => `${location.origin}${location.pathname}?s=${BigInt(givens.join('')).toString(36)}${day ? '&d=' + day : ''}`;
 $('shareBtn').onclick = async () => {
   $('more').close();
-  const url = shareLink(task.givens), text = `Sudoku (${$('diff').querySelector('b').textContent.split('· ')[1]}). Možeš li ga riješiti?`;
+  const url = shareLink(task.givens, task.daily && `${task.daily}.${task.level}`),
+    text = `${task.daily ? 'Dnevni sudoku' : 'Sudoku'} (${$('diff').querySelector('b').textContent.split('· ')[1]}). Možeš li ga riješiti?`;
   if (navigator.share) try { return await navigator.share({ title: 'Sudoku Scan', text, url }); } catch (e) { if (e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(url); say('Link je kopiran. Tko ga otvori, dobije ovaj isti sudoku.'); }
   catch { say(url, Infinity); }   // no clipboard: the link itself, to copy by hand
 };
 // A link opened (?s=): that sudoku, checked (a link is outside input). Already the game on the board or
 // in the history: go on with it; else a new game. The address loses ?s, so a reload goes on, not over.
+// Today's daily: its card (made from the date here too, like every daily). Another day's: a game.
 function openShared() {
-  const s = new URLSearchParams(location.search).get('s');
+  const q = new URLSearchParams(location.search), s = q.get('s'), d = /^(\d{4}-\d\d-\d\d)\.([0-2])$/.exec(q.get('d'));
   if (s === null) return false;
   history.replaceState(null, '', location.pathname);
+  if (d?.[1] === dayKey()) { go('menu'); openDaily(+d[2]); return true; }
   const g = /^[0-9a-z]{1,60}$/.test(s) && [...[...s].reduce((n, c) => n * 36n + BigInt(parseInt(c, 36)), 0n).toString().padStart(81, '0')].map(Number);
   const sols = g && g.length === 81 && g.filter(Boolean).length >= 17 ? solve(g) : [];
   if (sols.length !== 1) { go('menu'); say('Ovaj link ne vodi na ispravan sudoku.', Infinity); return true; }
