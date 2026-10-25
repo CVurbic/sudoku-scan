@@ -365,7 +365,9 @@
   #solvedTechs span { display: flex; justify-content: space-between; }
   #solvedTechs small { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   #solved .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
-  #solvedClose, #solvedNext { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  #solvedClose, #solvedNext, #solvedLevel, #solvedShare { gap: 8px; background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  #solvedShare.quiet { grid-column: 1 / -1; margin-top: -4px; border-color: transparent; background: transparent; color: var(--muted); }
+  #solvedShare svg { width: 20px; height: 20px; }
   /* The daily's leaderboard: a tone step like the techniques; your row on the same-digit blue. The rows
      rise in one after another (a rare moment). */
   #lboard { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: var(--ground); text-align: left; }
@@ -459,7 +461,9 @@
       <small>Ime i vrijeme bit će javni. Promijeniti ili isključiti: O aplikaciji.</small></form>
     <ol id="lbList" class="lblist"></ol>
   </div>
-  <div class="row"><button id="solvedMenu" autofocus>Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
+  <div class="row"><button id="solvedMenu" autofocus>Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Zatvori</button>
+    <button id="solvedLevel" hidden><span class="dot"></span><span></span></button>
+    <button id="solvedShare" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></svg><span></span></button></div>
 </dialog>
 <dialog id="about" aria-labelledby="aboutTitle">
   <h2 id="aboutTitle">O aplikaciji</h2>
@@ -2180,10 +2184,47 @@ function checkSolved() {
     s.append(name, Object.assign(document.createElement('small'), { textContent: `${n}×` }));
     return s;
   }));
-  $('solvedClose').hidden = !!task.random;   // a game offers the next one instead
-  $('solvedNext').hidden = !task.random;
+  solvedButtons();
   $('solved').showModal();
 }
+// The card's buttons. A game: the next one. Today's daily: on to the next level not solved yet, and the
+// result to share (quietly while levels are left, as the main button once all three are done). A scan: close.
+function solvedButtons() {
+  const next = task.daily ? [1, 2].map(k => (task.level + k) % 3).find(i => !days.levels[i]?.solvedAt) : undefined;
+  $('solvedClose').hidden = !!(task.random || task.daily);
+  $('solvedNext').hidden = !task.random;
+  $('solvedLevel').hidden = next === undefined;
+  if (next !== undefined) {
+    $('solvedLevel').dataset.lvl = next;
+    $('solvedLevel').firstChild.style.background = `var(${LEVELS[next][2]})`;
+    $('solvedLevel').lastChild.textContent = DAILY[next][0];
+  }
+  $('solvedShare').hidden = !task.daily;
+  $('solvedShare').classList.toggle('quiet', next !== undefined);
+  $('solvedShare').lastChild.textContent = next === undefined ? 'Podijeli' : 'Podijeli rezultat';
+  if (task.daily) prepShare(next === undefined);
+}
+// The day's result as text + link, made before the tap (the share sheet wants the tap itself, with no
+// network wait in between): this level, linked to this very daily (opened today, a friend plays it as the
+// daily); all three once done, linked to the app. Places only with a name on the board, after it is sent.
+let shareMsg = null;
+async function prepShare(all) {
+  const name = lbName(), lv = all ? [0, 1, 2] : [task.level], ms = i => days.levels[i].elapsed,
+    url = all ? location.origin + location.pathname : shareLink(task.givens, `${days.date}.${task.level}`);
+  const make = places => ({ url, text: [`Sudoku Scan · dnevni ${new Date().toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`,
+    ...lv.map((i, k) => `${DAILY[i][0]} ${clock(ms(i))}${places[k]?.all ? ` (${places[k].place}. od ${places[k].all})` : ''}`), ...all ? [] : ['Možeš li brže?']].join('\n') });
+  shareMsg = make([]);
+  if (!name || !await lbFlush()) return;
+  shareMsg = make(await Promise.all(lv.map(i => lbRows(days.date, i, 0, { name, ms: ms(i) }).catch(() => null))));
+}
+$('solvedShare').onclick = async () => {
+  const btn = $('solvedShare'), label = btn.lastChild.textContent, { text, url } = shareMsg;
+  if (navigator.share) try { return await navigator.share({ title: 'Sudoku Scan', text, url }); } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(`${text}\n${url}`); btn.lastChild.textContent = 'Kopirano ✓'; }   // on the button: a toast would sit under the card
+  catch { btn.lastChild.textContent = 'Nije uspjelo'; }
+  setTimeout(() => btn.lastChild.textContent = label, 2000);
+};
+$('solvedLevel').onclick = () => { $('solved').close(); openDaily(+$('solvedLevel').dataset.lvl); };
 $('solvedClose').onclick = () => $('solved').close();
 $('solvedNext').onclick = () => newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
 $('solvedMenu').onclick = () => { $('solved').close(); go('menu'); };
@@ -2434,7 +2475,7 @@ async function lbFlush() {
   return true;
 }
 // A day and level's top n as list rows, your own (mine: { name, ms }) marked, or below them if you are
-// further down (equal times share a place). → { rows, all: players }; rejects when it did not load.
+// further down (equal times share a place). → { rows, all: players, place: yours }; rejects when it did not load.
 async function lbRows(day, level, n, mine) {
   const where = `day=eq.${day}&level=eq.${level}`, ok = r => r.ok ? r : Promise.reject(),
     count = q => lb(`select=id&${q}`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).then(ok).then(r => +r.headers.get('content-range').split('/')[1]);
@@ -2449,7 +2490,7 @@ async function lbRows(day, level, n, mine) {
   const me = mine ? top.findIndex(r => r.name === mine.name && r.ms === mine.ms) : -1,
     rows = top.map((r, i) => row(top.findIndex(x => x.ms === r.ms) + 1, r, i === me ? 'me' : ''));
   if (mine && me < 0 && all) rows.push(row(faster + 1, mine, 'me apart'));
-  return { rows, all };
+  return { rows, all, place: faster + 1 };
 }
 const players = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'igrač' : 'igrača'}`;
 // The solved card's panel: the name first if there is none; else the top five and you.
@@ -2502,6 +2543,7 @@ $('lbJoin').onsubmit = e => {
   try { localStorage.sudokuName = name; } catch {}
   lbQueue(days.date, task.level, daily.elapsed);
   lbShow(days.date, task.level, daily.elapsed);
+  solvedButtons();   // the result to share, now with its place
 };
 $('aboutName').onchange = () => { try { const n = $('aboutName').value.trim(); if (n) localStorage.sudokuName = n; else delete localStorage.sudokuName; } catch {} };
 lbFlush();

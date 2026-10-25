@@ -252,6 +252,23 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return [...off, await lbFlush(), localStorage.sudokuLbQueue, lbDb.filter(r => r.level === 1 && r.name === 'Chris').length];
   });
   assert.deepStrictEqual(queue, [false, 1, true, '[]', 1], 'board: offline queue, 409');
+  // The buttons: on to Srednje, the result to share quietly (this level, its place, a link to this daily); all three done: Podijeli first, all three, the app's link.
+  assert.deepStrictEqual(await page.evaluate(() => [solvedClose.hidden, solvedLevel.hidden, solvedLevel.textContent, solvedShare.hidden, solvedShare.className, solvedShare.textContent]),
+    [true, false, 'Srednje', false, 'quiet', 'Podijeli rezultat'], 'solved daily: buttons');
+  await page.waitForFunction(() => /\(7\. od 7\)/.test(shareMsg.text));
+  const shared = await page.evaluate(async () => { navigator.share = async d => window.sent = d; solvedShare.click(); await new Promise(r => setTimeout(r)); return sent; });
+  assert.ok(/^Sudoku Scan · dnevni \d+\. \d+\.\nLagano \d+:\d\d \(7\. od 7\)\nMožeš li brže\?$/.test(shared.text) && shared.url.endsWith(`&d=${await page.evaluate(() => dayKey())}.0`), 'share: ' + JSON.stringify(shared));
+  const allDone = await page.evaluate(async () => {
+    const keep = days.levels.slice();
+    days.levels[1] = { elapsed: 61000, solvedAt: 1 }; days.levels[2] = { elapsed: 125000, solvedAt: 1 };
+    solvedButtons();
+    await new Promise(r => setTimeout(r, 300));
+    const r = [solvedLevel.hidden, solvedShare.className, solvedShare.textContent, shareMsg.text.split('\n').slice(1), shareMsg.url === location.origin + location.pathname];
+    days.levels = keep; solvedButtons();
+    return r;
+  });
+  assert.deepStrictEqual(allDone.slice(0, 3), [true, '', 'Podijeli'], 'all three done: Podijeli first');
+  assert.ok(/^Lagano .+,Srednje 1:01 \(\d+\. od \d+\),Teško 2:05$/.test(allDone[3].join()) && allDone[4], 'all three done: ' + allDone[3].join(' | '));
   await page.click('#solvedMenu');
   // The menu's Ljestvica: all three levels, top three + you (marked where your own record says so); a day back; a week at most.
   const ranks = () => page.evaluate(async () => { await showRanks();
