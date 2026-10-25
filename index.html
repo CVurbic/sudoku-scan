@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#f4f3f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
 <title>Sudoku Scan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
   /* Everything is served from this site (no font or script CDN): visitors talk to no one else. */
   @font-face { font-family: "Schibsted Grotesk"; font-weight: 400 700; font-display: swap;
@@ -67,14 +70,24 @@
   .hhead { position: sticky; top: 0; display: flex; align-items: center; height: 64px; background: var(--ground); }
   .hhead h2 { margin: 0; font-size: 20px; font-weight: 700; }
   #historyClose { margin-left: auto; min-height: 40px; border-color: transparent; background: transparent; }
-  #historyList { margin: 0; padding: 0 0 24px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  #historyList li { display: flex; align-items: center; gap: 4px; padding-right: 4px; border-radius: 12px; background: var(--surface); }
+  .hlist { margin: 0; padding: 0 0 24px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .hlist li { display: flex; align-items: center; gap: 4px; padding-right: 4px; border-radius: 12px; background: var(--surface); }
   .hrow { flex: 1; justify-content: flex-start; gap: 14px; min-height: 0; padding: 10px; border: 0; background: transparent; text-align: left; }
   .hrow canvas { width: 56px; height: 56px; flex: none; border-radius: 4px; }
   .hmeta { display: flex; flex-direction: column; gap: 2px; }
   .hmeta b { font-weight: 600; }
   .hmeta small { color: var(--muted); font-size: 14px; }
   .hdel { min-height: 40px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
+
+  /* Home without a task: today's dailies and the last sudokus instead of an empty board (showHome). */
+  #home { display: flex; flex-direction: column; gap: var(--gap); }
+  #homeDaily { flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; border-radius: 14px; text-align: left; }
+  #homeDaily > b { font-size: 18px; font-weight: 700; }
+  #homeDays { display: flex; flex-direction: column; gap: 6px; }
+  #homeDays > span { display: flex; align-items: center; gap: 10px; }
+  #homeDays small { margin-left: auto; color: var(--muted); font-size: 14px; }
+  #home h2 { margin: 8px 0 0; color: var(--muted); font-size: 14px; font-weight: 600; }
+  #manualBtn { align-self: center; min-height: 40px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
   #historyEmpty { margin: 8px 0; color: var(--muted); }
 
   #status { margin: 0; min-height: 2.9em; font-size: 15px; }
@@ -141,7 +154,7 @@
   #explainBox.up .tail { top: -9px; border-right: 0; border-bottom: 0; }      /* bubble under the cells, tail points up */
   #explainBox.down .tail { bottom: -9px; border-left: 0; border-top: 0; }     /* bubble over the cells, tail points down */
   #explainBox.free .tail { display: none; }
-  #explain { overflow-y: auto; }
+  #explain { overflow-y: auto; touch-action: none; }   /* a scroller sets its own touch-action: without this a drag on the text scrolls the page and ends the peek */
   .ehead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; font-weight: 500; }
   #explainToggle { min-height: 36px; padding: 0 12px; border-color: transparent; background: transparent; font-size: 15px; }
   #explain { margin: 0; padding-right: 10px; white-space: pre-line; font-size: 14px; line-height: 1.45; }
@@ -174,7 +187,7 @@
       grid-template-areas: "bar bar" "grid status" "grid daily" "grid diff" "grid dock" "grid pad" "grid actions" "grid debug"; padding-bottom: 32px; }
     #pad { grid-area: pad; }
     .bar { grid-area: bar; }
-    #board { grid-area: grid; align-self: start; }
+    #board, #home { grid-area: grid; align-self: start; }
     #status { grid-area: status; }
     #diff { grid-area: diff; }
     #dailyBar { grid-area: daily; }
@@ -239,7 +252,7 @@
   #dailyLevels { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
   #dailyLevels button { justify-content: flex-start; gap: 12px; min-height: 56px; padding: 0 16px; border-radius: 14px; }
   #dailyLevels button[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
-  #dailyLevels .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
   #dailyLevels small { margin-left: auto; color: var(--muted); font-size: 14px; }
   #dailyDlg .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--gap); }
   #dailyGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
@@ -270,7 +283,7 @@
 </header>
 <dialog id="history" aria-labelledby="historyTitle">
   <div class="hhead"><h2 id="historyTitle">Povijest</h2><button id="historyClose">Zatvori</button></div>
-  <ul id="historyList"></ul>
+  <ul id="historyList" class="hlist"></ul>
   <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
 </dialog>
 <div id="live" hidden>
@@ -318,6 +331,12 @@
     <p id="explain"></p>
   </section>
 </div>
+<section id="home" hidden>
+  <button id="homeDaily"><b>Dnevni sudoku</b><span id="homeDays"></span></button>
+  <h2 id="recentTitle">Nedavno</h2>
+  <ul id="recent" class="hlist"></ul>
+  <button id="manualBtn">Upiši sudoku ručno</button>
+</section>
 <div id="pad" hidden></div>   <!-- number pad; moves into the live camera while it is open -->
 <div class="actions">
   <button id="setTask">Ovo je zadatak</button>
@@ -618,6 +637,7 @@ function showScan(probs) {
   });
   if (task) learn(inputs.map((x, i) => [i, task.solution[i]]).filter(([i]) => inputs[i].classList.contains('ok')));
   markConflicts();
+  showHome();
   if (!task && entryLabel()) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".');
   if (!task) return say('Žuto = nesigurno, crveno = duplikat. Ispravi, obriši brojeve upisane rukom i stisni "Ovo je zadatak".');
   if (off > task.givens.filter(Boolean).length / 3) return say('Ovo izgleda kao drugi sudoku. Za novi stisni "Novi zadatak".');
@@ -642,6 +662,7 @@ function showTask() {
   }
   if (task) diffPill($('diff'), saved().find(e => e.key === task.solution.join(''))?.diff ?? difficulty(task.givens, task.solution));
   else $('diff').hidden = true;
+  showHome();
 }
 
 // Candidates: in every empty cell the digits still possible there (from the givens and right entries).
@@ -845,27 +866,56 @@ function remember(solution, givens, done, extra = {}) {
   return e;
 }
 
+// One sudoku as a row: mini grid, progress, date, level; a tap opens it.
+function historyItem(e) {
+  const li = document.createElement('li'), open = document.createElement('button');
+  const blanks = [...e.givens].filter(d => !+d).length, done = [...e.done].filter(d => +d).length;
+  open.className = 'hrow';
+  open.append(miniGrid(e), Object.assign(document.createElement('span'), { className: 'hmeta' }));
+  open.lastChild.append(Object.assign(document.createElement('b'), done === blanks ? { textContent: e.time ? `Riješeno za ${clock(e.time)} ✓` : 'Riješeno ✓', className: 'solved' } : { textContent: `${done} od ${blanks} polja` }),
+    Object.assign(document.createElement('small'), { textContent: (e.daily ? `Dnevni ${DAILY[e.level]?.[0].toLowerCase() ?? ''} · ` : '') + new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      + (e.diff === undefined ? '' : ` · ${diffLevel(e.diff)[1]}`) }));
+  open.onclick = () => openTask(e);
+  li.append(open);
+  return li;
+}
+
 function showHistory() {
-  const list = saved(), ul = $('historyList');
-  ul.replaceChildren(...list.map(e => {
-    const li = document.createElement('li'), open = document.createElement('button'), del = document.createElement('button');
-    const blanks = [...e.givens].filter(d => !+d).length, done = [...e.done].filter(d => +d).length;
-    open.className = 'hrow';
-    open.append(miniGrid(e), Object.assign(document.createElement('span'), { className: 'hmeta' }));
-    open.lastChild.append(Object.assign(document.createElement('b'), done === blanks ? { textContent: e.time ? `Riješeno za ${clock(e.time)} ✓` : 'Riješeno ✓', className: 'solved' } : { textContent: `${done} od ${blanks} polja` }),
-      Object.assign(document.createElement('small'), { textContent: (e.daily ? `Dnevni ${DAILY[e.level]?.[0].toLowerCase() ?? ''} · ` : '') + new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-        + (e.diff === undefined ? '' : ` · ${diffLevel(e.diff)[1]}`) }));
-    open.onclick = () => openTask(e);
+  const list = saved();
+  $('historyList').replaceChildren(...list.map(e => {
+    const li = historyItem(e), del = document.createElement('button');
     del.className = 'hdel'; del.textContent = 'Obriši';
     del.onclick = () => {
       try { localStorage.sudokuHistory = JSON.stringify(saved().filter(x => x.key !== e.key)); } catch {}
       showHistory();
+      showHome();
     };
-    li.append(open, del);
+    li.append(del);
     return li;
   }));
   $('historyEmpty').hidden = list.length > 0;
 }
+
+// Nothing on the board and no task: today's dailies and the last few sudokus instead of an empty grid.
+let manual = false;   // "Upiši sudoku ručno": the empty board after all, to type one in
+function showHome() {
+  const home = !task && !manual && inputs.every(x => !x.value);
+  $('home').hidden = !home;
+  $('board').hidden = home;
+  if (!home) return;
+  loadDays();
+  $('homeDays').replaceChildren(...DAILY.map(([name], i) => {
+    const s = document.createElement('span');
+    s.append(Object.assign(document.createElement('span'), { className: 'dot', style: `background: var(${LEVELS[i][2]})` }), name,
+      Object.assign(document.createElement('small'), { textContent: levelText(days.levels[i]) }));
+    return s;
+  }));
+  const recent = saved().slice(0, 4);
+  $('recent').replaceChildren(...recent.map(historyItem));
+  $('recentTitle').hidden = !recent.length;
+}
+$('homeDaily').onclick = () => openDaily();
+$('manualBtn').onclick = () => { manual = true; showHome(); };
 
 // The puzzle at a glance: printed digits as dark cells, the user's right digits in blue.
 function miniGrid(e) {
@@ -905,6 +955,7 @@ $('historyClose').onclick = () => $('history').close();
 
 $('newBtn').onclick = () => {
   task = null;
+  manual = false;
   try { localStorage.removeItem('sudokuTask'); } catch {}
   clearHint();
   lastVecs = Array.from({ length: 81 }, () => []);
@@ -1340,6 +1391,31 @@ for (const d of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
   $('pad').append(b);
 }
 
+// The back camera, preferably the one with the torch: facingMode alone may pick a camera without one
+// (an Android 10 phone opened "camera2 2", wide angle; the torch sits on "camera2 0", the main one).
+// Probing takes a moment, so the pick is remembered: its deviceId, or '' when no back camera has a torch.
+async function backCamera() {
+  const open = id => navigator.mediaDevices.getUserMedia({ video: { ...(id ? { deviceId: { exact: id } } : { facingMode: 'environment' }), width: { ideal: 1280 } } });
+  const torch = s => !!s.getVideoTracks()[0].getCapabilities?.().torch;
+  const hasTorch = async s => torch(s) || (await new Promise(r => setTimeout(r, 500)), torch(s));   // some phones list it a moment late
+  const keep = id => { try { localStorage.sudokuCamera = id; } catch {} };
+  let known; try { known = localStorage.sudokuCamera; } catch {}
+  if (known) try { return await open(known); } catch {}   // that camera is gone: probe again
+  let stream = await open();
+  if (known === '' || await hasTorch(stream)) return stream;
+  const first = stream.getVideoTracks()[0].getSettings().deviceId;
+  const others = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.deviceId !== first && /back|rear/i.test(d.label));
+  for (const d of others) {
+    stream?.getTracks().forEach(t => t.stop());   // phones run one camera at a time
+    stream = await open(d.deviceId).catch(() => null);
+    if (stream && await hasTorch(stream)) { keep(d.deviceId); return stream; }
+  }
+  keep('');
+  if (!others.length) return stream;
+  stream?.getTracks().forEach(t => t.stop());
+  return open(first);
+}
+
 $('liveBtn').onclick = async () => {
   pick(null);
   $('liveBar').before($('pad'));
@@ -1348,7 +1424,7 @@ $('liveBtn').onclick = async () => {
   $('live').requestFullscreen?.().catch(() => {});   // Android; iPhone keeps the fixed full-page layer
   tip('Pokrećem kameru…');
   let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } }); }
+  try { stream = await backCamera(); }
   catch { closeLive(); return say('Kamera nije dostupna (treba dozvola i https). Možeš učitati sliku iz galerije.'); }
   $('video').srcObject = stream;
   await $('video').play();
@@ -1356,6 +1432,11 @@ $('liveBtn').onclick = async () => {
     canTorch: !!stream.getVideoTracks()[0].getCapabilities?.().torch, torch: false };   // torch: Android Chrome, not iPhone
   $('liveView').textContent = 'Papir';
   liveButtons();
+  setTimeout(() => {   // some Android phones list the torch only once the camera has settled
+    if (live?.stream !== stream || live.canTorch) return;
+    live.canTorch = !!stream.getVideoTracks()[0].getCapabilities?.().torch;
+    liveButtons();
+  }, 1000);
   while (live) {
     const t = performance.now();
     if (!live.frozen) liveFrame();
@@ -1757,11 +1838,12 @@ function openDaily(lvl) {
   showLevels();
   $('dailyDlg').showModal();
 }
+const levelText = st => st?.solvedAt ? `Riješeno za ${clock(st.elapsed)} ✓` : st?.elapsed ? `U tijeku · ${clock(st.elapsed)}` : 'Nije počet';
 function showLevels() {
   [...$('dailyLevels').children].forEach((b, i) => {
     const st = days.levels[i];
     b.ariaPressed = String(i === pickLvl);
-    b.querySelector('small').textContent = st?.solvedAt ? `Riješeno za ${clock(st.elapsed)} ✓` : st?.elapsed ? `U tijeku · ${clock(st.elapsed)}` : 'Nije počet';
+    b.querySelector('small').textContent = levelText(st);
   });
   const st = days.levels[pickLvl];
   $('dailyGo').textContent = st?.solvedAt ? 'Pogledaj' : st?.elapsed ? 'Nastavi' : 'Kreni';
@@ -1834,6 +1916,7 @@ if (task?.daily === dayKey() && loadDays().levels[task.level]) {
   if (!daily.solvedAt) openDaily(task.level);
 } else { if (task) delete task.daily; showTask(); }
 </script>
+<script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>   <!-- offline + install (sw.js) -->
 <script async src="vendor/opencv.js" onload="cvReady()" onerror="say('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
 </body>
 </html>

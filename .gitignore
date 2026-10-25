@@ -5,3 +5,5 @@ node_modules/
 test/
 moje-slike/
 .taste-skill/
+notes/
+*.pem

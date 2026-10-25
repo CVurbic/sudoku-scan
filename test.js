@@ -80,6 +80,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   await page.evaluate(() => remember(task.solution, task.givens, Array(81).fill(0)));
   assert.strictEqual((await hist()).length, 1, 'no duplicate');
   await page.click('#newBtn');
+  assert.deepStrictEqual(await page.evaluate(() => [home.hidden, board.hidden, recent.children.length]), [false, true, 1], 'empty home: dailies + recent');
   await page.click('#historyBtn');
   assert.strictEqual(await page.$eval('.hmeta b', b => b.textContent), 'Riješeno ✓');
   await page.click('.hrow');
