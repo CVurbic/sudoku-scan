@@ -24,7 +24,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   };
   const scan = async f => {
     await (await page.$('#file')).uploadFile(path.join(__dirname, 'test', f));
-    await page.waitForFunction(() => !/Tražim/.test(document.getElementById('status').textContent));
+    await page.waitForFunction(() => !/Tražim/.test(document.getElementById('msg').textContent));
   };
   const grid = () => page.evaluate(() => [...document.querySelectorAll('#grid input')].map(i => i.value || '0').join(''));
   const cls = c => page.evaluate(c => [...document.querySelectorAll('#grid input')].map((x, i) => x.classList.contains(c) ? i : -1).filter(i => i >= 0), c);
@@ -60,6 +60,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
     const text = await page.$eval('#explain', e => e.textContent);
     if (text === 'Sve je riješeno!') break;
     if (press < 3) console.log(`first step, level ${press + 1}:`, text.replace(/\n/g, ' | '));
+    if (press < 3) assert.strictEqual(await page.$eval('#hintLabel', l => l.textContent), ['Zašto?', 'Odgovor', 'Savjet'][press], 'Savjet label follows the level');
     const [cell] = await cls('hint');
     if (cell === undefined) {   // levels 1-2: marks but no answer yet
       const tech = text.match(/Tehnika: ([^(]+)/)?.[1].trim();
@@ -79,19 +80,20 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.deepStrictEqual(await hist(), [{ key: solution, givens: PRINTED, done: [...PRINTED].filter(d => d === '0').length }], 'history entry');
   await page.evaluate(() => remember(task.solution, task.givens, Array(81).fill(0)));
   assert.strictEqual((await hist()).length, 1, 'no duplicate');
-  await page.click('#newBtn');
-  assert.deepStrictEqual(await page.evaluate(() => [home.hidden, board.hidden, recent.children.length]), [false, true, 1], 'empty home: dailies + recent');
-  await page.click('#historyBtn');
-  assert.strictEqual(await page.$eval('.hmeta b', b => b.textContent), 'Riješeno ✓');
-  await page.click('.hrow');
+  await page.click('#backBtn');
+  assert.deepStrictEqual(await page.evaluate(() => [menu.hidden, game.hidden, homeResume.hidden, recent.children.length]), [false, true, true, 1], 'menu: solved, so no Nastavi; in Nedavno');
+  await page.click('#historyAll');
+  assert.strictEqual(await page.$eval('#historyList .hmeta b', b => b.textContent), 'Riješeno ✓');
+  await page.click('#historyList .hrow');
   assert.deepStrictEqual([await page.evaluate(() => task.givens.join('')), await grid()], [PRINTED, solution], 'opened from history');
-  console.log('history: one entry per puzzle, solved, reopens');
+  console.log('history: one entry per puzzle, solved, reopens; Savjet label Savjet → Zašto? → Odgovor');
 
   // 1b. "Nova igra": a random sudoku with help and a clock; notes, undo, same-digit light, spent digits,
   //     the board (wrong digits and notes too) back after a reload.
-  await page.click('#newBtn');
+  await page.click('#backBtn');
   await page.click('#newLevels button');   // Lagano
-  await page.waitForFunction(() => task?.random && !dailyBar.hidden);
+  await page.waitForFunction(() => task?.random && !game.hidden);
+  assert.ok(await page.evaluate(() => toast.classList.contains('on') && /Savjet/.test(msg.textContent)), 'first games: the Savjet tip');
   assert.deepStrictEqual(await page.evaluate(() => [hintBtn.hidden, undoBtn.hidden, undoBtn.disabled, solve(task.givens).length]), [false, false, true, 1], 'game: help, undo, one solution');
   const empty = await page.evaluate(() => task.givens.findIndex(d => !d));
   await page.evaluate(i => inputs[i].click(), empty);
@@ -101,7 +103,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   await page.click('#padNotes');
   const wrongD = await page.evaluate(i => task.solution[i] % 9 + 1, empty);
   await page.evaluate(d => [...document.querySelectorAll('#pad button')].find(b => b.textContent === String(d)).click(), wrongD);
-  assert.deepStrictEqual(await page.evaluate(i => [inputs[i].classList.contains('wrong'), notes[i].length], empty), [true, 0], 'game: judged, notes gone');
+  assert.deepStrictEqual(await page.evaluate(i => [inputs[i].classList.contains('wrong'), notes[i].length, toast.classList.contains('on')], empty), [true, 0, false], 'game: judged, notes gone, the tip with them');
   await page.click('#undoBtn');
   assert.deepStrictEqual(await page.evaluate(i => [inputs[i].value, notes[i]], empty), ['', [3, 5]], 'undo: digit out, notes back');
   const given = await page.evaluate(() => task.givens.findIndex(Boolean));
@@ -111,14 +113,36 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   await new Promise(r => setTimeout(r, 1300));
   await page.reload();
   await page.waitForFunction(() => !document.getElementById('file').disabled, { timeout: 120000 });
-  assert.deepStrictEqual(await page.evaluate(i => [task.random, inputs[i].classList.contains('wrong'), task.elapsed > 0, dailyName.textContent], empty), [true, true, true, 'Nova igra · Lagano'], 'game back after reload');
+  assert.deepStrictEqual(await page.evaluate(i => [task.random, inputs[i].classList.contains('wrong'), task.elapsed > 0, gameName.textContent, game.hidden], empty), [true, true, true, 'Nova igra · Lagano', false], 'game back after reload');
+  // ‹ Izbornik keeps the game: "Nastavi" (not repeated in Nedavno) brings it back as it was; the clock waits in the menu.
+  const before = await grid();
+  await page.click('#backBtn');
+  const menuNow = await page.evaluate(() => [homeResume.hidden, resumeText.textContent, recent.children.length, historyAll.textContent]);
+  assert.ok(!menuNow[0] && /^Nova igra · Lagano · 1 od \d+ · \d+:\d\d$/.test(menuNow[1]) && menuNow[2] === 1 && /^Sva povijest \(2\)/.test(menuNow[3]), 'menu: Nastavi + Nedavno without it: ' + JSON.stringify(menuNow));
+  const waited = await page.evaluate(() => task.elapsed);
+  await new Promise(r => setTimeout(r, 1500));
+  assert.strictEqual(await page.evaluate(() => task.elapsed), waited, 'clock stops in the menu');
+  // Nedavno: two rows at most; all of them behind "Sva povijest".
+  await page.evaluate(() => { localStorage.sudokuHistory = JSON.stringify([...saved(), ...[1, 2, 3].map(k => ({ key: 'x' + k, givens: '0'.repeat(81), done: '0'.repeat(81), first: k, last: k, diff: 10 }))]); showMenu(); });
+  assert.deepStrictEqual(await page.evaluate(() => [recent.children.length, historyAll.textContent.startsWith('Sva povijest (5)')]), [2, true], 'Nedavno: 2 rows, all in Sva povijest');
+  await page.click('#homeResume');
+  assert.deepStrictEqual([await page.evaluate(() => game.hidden), await grid()], [false, before], 'Nastavi: the game as it was');
+  // Stuck (NUDGE_MS without a move, shortened here): the bubble out of Savjet, once per game; a tap puts it away.
+  await page.evaluate(() => { NUDGE_MS = 1500; idle = 0; });
+  await page.waitForFunction(() => !nudge.hidden, { timeout: 5000 });
+  await page.mouse.click(5, 300);
+  assert.ok(await page.evaluate(() => nudge.hidden && task.nudged), 'nudge: shown, a tap hides it');
+  await new Promise(r => setTimeout(r, 2500));
+  assert.ok(await page.evaluate(() => nudge.hidden), 'nudge: once per game');
+  // Savjet's techniques on the card, not as a minus.
+  for (let k = 0; k < 3; k++) await page.click('#hintBtn');
   await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
-  const won = await page.evaluate(() => [solved.open, solvedText.textContent, solvedNext.hidden, solvedHistory.hidden, padKeys.slice(0, 9).every(b => b.classList.contains('spent')), saved()[0].random]);
-  assert.ok(won[0] && /^Vrijeme: \d+:\d\d$/.test(won[1]) && !won[2] && won[3] && won[4] && won[5], 'game won: ' + JSON.stringify(won));
+  const won = await page.evaluate(() => [solved.open, solvedText.textContent, solvedNext.hidden, solvedClose.hidden, padKeys.slice(0, 9).every(b => b.classList.contains('spent')), saved()[0].random, solvedTechs.hidden, techList.textContent]);
+  assert.ok(won[0] && /^Vrijeme: \d+:\d\d$/.test(won[1]) && !won[2] && won[3] && won[4] && won[5] && !won[6] && /^\D+\d+×/.test(won[7]), 'game won: ' + JSON.stringify(won));
   await page.click('#solvedNext');
   await page.waitForFunction(k => task?.random && task.solution.join('') !== k && !task.elapsed, {}, solution);
-  console.log('game: help, notes, undo, light, reload, won, next one');
-  await page.click('#newBtn');
+  console.log('game: tip, help, notes, undo, light, reload, menu (Nastavi, Nedavno ≤ 2, clock paused), stuck bubble once, techniques on the card, next one');
+  await page.click('#backBtn');
 
   // 1a. Daily sudokus: for a date the same three puzzles on every run, each with one solution, easy < medium < hard.
   const gen = await page.evaluate(() => {
@@ -128,11 +152,12 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.ok(gen.same && gen.unique && gen.diffs[0] < 30 && gen.diffs[1] >= 30 && gen.diffs[1] < 55 && gen.diffs[2] >= 55 && gen.diffs[2] < 80, 'daily generator: ' + JSON.stringify(gen));
   // The card first (rules, three levels, "Kreni"); the clock waits for it. Then solo: no help buttons, a
   // clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
-  await page.click('#dailyBtn');
+  await page.click('#homeDaily');
   assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, dailyGo.textContent, !!task?.daily]), [true, 'Kreni', false], 'daily: card before the start');
   await page.click('#dailyLevels button');   // Lagano
   await page.click('#dailyGo');
-  await page.waitForFunction(() => task?.daily && !dailyBar.hidden);
+  await page.waitForFunction(() => task?.daily && !game.hidden);
+  await page.evaluate(() => { NUDGE_MS = 1000; idle = 0; });
   assert.deepStrictEqual(await page.evaluate(() => ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn'].map(id => $(id).hidden)), [true, true, true, true], 'daily: no help');
   const clash = await page.evaluate(() => {   // an empty cell + a digit already in its row
     const i = task.givens.findIndex(d => !d), d = task.givens.find((x, j) => x && (j / 9 | 0) === (i / 9 | 0));
@@ -141,8 +166,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   });
   assert.deepStrictEqual(clash, [true, false], 'daily: duplicate red, nothing judged');
   await new Promise(r => setTimeout(r, 2200));
-  assert.ok(await page.evaluate(() => daily.elapsed >= 1000), 'daily: the clock runs');
-  await page.click('#dailyBtn');   // the card again: the clock stops while it is open, the level says "U tijeku"
+  assert.ok(await page.evaluate(() => daily.elapsed >= 1000 && nudge.hidden), 'daily: the clock runs, no stuck bubble');
+  await page.click('#backBtn');
+  await page.click('#homeResume');   // Nastavi on today's daily: its card again; the clock stops while it is open, the level says "U tijeku"
   const paused = await page.evaluate(() => daily.elapsed);
   await new Promise(r => setTimeout(r, 2200));
   assert.deepStrictEqual(await page.evaluate(() => [daily.elapsed, dailyGo.textContent, dailyLevels.children[0].querySelector('small').textContent.startsWith('U tijeku')]),
@@ -280,9 +306,14 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   assert.strictEqual(await home(), PRINTED, 'home board shows the reading');
   assert.deepStrictEqual(await lp.evaluate(() => saved().map(e => e.key)), [solution], 'history: one entry');
   // Home: candidates on and off; the explanation of a step can be hidden.
+  const sheet = async () => { await lp.click('#moreBtn'); await new Promise(r => setTimeout(r, 300)); };
+  const unsheet = async () => { await lp.evaluate(() => more.close()); await new Promise(r => setTimeout(r, 300)); };
+  await sheet();
   await lp.click('#candsBtn');
   assert.ok(await lp.evaluate(() => !cands.hidden && [...cands.querySelectorAll('span span')].filter(s => s.textContent).length > 100), 'candidates shown');
   await lp.click('#candsBtn');
+  assert.ok(await lp.evaluate(() => !paperBtn.hidden && more.open), 'sheet: stays open for its switches; paper check for a scanned sudoku');
+  await unsheet();
   await lp.click('#hintBtn');
   // Held: see-through, also after the finger slides off the bubble; lifted: back.
   const at = await lp.evaluate(() => { const r = explain.getBoundingClientRect(); return [r.left + 20, r.top + 10]; });
@@ -294,19 +325,46 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, q.ur
   await lp.mouse.up();
   assert.deepStrictEqual([held, slid, await peeking()], [true, true, false], 'hold to see under the bubble');
   await lp.click('#explainToggle');
-  assert.deepStrictEqual(await lp.evaluate(() => [getComputedStyle(explainBox).display, explainBtn.ariaPressed]), ['none', 'false'], 'Sakrij removes the bubble');
+  assert.deepStrictEqual(await lp.evaluate(() => [getComputedStyle(explainBox).display, explainBtn.ariaPressed, /skriveno/.test(msg.textContent), msgAct.textContent]),
+    ['none', 'false', true, 'Vrati'], 'Sakrij removes the bubble and says where it went');
+  await sheet();
   await lp.click('#explainBtn');
+  await unsheet();
   assert.deepStrictEqual(await lp.evaluate(() => [getComputedStyle(explainBox).display, explainBtn.ariaPressed]), ['flex', 'true'], 'Objašnjenje brings it back');
   // An answer given at home survives scanning the paper again (history).
   await lp.click('#hintBtn'); await lp.click('#hintBtn');
   const answered = await lp.evaluate(() => hintState.h.cell);
-  await lp.click('#liveBtn');
+  await sheet();
+  await lp.click('#paperBtn');   // ⋯ → Provjeri papir kamerom
   await lp.waitForFunction(() => live?.frozen, { timeout: 30000 });
   await new Promise(r => setTimeout(r, 500));
   await lp.click('#liveConfirm');
   assert.strictEqual((await home())[answered], solution[answered], 'answer kept across scans');
   assert.strictEqual(await lp.evaluate(() => saved().length), 1, 'still one history entry');
-  console.log(`live: frozen, rot ${frozen.rot}, tap + pad fix, printed/own toggle, Potvrdi → home, candidates, explanation toggle, answers kept, one history entry`);
+  // Počni ispočetka: the user's digits go, the task stays.
+  await sheet();
+  await lp.click('#restartBtn');
+  assert.deepStrictEqual([await home(), await lp.evaluate(() => task.givens.join(''))], [PRINTED, PRINTED], 'Počni ispočetka');
+  // The explanation off from before (not hidden in this game): Savjet says so once, with "Uključi".
+  await new Promise(r => setTimeout(r, 300));
+  await lp.evaluate(() => { setQuiet(true); quietTold = null; });
+  await lp.click('#hintBtn');
+  assert.deepStrictEqual(await lp.evaluate(() => [/isključeno/.test(msg.textContent), msgAct.textContent]), [true, 'Uključi'], 'Savjet: the explanation is off');
+  await lp.click('#msgAct');
+  assert.strictEqual(await lp.evaluate(() => explainBtn.ariaPressed), 'true', 'Uključi brings it back');
+  // The sheet: a short drag snaps back, a long one closes it.
+  const dragSheet = async dy => {
+    await sheet();
+    const r = await lp.evaluate(() => { const b = document.querySelector('.grab').getBoundingClientRect(); return [b.x + b.width / 2, b.y + 10]; });
+    await lp.mouse.move(...r); await lp.mouse.down();
+    await lp.mouse.move(r[0], r[1] + dy, { steps: 10 }); await lp.mouse.up();
+    await new Promise(r => setTimeout(r, 400));
+    return lp.evaluate(() => more.open);
+  };
+  assert.strictEqual(await dragSheet(12), true, 'sheet: a short slow drag snaps back');
+  await unsheet();
+  assert.strictEqual(await dragSheet(150), false, 'sheet: dragged down, closed');
+  console.log(`live: frozen, rot ${frozen.rot}, tap + pad fix, printed/own toggle, Potvrdi → game, ⋯: candidates, explanation, paper check, restart; answers kept, one history entry`);
   await cam.close(); fs.unlinkSync(mjpeg); server.close();
   console.log('ALL OK');
 })().catch(e => { console.error(e.message); process.exit(1); });

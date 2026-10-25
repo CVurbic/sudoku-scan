@@ -53,14 +53,22 @@
     padding: env(safe-area-inset-top) max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
     background: var(--ground); color: var(--text); font: 400 16px/1.45 var(--font); -webkit-tap-highlight-color: transparent; }
 
+  /* Two states: the menu (#menu) and the game (#game, only the game). */
+  #menu, #game { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
   .bar { display: flex; align-items: center; gap: 10px; height: 56px; }
   .bar h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   .mark { width: 22px; height: 22px; flex: none; color: var(--text); }
-  #dailyBtn, #historyBtn { min-height: 40px; padding: 0 12px; border-color: transparent; background: transparent; }
-  #dailyBtn { margin-left: auto; }
-  #dailyBar { display: flex; align-items: baseline; justify-content: space-between; margin: 0; }
-  #dailyBar span { font-weight: 600; }
-  #timer { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* The game's top bar: back to the menu, the clock, ⋯. */
+  .ghead { display: flex; flex-direction: column; gap: var(--gap); }
+  .gbar { display: flex; align-items: center; height: 56px; margin: 0 -8px; }
+  #backBtn { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+  #timer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  #moreBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
+  .gname { display: flex; align-items: baseline; justify-content: space-between; margin: -4px 0 0; }
+  .gname b { font-weight: 600; }
+  .gname span { color: var(--muted); font-size: 14px; }
 
   /* History: a full-height sheet on the phone, a centred panel on a computer. */
   #history { width: min(100vw, 520px); max-width: none; max-height: 100dvh; height: 100dvh; margin: 0 auto; padding: 0 var(--gutter);
@@ -79,12 +87,17 @@
   .hmeta small { color: var(--muted); font-size: 14px; }
   .hdel { min-height: 40px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 
-  /* Home without a task: today's dailies and the last sudokus instead of an empty board (showHome). */
+  /* The menu: the game to go on with, today's dailies, a new game, the last sudokus (showMenu). */
   #home { display: flex; flex-direction: column; gap: var(--gap); }
-  #homeDaily, #homeNew { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; border: 1px solid var(--control);
+  #homeResume, #homeDaily, #homeNew { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; border: 1px solid var(--control);
     border-radius: 14px; background: var(--surface); text-align: left; }
   #homeDaily > b, #homeNew > b { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; }
-  #homeDaily > b::after { content: "›"; color: var(--muted); font-weight: 500; }   /* the whole card opens the daily */
+  #homeDaily > b::after, #homeResume::after { content: "›"; color: var(--muted); font-weight: 500; }   /* the whole card opens it */
+  #homeResume { flex-direction: row; align-items: center; gap: 14px; padding: 12px 16px 12px 12px; }
+  #homeResume canvas { width: 56px; height: 56px; flex: none; border-radius: 4px; }
+  #homeResume .hmeta { flex: 1; }
+  #homeResume b { font-size: 18px; font-weight: 700; }
+  #homeResume::after { font-size: 20px; }
   #homeNew > small { margin-top: -8px; color: var(--muted); font-size: 14px; }
   #newLevels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   #newLevels button { gap: 8px; padding: 0 8px; border-radius: 10px; background: var(--ground); }
@@ -92,10 +105,12 @@
   #homeDays > span { display: flex; align-items: center; gap: 10px; }
   #homeDays small { margin-left: auto; color: var(--muted); font-size: 14px; }
   #home h2 { margin: 8px 0 0; color: var(--muted); font-size: 14px; font-weight: 600; }
-  #manualBtn { align-self: center; min-height: 40px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
+  #recent { padding: 0; }
+  #historyAll { justify-content: space-between; min-height: 44px; margin-top: -4px; padding: 0 4px; border-color: transparent; background: transparent;
+    color: var(--muted); font-size: 15px; }
+  .links { display: flex; justify-content: center; gap: 8px; }
+  .links button { min-height: 44px; padding: 0 12px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
   #historyEmpty { margin: 8px 0; color: var(--muted); }
-
-  #status { margin: 0; min-height: 2.9em; font-size: 15px; }
 
   /* The board: 81 inputs, thin cell lines, ink lines after the 3rd and 6th column and row. */
   #grid { display: grid; grid-template-columns: repeat(9, 1fr); aspect-ratio: 1; width: 100%; flex: none;
@@ -104,8 +119,7 @@
     border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
     background-color: var(--surface); color: var(--pencil); caret-color: var(--hue); text-align: center;
     font-family: var(--font); font-weight: 400; line-height: 1.5; font-size: clamp(18px, 6vw, 32px); font-size: 6.4cqi;
-    text-decoration-thickness: 2px; text-underline-offset: 0.14em; outline: none;
-    transition: background-color .14s ease-out, color .14s ease-out; }
+    text-decoration-thickness: 2px; text-underline-offset: 0.14em; outline: none; }   /* no transition: picking and lighting happen hundreds of times */
   #grid input:nth-child(9n) { border-right: 0; }
   #grid input:nth-child(n+73) { border-bottom: 0; }
   #grid input:nth-child(9n+3), #grid input:nth-child(9n+6) { border-right: 2px solid var(--box); }
@@ -131,25 +145,75 @@
   #grid input.bad, #grid input.wrong { background-color: var(--bad-bg); color: var(--negative); box-shadow: inset 0 -4px 0 var(--negative); }
   #grid input.hint { background-color: var(--hint-bg); color: var(--positive); font-weight: 700; }
 
-  /* Buttons: one filled primary at a time — Skeniraj until there is a task, then the step button. */
+  /* Buttons: one filled primary per screen: Skeniraj in the menu, "Ovo je zadatak" before a task. */
   button, .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px;
     border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); color: var(--text);
     font: 500 16px/1.2 var(--font); text-align: center; cursor: pointer; user-select: none;
     transition: transform .12s ease-out, background-color .14s ease-out, border-color .14s ease-out; }
   button:active, .btn:active { transform: scale(.97); }
-  #liveBtn, #hintBtn { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-  body:has(#hintBtn:not([hidden])) #liveBtn { background: var(--surface); border-color: var(--control); color: var(--text); }
+  #liveBtn, #setTask { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
   button:disabled, #file:disabled + label[for="file"].btn { background: var(--raised); border-color: var(--raised); color: var(--muted);
     cursor: default; transform: none; }
   :focus-visible, #file:focus-visible + .btn { outline: 3px solid var(--hue); outline-offset: 2px; }
   #file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 6px; }
-  #setTask { grid-column: 1 / -1; }
-  #hintBtn { grid-column: 2 / -1; }
-  #undoBtn { padding: 0 4px; font-size: 15px; }
-  #candsBtn[aria-pressed="true"], #explainBtn[aria-pressed="true"] { background: var(--raised); color: var(--text); }
-  #solveBtn, #candsBtn, #explainBtn, #newBtn { min-height: 40px; padding: 0 4px; border-color: transparent; background: transparent; color: var(--muted); font-size: 14px; }
+  /* Under the thumb: tools (icon over label; Savjet the only one in colour), then the digits with how many are left.
+     The gap between the board and them on a tall phone is on purpose. */
+  .controls { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  #tools { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; container-type: inline-size; }
+  #tools button { flex-direction: column; gap: 4px; min-height: 60px; padding: 0 2px; border: 0; border-radius: 10px; background: transparent;
+    color: var(--muted); font-size: 13px; line-height: 1.25; }
+  #tools button:disabled { background: transparent; opacity: 0.45; }
+  #tools #padNotes[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+  #tools #hintBtn { color: var(--hue); font-weight: 600; }
+  #hintBtn > span { display: flex; align-items: center; gap: 5px; }
+  .lv { display: none; gap: 3px; }
+  .lv i { width: 5px; height: 5px; border-radius: 50%; background: var(--control); }
+  #hintBtn[data-level] .lv { display: flex; }   /* a step is open: how close the answer is */
+  #hintBtn[data-level="1"] .lv i:first-child, #hintBtn[data-level="2"] .lv i:nth-child(-n+2) { background: var(--hue); }
+  #setTask { min-height: 56px; font-weight: 600; }
+
+  /* Stuck for a while (Nova igra): a small bubble out of Savjet. */
+  #nudge { position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 3; width: 240px; margin: 0; padding: 10px 14px;
+    border: 1px solid var(--control); border-radius: 14px; background: var(--surface); font-size: 14px; transform-origin: 100% 100%;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); }
+  #nudge::after { content: ""; position: absolute; right: calc(12.5cqi - 6px); bottom: -7px; width: 12px; height: 12px; background: var(--surface);
+    border-right: 1px solid var(--control); border-bottom: 1px solid var(--control); transform: rotate(45deg); }
+
+  /* ⋯: a bottom sheet with the rare things. Slides up, a little faster down. */
+  #more { width: min(100%, 520px); max-width: none; margin: auto auto 0; padding: 0; border: 0; border-radius: 16px 16px 0 0;
+    background: var(--surface); color: var(--text); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
+    transform: translateY(100%); transition: transform .18s cubic-bezier(0.32, 0.72, 0, 1), overlay .18s allow-discrete, display .18s allow-discrete; }
+  #more[open] { transform: none; transition-duration: .24s; }
+  @starting-style { #more[open] { transform: translateY(100%); } }
+  #more::backdrop { background: rgba(0, 0, 0, 0); transition: background-color .18s, overlay .18s allow-discrete, display .18s allow-discrete; }
+  #more[open]::backdrop { background: rgba(0, 0, 0, 0.45); }
+  @starting-style { #more[open]::backdrop { background: rgba(0, 0, 0, 0); } }
+  .sheet { display: flex; flex-direction: column; padding: 8px 8px calc(16px + env(safe-area-inset-bottom)); touch-action: none; }   /* a drag moves the sheet, not the page */
+  .grab { width: 36px; height: 4px; margin: 0 auto 8px; border-radius: 2px; background: var(--control); }
+  .sheet button { justify-content: space-between; gap: 12px; min-height: 52px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; text-align: left; }
+  .sheet button > span { display: flex; flex-direction: column; }
+  .sheet small { color: var(--muted); font-size: 14px; font-weight: 400; }
+  .sheet hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+  .sw { position: relative; width: 40px; height: 24px; flex: none; border-radius: 999px; background: var(--control); transition: background-color .14s ease-out; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface);
+    transition: transform .14s ease-out; }
+  [aria-pressed="true"] > .sw { background: var(--primary); }
+  [aria-pressed="true"] > .sw::after { transform: translateX(16px); background: var(--on-primary); }
+
+  /* Messages: a toast under the top bar, over the page (it pushes nothing). Info goes by itself, errors stay until ✕. */
+  #toast { position: fixed; top: calc(60px + env(safe-area-inset-top)); left: 16px; right: 16px; z-index: 20; max-width: 488px; margin: 0 auto;
+    display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 16px; border-radius: 12px; background: var(--primary); color: var(--on-primary);
+    font-size: 15px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    opacity: 0; transform: translateY(-8px); visibility: hidden; pointer-events: none;
+    transition: opacity .15s ease-out, transform .15s ease-out, visibility 0s .15s; }
+  #toast.on { opacity: 1; transform: none; visibility: visible; pointer-events: auto;
+    transition: opacity .2s cubic-bezier(0.23, 1, 0.32, 1), transform .2s cubic-bezier(0.23, 1, 0.32, 1); }
+  #msg { flex: 1; margin: 8px 0; }
+  #msg b { font-weight: 700; }
+  #msgAct { min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline;
+    text-underline-offset: 3px; }
+  #msgClose { width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 18px; }
 
   /* The explanation: a speech bubble floating over the board, its tail on the marked cells (placeBubble).
      It floats, so it alone gets a shadow. */
@@ -180,30 +244,51 @@
     font-size: 2.6cqi; font-weight: 500; line-height: 1; text-align: center; align-items: center; }
   #cands.mine > span { color: var(--pencil); }   /* the user's own notes, not the computed candidates */
 
-  details { margin-top: 12px; color: var(--muted); font-size: 13px; }
-  summary { cursor: pointer; padding: 6px 0; }
-  .credits { margin: 6px 0; line-height: 1.5; }
+  #about h2 { margin: 0 0 12px; font-size: 24px; font-weight: 700; }
+  .credits { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
   .credits a { color: inherit; }
   canvas { max-width: 100%; }
-  #warped { display: block; margin-top: 8px; border-radius: 4px; }
+  #warped { display: block; max-width: 160px; margin-bottom: 16px; border-radius: 4px; }
+  #warped:not([width]) { display: none; }   /* no scan yet */
+  #aboutClose { width: 100%; }
 
-  /* Capture dock: on the phone it stays under the thumb. */
+  /* Capture dock: on the phone it stays under the thumb. While OpenCV and the model load, a quiet line says so. */
   .dock { position: sticky; bottom: 0; margin: auto calc(-1 * var(--gutter)) 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
     padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: var(--ground); border-top: 1px solid var(--line); }
+  #loading { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+
+  /* Digits: one row of nine on the phone, no key background; the count of each still to place under it. */
+  #pad { display: grid; grid-template-columns: repeat(9, 1fr); width: 100%; }
+  #pad button { flex-direction: column; gap: 0; min-height: 64px; padding: 0; border: 0; border-radius: var(--radius); background: transparent;
+    color: var(--hue); font-size: 34px; font-weight: 500; line-height: 1.1; }
+  #pad button::after { content: attr(data-left); color: var(--muted); font-size: 12px; line-height: 1.3; }
+  #pad.noting button { color: var(--muted); }   /* digits go in as notes */
+  #pad button.spent { visibility: hidden; }   /* all nine on the board */
+  #pad .erase { display: none; }   /* the game has Obriši among the tools */
 
   @media (min-width: 880px) {
-    body { max-width: none; display: grid; justify-content: center; align-content: start; column-gap: 48px; row-gap: var(--gap);
-      grid-template-columns: min(600px, calc(100dvh - 140px)) 340px; grid-template-rows: auto auto auto auto auto 1fr;
-      grid-template-areas: "bar bar" "grid status" "grid daily" "grid diff" "grid dock" "grid pad" "grid actions" "grid debug"; padding-bottom: 32px; }
-    #pad { grid-area: pad; }
-    .bar { grid-area: bar; }
-    #board, #home { grid-area: grid; align-self: start; }
-    #status { grid-area: status; }
-    #diff { grid-area: diff; }
-    #dailyBar { grid-area: daily; }
-    .dock { grid-area: dock; position: static; margin: 0; padding: 0; border: 0; background: none; }
-    .actions { grid-area: actions; }
-    details { grid-area: debug; margin: 0; }
+    :root { --col: min(600px, calc(100dvh - 56px), calc(100vw - 440px)); }   /* the board's (and the cards') column; 48px gap, then 340px; fits 880px */
+    body { max-width: none; }
+    #menu, #game { display: grid; justify-content: center; align-content: start; column-gap: 48px; row-gap: var(--gap); padding-bottom: 32px;
+      grid-template-columns: var(--col) 340px; }
+    #menu { grid-template-areas: "bar bar" "home dock"; }
+    #menu .bar { grid-area: bar; }
+    #home { grid-area: home; }
+    .dock { grid-area: dock; align-self: start; position: static; margin: 0; padding: 0; border: 0; background: none; }
+    /* The last row takes the board's spare height, so the controls keep their own (no stretched keys). */
+    #game { grid-template-rows: auto auto 1fr; padding-top: 24px;
+      grid-template-areas: "board head" "board controls" "board ."; }
+    #board { grid-area: board; align-self: start; }
+    .ghead { grid-area: head; }
+    .gbar { margin-top: -6px; }
+    .controls { grid-area: controls; margin: 8px 0 0; padding: 0; gap: 16px; }
+    #pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }   /* like a calculator */
+    #pad button { min-height: 64px; flex-direction: row; align-items: baseline; gap: 6px; background: var(--surface); font-size: 28px; }
+    /* The toast in the right column: under Skeniraj in the menu; in the game at its foot, clear of the
+       controls it would cover under the short top bar. */
+    #toast { top: 128px; left: calc(50% + (var(--col) + 48px + 340px) / 2 - 340px); right: auto; width: 340px; margin: 0; }
+    body:has(#game:not([hidden])) #toast { top: auto; bottom: 32px; transform: translateY(8px); }
+    body:has(#game:not([hidden])) #toast.on { transform: none; }
   }
 
   /* Live camera (the scanner): always dark. The frozen reading sits on black between the status (top)
@@ -233,34 +318,29 @@
   #liveTools { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
   #liveTools button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--dim); font-size: 15px; }
   #liveTools button[aria-pressed="true"] { background: var(--key); color: var(--ink); }
-  #live #pad { padding: 0; background: none; }
-  #live #pad button { border-radius: 12px; background: var(--key); color: var(--ink); }
-  #live #pad #padKind { background: var(--key-on); }
-  #pad { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; width: 100%; max-width: 480px;
-    padding: 6px; border-radius: 12px; background: rgba(14, 14, 13, 0.85); }
-  #pad button { min-height: 48px; padding: 0; border: 0; border-radius: var(--radius-control); background: #fff; color: #121212;
-    font-size: 20px; font-weight: 500; }
-  #pad #padKind, #pad #padNotes { grid-column: 1 / -1; min-height: 44px; background: #d1d5db; font-size: 16px; }
-  #pad #padNotes[aria-pressed="true"] { background: var(--hue); color: #fff; }
-  #pad.noting button:not(#padNotes):not(#padKind) { font-size: 15px; font-weight: 600; color: var(--hue); }   /* digits go in as notes */
-  #pad button.spent { opacity: 0.3; }   /* all nine on the board */
-  #live #pad #padNotes { display: none; }
-  #live #pad button.spent { opacity: 1; }
+  /* In the camera the same pad (moved in while it is open), as dark keys with ⌫ and printed / own. */
+  #live #pad { grid-template-columns: repeat(10, 1fr); gap: 4px; max-width: 480px; }
+  #live #pad button { min-height: 48px; border-radius: 12px; background: var(--key); color: var(--ink); font-size: 20px; }
+  #live #pad button::after { content: none; }
+  #live #pad button.spent { visibility: visible; }
+  #live #pad .erase { display: inline-flex; }
+  #live #pad #padKind { grid-column: 1 / -1; flex-direction: row; min-height: 44px; background: var(--key-on); font-size: 16px; font-weight: 500; }
+  #live #pad #padKind svg { display: none; }
 
   /* Difficulty: a pill filled to the percentage in its band's colour. */
   .diffpill { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; }
-  .diffpill .dtrack { flex: 1; height: 10px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+  .diffpill .dtrack { flex: 1; height: 6px; border-radius: 999px; background: var(--raised); overflow: hidden; }
   .diffpill .dfill { display: block; height: 100%; border-radius: 999px; background: var(--band); transition: width .3s ease-out; }
   .diffpill b { font-weight: 600; color: var(--text); white-space: nowrap; }
   .diffpill span:first-child { color: var(--muted); }
 
   /* Cards (solved, the daily's start): float over the page, grow in. Solved is a rare moment, so it may
      celebrate a little: the tick draws itself. */
-  #solved, #dailyDlg { width: min(88vw, 380px); padding: 28px 24px 20px; border: 0; border-radius: 20px; background: var(--surface); color: var(--text);
+  #solved, #dailyDlg, #about { width: min(88vw, 380px); padding: 28px 24px 20px; border: 0; border-radius: 20px; background: var(--surface); color: var(--text);
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3); }
   #solved { text-align: center; }
-  #solved::backdrop, #dailyDlg::backdrop { background: rgba(0, 0, 0, 0.45); }
-  #solved[open], #dailyDlg[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
+  #solved::backdrop, #dailyDlg::backdrop, #about::backdrop { background: rgba(0, 0, 0, 0.45); }
+  #solved[open], #dailyDlg[open], #about[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
   #dailyDlg h2 { margin: 0; font-size: 24px; font-weight: 700; }
   #dailyDate { margin: 2px 0 12px; color: var(--muted); }
   #dailyDlg p { margin: 0 0 16px; line-height: 1.5; }
@@ -278,24 +358,27 @@
   #solved h2 { margin: 8px 0 4px; font-size: 26px; font-weight: 700; }
   #solved p { margin: 0 0 16px; color: var(--muted); }
   #solved #diffSolved { margin: 0 0 20px; }
+  #solvedTechs { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: var(--ground); text-align: left; }
+  #solvedTechs b { display: block; margin-bottom: 4px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  #solvedTechs span { display: flex; justify-content: space-between; }
+  #solvedTechs small { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   #solved .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
-  #solvedClose { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  #solvedClose, #solvedNext { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
   .hmeta b.solved { color: var(--positive); }
 
+  /* Reduced motion: nothing travels or grows; fades stay. */
   @media (prefers-reduced-motion: reduce) {
-    #solved[open], #dailyDlg[open], #solved .tick path { animation: none; stroke-dashoffset: 0; }
-    *, *::before, *::after { transition: none !important; }
+    #solved[open], #dailyDlg[open], #about[open], #solved .tick path { animation: none; stroke-dashoffset: 0; }
+    #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
+    #more, #more[open], #live video, #live canvas { transform: none; }
+    #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }
+    @starting-style { #more[open] { transform: none; } }
     button:active, .btn:active { transform: none; }
   }
 </style>
 </head>
 <body>
-<header class="bar">
-  <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
-  <h1>Sudoku Scan</h1>
-  <button id="dailyBtn">Dnevni</button>
-  <button id="historyBtn">Povijest</button>
-</header>
+<div id="toast" role="status"><p id="msg"></p><button id="msgAct" hidden></button><button id="msgClose" aria-label="Zatvori"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
 <dialog id="history" aria-labelledby="historyTitle">
   <div class="hhead"><h2 id="historyTitle">Povijest</h2><button id="historyClose">Zatvori</button></div>
   <ul id="historyList" class="hlist"></ul>
@@ -316,9 +399,6 @@
     </div>
   </div>
 </div>
-<p id="status">Učitavam OpenCV…</p>
-<p id="dailyBar" hidden><span id="dailyName"></span><b id="timer" aria-label="Vrijeme">0:00</b></p>
-<p id="diff" class="diffpill" hidden></p>
 <dialog id="dailyDlg" aria-labelledby="dailyTitle">
   <h2 id="dailyTitle">Dnevni sudoku</h2>
   <p id="dailyDate"></p>
@@ -336,8 +416,70 @@
   <h2 id="solvedTitle">Riješeno!</h2>
   <p id="solvedText">Sve je točno.</p>
   <p id="diffSolved" class="diffpill"></p>
-  <div class="row"><button id="solvedHistory">Povijest</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
+  <div id="solvedTechs" hidden><b>Tehnike iz savjeta</b><div id="techList"></div></div>
+  <div class="row"><button id="solvedMenu">Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Super</button></div>
 </dialog>
+<dialog id="about" aria-labelledby="aboutTitle">
+  <h2 id="aboutTitle">O aplikaciji</h2>
+  <p class="credits">Sve radi u tvom pregledniku: slike i sudokui ne napuštaju uređaj.</p>
+  <p class="credits">Čitanje brojki naučeno je na skupu MNIST (Y. LeCun, C. Cortes, C. J. C. Burges, CC BY-SA 3.0), a razlikovanje tiskanih i rukom pisanih na
+    <a href="https://github.com/wichtounet/sudoku_dataset">Sudoku datasetu</a> Baptistea Wichta (CC BY 4.0).
+    Koristi OpenCV.js i TensorFlow.js (Apache 2.0) i font Schibsted Grotesk (SIL Open Font License 1.1); licence su u mapama vendor/ i fonts/.</p>
+  <canvas id="warped" aria-label="Zadnja izravnana mreža"></canvas>
+  <button id="aboutClose">Zatvori</button>
+</dialog>
+<dialog id="more" aria-label="Više">
+  <div class="sheet">
+    <span class="grab" aria-hidden="true"></span>
+    <button id="explainBtn" aria-pressed="true">Objašnjenje u oblačiću<span class="sw"></span></button>
+    <button id="candsBtn" aria-pressed="false">Kandidati<span class="sw"></span></button>
+    <button id="paperBtn" disabled>Provjeri papir kamerom</button>
+    <hr>
+    <button id="restartBtn"><span>Počni ispočetka<small>briše tvoje brojeve</small></span></button>
+    <button id="solveBtn">Riješi sve</button>
+  </div>
+</dialog>
+
+<section id="menu">
+  <header class="bar">
+    <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
+    <h1>Sudoku Scan</h1>
+  </header>
+  <div id="home">
+    <button id="homeResume" hidden><canvas></canvas><span class="hmeta"><b>Nastavi</b><small id="resumeText"></small></span></button>
+    <button id="homeDaily"><b>Dnevni sudoku</b><span id="homeDays"></span></button>
+    <div id="homeNew">
+      <b>Nova igra</b>
+      <small>Vježba: savjeti kad zapneš, bez kazne</small>
+      <div id="newLevels">
+        <button><span class="dot" style="background: var(--easy)"></span>Lagano</button>
+        <button><span class="dot" style="background: var(--medium)"></span>Srednje</button>
+        <button><span class="dot" style="background: var(--hard)"></span>Teško</button>
+      </div>
+    </div>
+    <h2 id="recentTitle">Nedavno</h2>
+    <ul id="recent" class="hlist"></ul>
+    <button id="historyAll"><span></span><span aria-hidden="true">›</span></button>
+    <div class="links"><button id="manualBtn">Upiši ručno</button><button id="aboutBtn">O aplikaciji</button></div>
+  </div>
+  <div class="dock">
+    <p id="loading">Učitavam OpenCV…</p>
+    <input type="file" id="file" accept="image/*" disabled>
+    <label for="file" class="btn">Iz galerije</label>
+    <button id="liveBtn" disabled>Skeniraj</button>
+  </div>
+</section>
+
+<section id="game" hidden>
+  <div class="ghead">
+    <div class="gbar">
+      <button id="backBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Izbornik</button>
+      <b id="timer" aria-label="Vrijeme">0:00</b>
+      <button id="moreBtn" aria-label="Više"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg></button>
+    </div>
+    <p class="gname"><b id="gameName"></b><span id="gameSide"></span></p>
+    <p id="diff" class="diffpill" hidden></p>
+  </div>
 <div id="board">
   <div id="grid"></div>
   <section id="explainBox">
@@ -346,49 +488,43 @@
     <p id="explain"></p>
   </section>
 </div>
-<section id="home" hidden>
-  <button id="homeDaily"><b>Dnevni sudoku</b><span id="homeDays"></span></button>
-  <div id="homeNew">
-    <b>Nova igra</b>
-    <small>Nasumični sudoku, s pomoći i timerom</small>
-    <div id="newLevels">
-      <button><span class="dot" style="background: var(--easy)"></span>Lagano</button>
-      <button><span class="dot" style="background: var(--medium)"></span>Srednje</button>
-      <button><span class="dot" style="background: var(--hard)"></span>Teško</button>
+  <div class="controls">
+    <div id="tools">
+      <button id="undoBtn" disabled><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>Poništi</button>
+      <button id="eraseBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20H9L4 15l9-9 7 7-6 6"/><path d="M9 11l6 6"/></svg>Obriši</button>
+      <button id="padNotes" aria-pressed="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M13 7l4 4"/></svg>Bilješke</button>
+      <button id="hintBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg><span><span id="hintLabel">Savjet</span><span class="lv" aria-hidden="true"><i></i><i></i><i></i></span></span></button>
+      <button id="padKind" disabled><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14l-4-4M20 16H6l4 4"/></svg><span>Ovo je moj broj (rukom)</span></button>
+      <p id="nudge" role="status" hidden>Zapelo? <b>Savjet</b> pokaže gdje gledati, bez odgovora. Slobodno.</p>
     </div>
+    <div id="pad"></div>   <!-- digits; moves into the live camera while it is open -->
+    <button id="setTask" disabled>Ovo je zadatak</button>
   </div>
-  <h2 id="recentTitle">Nedavno</h2>
-  <ul id="recent" class="hlist"></ul>
-  <button id="manualBtn">Upiši sudoku ručno</button>
 </section>
-<div id="pad" hidden></div>   <!-- number pad; moves into the live camera while it is open -->
-<div class="actions">
-  <button id="setTask">Ovo je zadatak</button>
-  <button id="undoBtn" hidden disabled>Poništi</button>
-  <button id="hintBtn" hidden>Sljedeći korak</button>
-  <button id="solveBtn" hidden>Riješi sve</button>
-  <button id="candsBtn" hidden aria-pressed="false">Kandidati</button>
-  <button id="explainBtn" hidden aria-pressed="true">Objašnjenje</button>
-  <button id="newBtn" hidden>Očisti</button>
-</div>
-<details><summary>O aplikaciji</summary>
-  <p class="credits">Sve radi u tvom pregledniku: slike i sudokui ne napuštaju uređaj.</p>
-  <p class="credits">Čitanje brojki naučeno je na skupu MNIST (Y. LeCun, C. Cortes, C. J. C. Burges, CC BY-SA 3.0), a razlikovanje tiskanih i rukom pisanih na
-    <a href="https://github.com/wichtounet/sudoku_dataset">Sudoku datasetu</a> Baptistea Wichta (CC BY 4.0).
-    Koristi OpenCV.js i TensorFlow.js (Apache 2.0) i font Schibsted Grotesk (SIL Open Font License 1.1); licence su u mapama vendor/ i fonts/.</p>
-  <canvas id="warped" aria-label="Zadnja izravnana mreža"></canvas>
-</details>
-<div class="dock">
-  <input type="file" id="file" accept="image/*" disabled>
-  <label for="file" class="btn">Iz galerije</label>
-  <button id="liveBtn" disabled>Skeniraj</button>
-</div>
 
 <script src="vendor/tf.min.js"></script>   <!-- TensorFlow.js 4.22.0 -->
 <script>
 const S = 64, N = S * 9;   // cell px, warped grid px
 const $ = id => document.getElementById(id);
-const say = t => $('status').textContent = t;
+// A message as a toast under the top bar (*word* = bold). Info goes by itself after ms (3 s, longer for
+// long text); an error or an instruction (ms = Infinity) stays until ✕ or the state changes (go). '' hides it.
+// act: [label, fn] puts one action button in it (e.g. "Uključi").
+let msgTimer, tipOn = false;   // tipOn: the first games' Savjet tip is showing
+function say(t, ms = Math.max(3000, t.length * 50), act) {
+  clearTimeout(msgTimer);
+  tipOn = false;
+  $('toast').classList.toggle('on', !!t);
+  if (!t) return;
+  $('toast').setAttribute('role', ms < Infinity ? 'status' : 'alert');
+  $('msg').replaceChildren(...t.split('*').map((s, i) => i % 2 ? Object.assign(document.createElement('b'), { textContent: s }) : s));
+  $('msgClose').hidden = ms < Infinity;
+  $('msgAct').hidden = !act;
+  if (act) { $('msgAct').textContent = act[0]; $('msgAct').onclick = () => { say(''); act[1](); }; }
+  if (ms < Infinity) msgTimer = setTimeout(() => say(''), ms);
+}
+$('msgClose').onclick = () => say('');
+// While OpenCV and the model load: a quiet line over Skeniraj / Iz galerije ('' when ready).
+const loading = t => { $('loading').textContent = t; $('loading').hidden = !t; };
 // Cells are typed into with the number pad (as in the live camera), not the phone keyboard; on a
 // computer the keys 1-9 and Backspace work too.
 const inputs = Array.from({ length: 81 }, (_, k) => {
@@ -411,17 +547,15 @@ const candCells = (() => {
 let model, featModel, printedModel = null, task = null;   // task = { givens, solution }: 81 numbers each, 0 = empty
 let sel = null;   // cell picked for the pad
 
-// Tap on a cell → pick it and show the pad (a task's printed digits are fixed); same cell again → put away.
+// Tap on a cell → pick it for the pad (a task's printed digits are fixed); same cell again → put away.
 function pick(k) {
   const tapped = k;
   if (task?.givens[k]) k = null;
   sel = k === sel ? null : k;
   inputs.forEach((x, i) => x.classList.toggle('sel', i === sel));
   light(sel ?? (task?.givens[tapped] ? tapped : null));   // a printed digit can't be picked, but shows where its digit is
-  $('pad').hidden = sel === null;
-  $('padKind').hidden = sel === null || !!task || !inputs[sel].value;
-  $('padNotes').hidden = sel === null || !task;
-  if (sel !== null) $('padKind').textContent = inputs[sel].classList.contains('entry') ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
+  $('padKind').disabled = sel === null || !inputs[sel].value;   // before a task only
+  $('padKind').lastChild.textContent = sel !== null && inputs[sel].classList.contains('entry') ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
 }
 
 // The tapped cell's row, column and box, and every cell holding its digit (null: none).
@@ -455,6 +589,7 @@ function restore(st) {
 $('undoBtn').onclick = () => {
   const u = undo.pop();
   if (!u) return;
+  idle = 0;
   clearHint();
   pick(null);
   notes = u.notes;
@@ -470,6 +605,9 @@ $('undoBtn').onclick = () => {
 // instead, and the pad stays for the next one.
 function setCell(d) {
   const k = sel, i = inputs[k];
+  if (k === null) return;   // a digit with no cell picked does nothing
+  idle = 0;
+  if (d && tipOn) { tipOn = false; say(''); }   // the first digit puts the first games' tip away
   undo.push({ k, v: i.value, notes: notes.slice() });   // notes are replaced, never changed in place
   if (noting && task && !i.value) {
     notes[k] = !d ? [] : notes[k].includes(d) ? notes[k].filter(x => x !== d) : [...notes[k], d].sort();
@@ -505,28 +643,30 @@ function setKind() {
   i.classList.toggle('given', !i.classList.toggle('entry'));
   entryLabel();
 }
-try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch {}   // shown at the end of the script
-
 async function cvReady() {
   if (cv instanceof Promise) cv = await cv;
   else if (!cv.Mat) await new Promise(r => cv.onRuntimeInitialized = r);
-  say('Učitavam model…');
+  loading('Učitavam model…');
   try { model = await tf.loadLayersModel('model/model.json'); }
-  catch { return say('Model nije pronađen (pokreni train.js).'); }
+  catch { return loading('Model nije pronađen (pokreni train.js).'); }
   featModel = tf.model({ inputs: model.inputs, outputs: model.layers[model.layers.length - 2].output });
   try { printedModel = await tf.loadLayersModel('model/printed/model.json'); } catch {}   // optional: printed vs handwritten
   rebuildMemory();
-  $('file').disabled = $('liveBtn').disabled = false;
-  say(task ? 'Spremno.' : 'Skeniraj sudoku s papira ili igraj ovdje.');
+  $('file').disabled = $('liveBtn').disabled = $('paperBtn').disabled = false;
+  loading('');
 }
 
+// A photo of the saved sudoku's paper is checked against it; any other photo is a new sudoku (the saved
+// one stays for "Nastavi"). A photo is never today's daily.
 $('file').onchange = async () => {
   const f = $('file').files[0];
   if (!f) return;
+  $('file').value = '';   // the same picture again fires again
   say('Tražim mrežu…');
-  if (task?.daily) { task = null; showTask(); }   // a photo is never today's daily
   const probs = await readGrid(f);
-  if (!probs) return say('Mreža nije pronađena. Probaj sliku snimljenu bliže i ravnije, ili skeniraj kamerom.');
+  if (!probs) return say('Mreža nije pronađena. Probaj sliku snimljenu bliže i ravnije, ili skeniraj kamerom.', Infinity);
+  const off = task && probs.filter((p, i) => task.givens[i] && best(p) !== task.givens[i]).length;
+  if (task && (task.daily || off > task.givens.filter(Boolean).length / 3)) clearBoard();
   showScan(lastProbs = probs);
 };
 
@@ -692,8 +832,8 @@ const judge = (p, sol) => p[sol - 1] >= 0.3 ? 'ok' : p[sol - 1] < 0.01 && Math.m
 
 // No task yet: show the model's best guess. With a task: givens come from the task, own entries are judged.
 function showScan(probs) {
+  go('game');
   clearHint();
-  let off = 0;
   probs.forEach((p, i) => {
     const inp = inputs[i], b = best(p);
     inp.classList.remove('low', 'ok', 'wrong', 'maybe', 'entry');
@@ -704,7 +844,7 @@ function showScan(probs) {
       inp.classList.toggle('given', !!b && lastPrinted[i] !== false);
       return;
     }
-    if (task.givens[i]) { if (b !== task.givens[i]) off++; return; }
+    if (task.givens[i]) return;
     if (!p) { inp.value = ''; return; }
     const j = judge(p, task.solution[i]);
     inp.value = j === 'ok' ? task.solution[i] : b;
@@ -712,14 +852,14 @@ function showScan(probs) {
   });
   if (task) learn(inputs.map((x, i) => [i, task.solution[i]]).filter(([i]) => inputs[i].classList.contains('ok')));
   markConflicts();
-  showHome();
-  if (!task && entryLabel()) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".');
-  if (!task) return say('Žuto = nesigurno, crveno = duplikat. Ispravi, obriši brojeve upisane rukom i stisni "Ovo je zadatak".');
-  if (off > task.givens.filter(Boolean).length / 3) return say('Ovo izgleda kao drugi sudoku. Za novi stisni "Novi zadatak".');
-  const n = cls => inputs.filter(x => x.classList.contains(cls)).length;
-  say(`Točno: ${n('ok')}, krivo: ${n('wrong')} (crveno), nesigurno: ${n('maybe')} (žuto, provjeri ručno).`);
+  if (!task && entryLabel()) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".', Infinity);
+  if (!task) return say('Žuto = nesigurno, crveno = duplikat. Ispravi, obriši brojeve upisane rukom i stisni "Ovo je zadatak".', Infinity);
+  sayEntries();
 }
+// "Tvoji brojevi: 34 točno, 1 krivo, 2 nesigurno", after a check of the paper.
+const sayEntries = () => { const n = c => inputs.filter(x => x.classList.contains(c)).length; say(`*Tvoji brojevi:* ${n('ok')} točno, ${n('wrong')} krivo, ${n('maybe')} nesigurno`); };
 
+// The game's controls for the task on the board (none: a sudoku being typed in or checked first).
 function showTask() {
   inputs.forEach((inp, i) => {
     const g = task?.givens[i];
@@ -728,16 +868,25 @@ function showTask() {
     inp.classList.remove('entry');
   });
   entryLabel();
-  for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn']) $(id).hidden = !task || !!task.daily;   // the daily is solo
-  $('newBtn').hidden = $('undoBtn').hidden = !task;
-  $('dailyBar').hidden = !task?.daily && !task?.random;
-  if (task?.daily) $('dailyName').textContent = `Dnevni · ${DAILY[task.level][0]} · ` + new Date(task.daily + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' });
-  if (task?.random) $('dailyName').textContent = `Nova igra · ${DAILY[task.level][0]}`;
-  if (task?.daily || task?.random) $('timer').textContent = clock(state().elapsed);
+  const solo = !task || !!task.daily;   // the daily is solo
+  for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn']) $(id).hidden = solo;
+  $('paperBtn').hidden = solo || !!task.random;   // a scanned sudoku's paper
+  $('undoBtn').hidden = $('padNotes').hidden = $('moreBtn').hidden = !task;
+  $('padKind').hidden = $('setTask').hidden = !!task;
+  $('timer').hidden = !task?.daily && !task?.random;
+  if (!$('timer').hidden) $('timer').textContent = clock(state().elapsed);
   if (task) diffPill($('diff'), saved().find(e => e.key === task.solution.join(''))?.diff ?? difficulty(task.givens, task.solution));
   else $('diff').hidden = true;
-  showHome();
 }
+
+// The name row: what is being played (and its date), or before a task what is being typed and how many digits.
+function gameHead() {
+  const n = inputs.filter(x => x.value).length;
+  $('gameName').textContent = !task ? (lastProbs ? 'Provjeri očitanje' : 'Upiši sudoku') : gameKind() + (task.daily || task.random ? ` · ${DAILY[task.level][0]}` : '');
+  $('gameSide').textContent = !task ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'broj' : n % 10 > 1 && n % 10 < 5 && (n % 100 < 12 || n % 100 > 14) ? 'broja' : 'brojeva'}`
+    : task.daily ? new Date(task.daily + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
+}
+const gameKind = () => task.random ? 'Nova igra' : task.daily ? 'Dnevni' : 'Skenirani sudoku';
 
 // Candidates: in every empty cell the digits still possible there (from the givens and right entries).
 let showCands = false;
@@ -767,7 +916,15 @@ const setQuiet = q => {
   placeBubble();
   try { localStorage.sudokuQuiet = q ? '1' : '0'; } catch {}
 };
-$('explainToggle').onclick = () => setQuiet(true);
+// Switched off, the user must know where it went: said at once on Sakrij, and once per game when Savjet
+// is pressed while it is off (it may be off from an earlier game), each time with the way back.
+let quietTold = null;   // the puzzle (solution key) already told
+const back = () => setQuiet(false);
+$('explainToggle').onclick = () => {
+  setQuiet(true);
+  quietTold = task?.solution.join('');
+  say('Objašnjenje je skriveno. Vraća se u ⋯ → Objašnjenje u oblačiću.', 6000, ['Vrati', back]);
+};
 $('explainBtn').onclick = () => setQuiet(!$('explainBox').classList.contains('quiet'));
 // Held (not on its button): nearly see-through, to read the cells under it, until the finger lifts,
 // wherever it moves meanwhile (captured; touch-action: none keeps the page from scrolling instead).
@@ -785,14 +942,21 @@ function clearHint() {
   inputs.forEach(x => x.classList.remove('hint', 'area', 'focus', 'beam', 'blocker', 'crossed'));
   $('explain').textContent = '';
   hintState = null;
-  $('hintBtn').textContent = 'Sljedeći korak';
+  hintLabel(3);
+}
+
+// Savjet says what its next press brings (Savjet → Zašto? → Odgovor); while a step is open, dots show how deep.
+function hintLabel(level) {
+  $('hintLabel').textContent = HINT_NEXT[level];
+  if (level < 3) $('hintBtn').dataset.level = level; else delete $('hintBtn').dataset.level;
 }
 
 // Handwritten digits on the board? The task button then checks them. → whether there are any.
 function entryLabel() {
   const any = inputs.some(x => x.classList.contains('entry'));
   $('setTask').textContent = any ? 'Provjeri moje brojeve' : 'Ovo je zadatak';
-  $('setTask').hidden = !!task || !inputs.some(x => x.value);
+  $('setTask').disabled = !inputs.some(x => x.value);
+  gameHead();
   return any;
 }
 
@@ -803,8 +967,8 @@ $('setTask').onclick = () => {
   let givens = g.map((d, i) => mine[i] ? 0 : d), sols = mine.some(Boolean) ? solve(givens) : [];
   const check = sols.length === 1 && !!lastProbs;
   if (!check) { givens = g; sols = solve(g); }
-  if (!sols.length) return say('Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.');
-  if (sols.length > 1) return say('Ima više rješenja: vjerojatno fali neki broj.');
+  if (!sols.length) return say('Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.', Infinity);
+  if (sols.length > 1) return say('Ima više rješenja: vjerojatno fali neki broj.', Infinity);
   task = { givens, solution: sols[0] };
   undo = [];
   learn(givens.map((d, i) => [i, d]).filter(([, d]) => d));
@@ -813,7 +977,7 @@ $('setTask').onclick = () => {
   showTask();
   if (check) return showScan(lastProbs);
   say((mine.some(Boolean) ? 'Tiskani brojevi sami nemaju jedno rješenje, pa su svi brojevi uzeti kao zadatak. ' : '') +
-    'Zadatak spremljen. Rješavaj na papiru ili ovdje; za provjeru papira skeniraj ponovno.');
+    'Zadatak spremljen. Rješavaj na papiru ili ovdje; papir provjeriš kamerom (⋯).');
 };
 
 // Highlights of a step in the grid: where to look, and from level 2 on what rules cells out.
@@ -841,6 +1005,9 @@ $('hintBtn').onclick = () => {
     if (g.every(Boolean)) return explainAt('Sve je riješeno!', []);
     const h = hint(g) || reveal(g, task.solution);
     hintState = { h, level: h.tech ? 1 : 3 };
+    task.techs ??= {};   // Savjet used in this game (no stuck bubble then); the techniques it showed, for "Riješeno!"
+    if (h.tech) task.techs[h.tech.name] = (task.techs[h.tech.name] || 0) + 1;
+    saveState();
   }
   const { h, level } = hintState;
   markStep(h, level);
@@ -852,11 +1019,14 @@ $('hintBtn').onclick = () => {
     markConflicts();
   }
   const wrong = inputs.filter(x => x.classList.contains('wrong')).length;
-  say(level < 3 ? 'Upiši svoj odgovor u polje: reći ću ti je li točan i zašto.' : 'Za idući korak stisni Sljedeći korak.');
   explainAt((wrong ? `Pazi: ${wrong} polja su kriva (crveno).\n` : '') + hintText(h, level),
     level === 3 ? [h.cell] : h.focus.length ? h.focus : h.area,   // keep the area and, from "why" on, the reasons in sight
     level === 1 ? h.area : [...h.area, ...h.focus, ...h.blockers, ...h.blockers, ...h.crossed]);   // twice: the reasons matter most
-  $('hintBtn').textContent = HINT_NEXT[level];
+  hintLabel(level);
+  if ($('explainBox').classList.contains('quiet') && quietTold !== task.solution.join('')) {
+    quietTold = task.solution.join('');
+    say('Objašnjenje je isključeno: Savjet pokazuje samo oznake na mreži.', 6000, ['Uključi', back]);
+  }
 };
 
 // The explanation bubble: text, its tail on the main cells, kept clear of the marked ones (avoid).
@@ -870,15 +1040,15 @@ function explainAt(text, main, avoid = []) {
     $('explainBox').animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
 }
 // Where the bubble goes: full text, board-wide, at the height that covers the fewest marked cells
-// (avoid; the main ones count triple), nearest the main cells on a tie. It may cover the status line
-// above the board, never the buttons below it. The tail points at the main cells from whichever side
+// (avoid; the main ones count triple), nearest the main cells on a tie. It may cover the name row
+// above the board, never the top bar or the buttons below it. The tail points at the main cells from whichever side
 // the bubble ended up on (class up: bubble below them, down: above; free: no cells, or on them).
 function placeBubble() {
   const box = $('explainBox'), tail = box.querySelector('.tail'), ex = $('explain'), b = $('board').getBoundingClientRect();
-  const H = $('grid').offsetHeight;
-  if (!ex.textContent) return;
+  const H = $('grid').offsetHeight, bar = $('backBtn').getBoundingClientRect();
+  if (!ex.textContent || $('game').hidden) return;
   ex.style.maxHeight = '40vh';
-  const h = box.offsetHeight, roof = 8 - b.top;   // roof: top of the screen
+  const h = box.offsetHeight, roof = (bar.bottom <= b.top ? bar.bottom + 4 : 8) - b.top;   // roof: under the top bar (phone) or the screen's top
   const span = i => { const r = inputs[i].getBoundingClientRect(); return [r.top - b.top, r.bottom - b.top]; };
   const main = bubbleAt.main.map(span), mT = Math.min(...main.map(s => s[0])), mB = Math.max(...main.map(s => s[1]));
   const cost = top => bubbleAt.avoid.reduce((c, i) => { const [t, btm] = span(i); return c + (t < top + h && btm > top ? (bubbleAt.main.includes(i) ? 3 : 1) : 0); }, 0) * 1e4
@@ -909,7 +1079,7 @@ function tryMove(k, d) {
   const s = res.step;
   explainAt(res.text + (res.ok ? '' : '\nObriši broj i pokušaj ponovno.'), [k],
     [...(s ? [...s.area, ...s.focus, ...s.blockers, ...s.crossed] : []), ...(res.conflict !== undefined ? [res.conflict] : [])]);
-  $('hintBtn').textContent = HINT_NEXT[hintState?.level ?? 3];
+  hintLabel(hintState?.level ?? 3);
 }
 
 $('solveBtn').onclick = () => {
@@ -967,7 +1137,7 @@ function showHistory() {
     del.onclick = () => {
       try { localStorage.sudokuHistory = JSON.stringify(saved().filter(x => x.key !== e.key)); } catch {}
       showHistory();
-      showHome();
+      showMenu();
     };
     li.append(del);
     return li;
@@ -975,13 +1145,18 @@ function showHistory() {
   $('historyEmpty').hidden = list.length > 0;
 }
 
-// Nothing on the board and no task: today's dailies and the last few sudokus instead of an empty grid.
-let manual = false;   // "Upiši sudoku ručno": the empty board after all, to type one in
-function showHome() {
-  const home = !task && !manual && inputs.every(x => !x.value);
-  $('home').hidden = !home;
-  $('board').hidden = home;
-  if (!home) return;
+// Menu or game. Going between them animates nothing and keeps everything: the game stays on the board.
+let view = 'menu';
+function go(v) {
+  view = v;
+  $('menu').hidden = v !== 'menu';
+  $('game').hidden = v !== 'game';
+  say('');   // a message belongs to the screen it was said on
+  if (v === 'menu') showMenu(); else placeBubble();
+}
+
+// The menu: the unfinished game on the board ("Nastavi"), today's dailies, the last two other sudokus.
+function showMenu() {
   loadDays();
   $('homeDays').replaceChildren(...DAILY.map(([name], i) => {
     const s = document.createElement('span');
@@ -989,12 +1164,69 @@ function showHome() {
       Object.assign(document.createElement('small'), { textContent: levelText(days.levels[i]) }));
     return s;
   }));
-  const recent = saved().slice(0, 4);
+  const key = task && celebrated !== task.solution.join('') ? task.solution.join('') : null;   // solved (or "Riješi sve"): nothing to go on with
+  $('homeResume').hidden = !key;
+  if (key) {
+    const done = inputs.map((x, i) => task.givens[i] ? 0 : +x.value || 0), blanks = task.givens.filter(d => !d).length;
+    const level = task.daily || task.random ? DAILY[task.level][0] : diffLevel(saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution))[1];
+    $('homeResume').firstChild.replaceWith(miniGrid({ givens: task.givens.join(''), done: done.join('') }));
+    $('resumeText').textContent = [gameKind(), level, `${done.filter(Boolean).length} od ${blanks}`, ...task.daily || task.random ? [clock(state().elapsed)] : []].join(' · ');
+  }
+  const list = saved(), recent = list.filter(e => e.key !== key).slice(0, 2);
   $('recent').replaceChildren(...recent.map(historyItem));
   $('recentTitle').hidden = !recent.length;
+  $('historyAll').hidden = !list.length;
+  $('historyAll').firstChild.textContent = `Sva povijest (${list.length})`;
 }
+$('homeResume').onclick = () => task.daily === dayKey() ? openDaily(task.level) : go('game');   // today's daily: its card, the clock waits for it
 $('homeDaily').onclick = () => openDaily();
-$('manualBtn').onclick = () => { manual = true; showHome(); };
+$('manualBtn').onclick = () => { clearBoard(); go('game'); };
+$('aboutBtn').onclick = () => $('about').showModal();
+$('aboutClose').onclick = () => $('about').close();
+
+// ‹ Izbornik: the game stays (saved, and "Nastavi" brings it back). A sudoku still being typed in or
+// checked has no task yet: it is dropped, and the saved game comes back on the board.
+$('backBtn').onclick = () => {
+  pick(null);
+  if (!task) { clearBoard(); loadSaved(); }
+  go('menu');
+};
+
+// ⋯: a bottom sheet. Esc or a tap on the dimmed page closes it (the dialog itself is the backdrop: it has no padding).
+$('moreBtn').onclick = () => $('more').showModal();
+$('more').onclick = e => e.target === $('more') && $('more').close();
+// Dragged down it follows the finger (upward only with friction); far or fast enough, it closes, else it
+// snaps back. Only the first finger counts; a move under 8 px is still a tap on an item.
+let drag = null;   // { id: pointer, y, t: start, dy, on: dragging }
+const sheet = document.querySelector('.sheet');
+sheet.onpointerdown = e => { drag ??= { id: e.pointerId, y: e.clientY, t: e.timeStamp, dy: 0, on: false }; };
+sheet.onpointermove = e => {
+  if (drag?.id !== e.pointerId) return;
+  const dy = e.clientY - drag.y;
+  if (!drag.on && Math.abs(dy) < 8) return;
+  if (!drag.on) { drag.on = true; sheet.setPointerCapture(e.pointerId); $('more').style.transition = 'none'; }
+  drag.dy = dy;
+  $('more').style.transform = `translateY(${dy > 0 ? dy : dy / 5}px)`;
+};
+sheet.onpointerup = sheet.onpointercancel = e => {
+  if (drag?.id !== e.pointerId) return;
+  const d = drag;
+  drag = null;
+  if (!d.on) return;
+  $('more').style.transition = $('more').style.transform = '';   // from where the finger left it: closing or back
+  if (d.dy > 80 || d.dy > 20 && d.dy / (e.timeStamp - d.t) > 0.11) $('more').close();   // 0.11 px/ms: a flick is enough
+};
+$('paperBtn').onclick = () => { $('more').close(); $('liveBtn').onclick(); };
+// "Počni ispočetka": the user's digits and notes off this sudoku; the task, its clock and the history stay.
+$('restartBtn').onclick = () => {
+  $('more').close();
+  clearHint();
+  pick(null);
+  inputs.forEach((x, i) => { if (!task.givens[i]) { x.value = ''; x.className = ''; } });
+  notes = notes.map(() => []);
+  undo = [];
+  markConflicts();
+};
 
 // The puzzle at a glance: printed digits as dark cells, the user's right digits in blue.
 function miniGrid(e) {
@@ -1027,24 +1259,38 @@ function openTask(e) {
   celebrated = solved ? e.key : null;   // reopening a solved one is no new success
   showTask();
   markConflicts();
-  say('Sudoku iz povijesti. Nastavi ovdje ili skeniraj papir za provjeru.');
+  go('game');
 }
 
-$('historyBtn').onclick = () => { showHistory(); $('history').showModal(); };
+$('historyAll').onclick = () => { showHistory(); $('history').showModal(); };
 $('historyClose').onclick = () => $('history').close();
 
-$('newBtn').onclick = () => {
+// The board empty and no task, to scan or type one in. Only in memory: the saved game stays for "Nastavi".
+function clearBoard() {
   task = null;
-  manual = false;
-  try { localStorage.removeItem('sudokuTask'); } catch {}
   clearHint();
+  lastProbs = null;
   lastVecs = Array.from({ length: 81 }, () => []);
   inputs.forEach(x => { x.value = ''; x.className = ''; });
   notes = notes.map(() => []);
   undo = [];
   showTask();
-  say('Skeniraj sudoku s papira ili igraj ovdje.');
-};
+  markConflicts();
+}
+
+// The saved task back on the board, as it was left. Today's daily from its day; one from an earlier
+// day goes on as an ordinary task.
+function loadSaved() {
+  try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch { task = null; }
+  idle = 0;
+  if (task?.daily === dayKey() && loadDays().levels[task.level]) return playDaily(task.level);
+  if (!task) return showTask();
+  delete task.daily;
+  restore(task);
+  celebrated = task.solvedAt || inputs.every((x, i) => (+x.value || task.givens[i]) === task.solution[i]) ? task.solution.join('') : null;
+  showTask();
+  markConflicts();
+}
 
 // --- Sudoku logic. Grid = array of 81 numbers, 0 = empty. ---
 
@@ -1100,7 +1346,7 @@ const TECH = {
   pair: { name: 'Goli par', en: 'Naked Pair',
     how: 'Ako dva polja u istom redu, stupcu ili kvadratu mogu imati samo ista dva broja, ta dva broja pripadaju njima. Iz ostalih polja tog reda, stupca ili kvadrata ih precrtaj, pa potraži jedino mjesto ili jedini broj.' },
 };
-const HINT_NEXT = { 1: 'Zašto?', 2: 'Pokaži odgovor', 3: 'Sljedeći korak' };
+const HINT_NEXT = { 1: 'Zašto?', 2: 'Odgovor', 3: 'Savjet' };
 
 // How hard a puzzle is for a person, 0-100: solve it with the hints' own techniques, easiest first.
 // The hardest technique needed sets the band (null: beyond them, the cell is revealed). Within it:
@@ -1450,40 +1696,31 @@ const frame = document.createElement('canvas');
 // Status over the camera: a short headline and, if needed, one line of detail.
 const tip = (t, sub = '') => { $('tipMain').textContent = t; $('tipSub').textContent = sub; };
 
+// Digits 1-9 (the count still to place shown under each, data-left) and ⌫, which only the camera shows:
+// the game has Obriši among its tools.
 const padKeys = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => {
   const b = document.createElement('button');
   b.textContent = d || '⌫';
-  if (!d) b.ariaLabel = 'Prazno';
+  if (!d) { b.ariaLabel = 'Prazno'; b.className = 'erase'; }
   b.onclick = () => live ? fixCell(d) : setCell(d);
   return $('pad').appendChild(b);
 });
-{
-  const b = document.createElement('button');
-  b.id = 'padNotes';
-  b.textContent = 'Bilješke';
-  b.ariaPressed = 'false';
-  b.onclick = () => {
-    noting = !noting;
-    b.ariaPressed = String(noting);
-    $('pad').classList.toggle('noting', noting);
-  };
-  $('pad').append(b);
-}
-{
-  const b = document.createElement('button');
-  b.id = 'padKind';
-  b.onclick = () => {   // the selected digit: printed ↔ handwritten
-    const f = live?.frozen;
-    if (!live) return setKind();
-    if (!f || f.sel === null) return;
-    f.printed[f.sel] = f.printed[f.sel] === false;
-    f.sel = null;
-    $('pad').hidden = true;
-    resolve();
-    showFrozen();
-  };
-  $('pad').append(b);
-}
+$('eraseBtn').onclick = () => setCell(0);
+$('padNotes').onclick = () => {
+  noting = !noting;
+  $('padNotes').ariaPressed = String(noting);
+  $('pad').classList.toggle('noting', noting);
+};
+$('padKind').onclick = () => {   // the selected digit: printed ↔ handwritten
+  const f = live?.frozen;
+  if (!live) return setKind();
+  if (!f || f.sel === null) return;
+  f.printed[f.sel] = f.printed[f.sel] === false;
+  f.sel = null;
+  $('pad').hidden = true;
+  resolve();
+  showFrozen();
+};
 
 // The back camera, preferably the one with the torch: facingMode alone may pick a camera without one
 // (an Android 10 phone opened "camera2 2", wide angle; the torch sits on "camera2 0", the main one).
@@ -1512,14 +1749,17 @@ async function backCamera() {
 
 $('liveBtn').onclick = async () => {
   pick(null);
-  $('liveBar').before($('pad'));
+  $('liveBar').before($('pad'));   // the camera's pad: digits, ⌫ and printed / own, shown for a tapped cell
+  $('pad').append($('padKind'));
+  $('pad').hidden = true;
+  $('padKind').disabled = false;
   $('live').hidden = false;
   document.body.style.overflow = 'hidden';
   $('live').requestFullscreen?.().catch(() => {});   // Android; iPhone keeps the fixed full-page layer
   tip('Pokrećem kameru…');
   let stream;
   try { stream = await backCamera(); }
-  catch { closeLive(); return say('Kamera nije dostupna (treba dozvola i https). Možeš učitati sliku iz galerije.'); }
+  catch { closeLive(); return say('Kamera nije dostupna (treba dozvola i https). Možeš učitati sliku iz galerije.', Infinity); }
   $('video').srcObject = stream;
   await $('video').play();
   live = { stream, digital: true, last: null, lost: 0, frozen: null,
@@ -1541,8 +1781,12 @@ $('liveBtn').onclick = async () => {
 function closeLive() {
   live?.stream.getTracks().forEach(t => t.stop());
   live = null;
-  $('live').hidden = $('pad').hidden = true;
-  $('board').after($('pad'));
+  $('live').hidden = true;
+  $('tools').after($('pad'));   // back in the game, always shown there
+  $('tools').append($('padKind'));
+  $('pad').hidden = false;
+  $('padKind').hidden = !!task;
+  pick(null);
   setLift(0);
   $('video').style.visibility = '';
   document.body.style.overflow = '';
@@ -1587,9 +1831,8 @@ $('liveConfirm').onclick = () => {
   closeLive();
   showTask();
   markConflicts();
-  const n = c => inputs.filter(x => x.classList.contains(c)).length;
-  say((f.entry.some(Boolean) ? `Tvoji brojevi: ${n('ok')} točno, ${n('wrong')} krivo, ${n('maybe')} nesigurno. ` : 'Sudoku je učitan. ') +
-    'Za pomoć stisni Sljedeći korak.');
+  go('game');
+  if (f.entry.some(Boolean)) sayEntries();
 };
 
 function liveButtons() {
@@ -1720,7 +1963,7 @@ $('overlay').onclick = e => {
   f.sel = i === f.sel ? null : i;
   $('pad').hidden = f.sel === null;
   $('padKind').hidden = f.sel === null || !f.digits[f.sel];
-  if (f.sel !== null) $('padKind').textContent = f.printed[f.sel] === false ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
+  if (f.sel !== null) $('padKind').lastChild.textContent = f.printed[f.sel] === false ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
   showFrozen();
 };
 
@@ -1848,13 +2091,21 @@ function checkSolved() {
   diffPill($('diffSolved'), saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution));
   if (task.random) { task.solvedAt = Date.now(); saveState(); }
   $('solvedText').textContent = task.daily ? dailySolved() : task.random ? `Vrijeme: ${clock(task.elapsed)}` : 'Sve je točno.';
-  $('solvedHistory').hidden = !!task.random;   // a game offers the next one instead
+  // Savjet is no minus: what it taught is listed instead.
+  const techs = Object.entries(task.techs || {}).sort((a, b) => b[1] - a[1]);
+  $('solvedTechs').hidden = !techs.length;
+  $('techList').replaceChildren(...techs.map(([name, n]) => {
+    const s = document.createElement('span');
+    s.append(name, Object.assign(document.createElement('small'), { textContent: `${n}×` }));
+    return s;
+  }));
+  $('solvedClose').hidden = !!task.random;   // a game offers the next one instead
   $('solvedNext').hidden = !task.random;
   $('solved').showModal();
 }
 $('solvedClose').onclick = () => $('solved').close();
-$('solvedNext').onclick = () => { $('solved').close(); newRandom(task.level); };
-$('solvedHistory').onclick = () => { $('solved').close(); showHistory(); $('history').showModal(); };
+$('solvedNext').onclick = () => newRandom(task.level, $('solvedNext'));
+$('solvedMenu').onclick = () => { $('solved').close(); go('menu'); };
 
 // Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn,
 // a finished board celebrated.
@@ -1867,7 +2118,11 @@ function markConflicts() {
     st.notes = notes.map(n => n.join(''));
     saveState();
   }
-  padKeys.forEach((b, j) => b.classList.toggle('spent', j < 9 && inputs.filter(x => +x.value === j + 1).length >= 9));
+  padKeys.slice(0, 9).forEach((b, j) => {   // how many of each digit are still to place; none: the key goes (its place stays)
+    const left = 9 - inputs.filter(x => +x.value === j + 1).length;
+    b.dataset.left = Math.max(0, left);
+    b.classList.toggle('spent', !!task && left <= 0);   // before a task a misread digit may be one of nine: every key stays
+  });
   $('undoBtn').disabled = !undo.length;
   drawCands();
   checkSolved();
@@ -1958,7 +2213,6 @@ function showLevels() {
 }
 [...$('dailyLevels').children].forEach((b, i) => b.onclick = () => { pickLvl = i; showLevels(); });
 $('dailyCancel').onclick = () => $('dailyDlg').close();
-$('dailyBtn').onclick = () => openDaily(task?.daily === dayKey() ? task.level : undefined);
 $('dailyGo').onclick = async () => {
   if (!days.levels[pickLvl]) {
     $('dailyGo').disabled = true;
@@ -1970,6 +2224,7 @@ $('dailyGo').onclick = async () => {
   }
   $('dailyDlg').close();
   playDaily(pickLvl);
+  go('game');
 };
 
 // Put one of today's dailies on the board.
@@ -1984,30 +2239,37 @@ function playDaily(lvl) {
   celebrated = daily.solvedAt ? daily.solution.join('') : null;
   showTask();
   markConflicts();
-  say(daily.solvedAt ? `Riješeno za ${clock(daily.elapsed)}. Novi dnevni sudokui stižu sutra.`
-    : 'Rješavaš sam, bez pomoći. Crveno su samo brojevi koji se ponavljaju.');
 }
 
 // "Nova igra": the daily's generator on a random seed, so always one solution, solvable with the known
 // techniques. With help, and a clock without records (those belong to the daily).
 // ponytail: made on the tap (Teško up to ~3 s, the page waits); a Web Worker if that ever feels slow.
-async function newRandom(lvl) {
-  [...$('newLevels').children].forEach(b => b.disabled = true);
-  say(`Pripremam novu igru (${DAILY[lvl][0].toLowerCase()})…`);
+// The pressed button (a level, or "Nova igra" on the solved card) says it is working meanwhile.
+async function newRandom(lvl, btn) {
+  const label = btn.lastChild.textContent, keys = [...$('newLevels').children, $('solvedNext')];
+  keys.forEach(b => b.disabled = true);
+  btn.lastChild.textContent = 'Pripremam…';
   await new Promise(r => setTimeout(r, 30));   // let that show before the work
   const p = makeDaily('r' + Math.random(), lvl);
-  [...$('newLevels').children].forEach(b => b.disabled = false);
+  keys.forEach(b => b.disabled = false);
+  btn.lastChild.textContent = label;
+  $('solved').close();
   task = { givens: p.givens, solution: p.solution, random: true, level: lvl, elapsed: 0 };
   clearHint();
   lastProbs = null;
   lastVecs = Array.from({ length: 81 }, () => []);
   restore(task);
   celebrated = null;
+  idle = 0;
   showTask();
   markConflicts();
-  say('Nova igra. Zapne li, stisni Sljedeći korak.');
+  go('game');
+  // The first three games say that Savjet costs nothing (it goes with the first digit, or after 6 s).
+  let tips = 0;
+  try { tips = +localStorage.sudokuTips || 0; if (tips < 3) localStorage.sudokuTips = tips + 1; } catch {}
+  if (tips < 3) { say('Zapneš li, *Savjet* pokaže sljedeći potez i objasni zašto. Koristi ga koliko god želiš: ništa ne gubiš.', 6000); tipOn = true; }
 }
-[...$('newLevels').children].forEach((b, i) => b.onclick = () => newRandom(i));
+[...$('newLevels').children].forEach((b, i) => b.onclick = () => newRandom(i, b));
 
 // A daily done: stop the clock, keep the record. → the card's line: time, streak (days with at least
 // one daily solved), best of this level.
@@ -2026,33 +2288,37 @@ function dailySolved() {
     + (same.length < 2 ? '' : best === daily.elapsed ? ' · novi rekord!' : ` · najbolje (${DAILY[task.level][0].toLowerCase()}): ${clock(best)}`);   // a record needs a second one
 }
 
-// The clock: counts only while one of today's dailies is on the board, unsolved, the page on screen
-// (another app or a locked phone stops it; a gap over 5 s means the page slept) and no card over it.
-let lastTick = Date.now();
+// The clock: counts only while a game or one of today's dailies is played, unsolved, the page on screen
+// (another app or a locked phone stops it; a gap over 5 s means the page slept), not from the menu
+// and with no card over it. Stuck in a Nova igra (NUDGE_MS without a move, Savjet not used yet): once
+// per game, a small bubble out of Savjet.
+let lastTick = Date.now(), idle = 0, NUDGE_MS = 120000;   // idle: ms since the last move (digit, erase, note, undo)
 setInterval(() => {
   const now = Date.now(), dt = now - lastTick;
   lastTick = now;
   const st = task?.random ? task : task?.daily === days?.date && daily;   // a game or today's daily
-  if (!st || st.solvedAt || document.hidden || dt > 5000 || $('dailyDlg').open) return;
+  if (!st || st.solvedAt || document.hidden || dt > 5000 || $('dailyDlg').open || view !== 'game') return;
   st.elapsed += dt;
   saveState();
   $('timer').textContent = clock(st.elapsed);
+  if (!task.random || task.techs || task.nudged || (idle += dt) < NUDGE_MS || document.querySelector('dialog[open]')) return;
+  task.nudged = true;
+  saveState();
+  $('nudge').hidden = false;
+  $('nudge').animate([{ opacity: 0, transform: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'scale(0.95)' }, {}],
+    { duration: 200, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
 }, 1000);
+addEventListener('pointerdown', () => $('nudge').hidden = true, true);   // any tap puts it away
 
-// The saved task, now that everything it needs exists. Today's daily comes back paused, behind its
-// card ("Nastavi"); one from an earlier day goes on as an ordinary task.
-if (task?.daily === dayKey() && loadDays().levels[task.level]) {
-  playDaily(task.level);
-  if (!daily.solvedAt) openDaily(task.level);
-} else if (task) {
-  delete task.daily;
-  restore(task);
-  if (task.solvedAt || inputs.every((x, i) => (+x.value || task.givens[i]) === task.solution[i])) celebrated = task.solution.join('');
-  showTask();
-  markConflicts();
-} else showTask();
+// The saved game, now that everything it needs exists, as it was left. Today's daily comes back
+// paused, behind its card ("Nastavi"). Nothing to go on with: the menu.
+loadSaved();
+if (task && celebrated !== task.solution.join('')) {
+  go('game');
+  if (task.daily && !daily.solvedAt) openDaily(task.level);
+} else go('menu');
 </script>
 <script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>   <!-- offline + install (sw.js) -->
-<script async src="vendor/opencv.js" onload="cvReady()" onerror="say('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
+<script async src="vendor/opencv.js" onload="cvReady()" onerror="loading('OpenCV se nije učitao. Osvježi stranicu.')"></script>   <!-- OpenCV.js 4.10.0 (@techstark/opencv-js) -->
 </body>
 </html>
