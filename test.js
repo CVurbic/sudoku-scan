@@ -71,6 +71,17 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // 1. Printed puzzle: exact OCR, unique solution, hints step to the end and are always right.
   await scan('printed.jpg');
   assert.strictEqual(await grid(), PRINTED, 'printed OCR');
+  // The same photo inverted (light on dark, as a dark-mode screenshot) reads the same.
+  const dark = await page.evaluate(async () => {
+    const im = await createImageBitmap(await (await fetch('/test/printed.jpg')).blob()), c = document.createElement('canvas');
+    [c.width, c.height] = [im.width, im.height];
+    const x = c.getContext('2d');
+    x.filter = 'invert(1)';
+    x.drawImage(im, 0, 0);
+    const probs = await readGrid(await new Promise(r => c.toBlob(r, 'image/jpeg')));
+    return probs?.map(best).join('');
+  });
+  assert.strictEqual(dark, PRINTED, 'inverted photo OCR');
   await page.click('#setTask');
   const solution = await page.evaluate(() => task.solution.join(''));
   const pill = await page.$eval('#diff', d => [d.hidden, d.textContent]);
@@ -148,6 +159,21 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   const given = await page.evaluate(() => task.givens.findIndex(Boolean));
   await page.evaluate(i => inputs[i].click(), given);
   assert.ok(await page.evaluate(i => inputs.every((x, j) => x.classList.contains('same') === (x.value === inputs[i].value)) && inputs.some(x => x.classList.contains('peer')), given), 'same digit + peers lit');
+  // Number first: no cell picked → the digit is armed (all of it lit); each empty cell tapped gets it; the
+  // same key again puts it away.
+  const key = d => page.evaluate(d => [...document.querySelectorAll('#pad button')].find(b => b.textContent === String(d)).click(), d);
+  const [e1, e2] = await page.evaluate(() => inputs.flatMap((x, i) => x.value ? [] : [i]).slice(0, 2));
+  const d1 = await page.evaluate(i => task.solution[i], e1);
+  await key(d1);
+  assert.deepStrictEqual(await page.evaluate(d => [armed, padKeys[d - 1].ariaPressed, inputs.every(x => x.classList.contains('same') === (x.value === String(d)))], d1),
+    [d1, 'true', true], 'number first: armed, its digit lit');
+  for (const i of [e1, e2]) await page.evaluate(i => inputs[i].click(), i);
+  assert.deepStrictEqual(await page.evaluate(([a, b]) => [inputs[a].value, inputs[a].classList.contains('ok'), inputs[b].value, sel, armed], [e1, e2]),
+    [String(d1), true, String(d1), null, d1], 'number first: each empty cell tapped gets it');
+  await page.click('#undoBtn');
+  await page.click('#undoBtn');
+  await key(d1);
+  assert.deepStrictEqual(await page.evaluate(([a, b]) => [armed, inputs[a].value, inputs[b].value], [e1, e2]), [0, '', ''], 'number first: put away');
   await page.evaluate(([i, d]) => { sel = i; setCell(d); }, [empty, wrongD]);
   await new Promise(r => setTimeout(r, 1300));
   await page.reload();
@@ -344,6 +370,45 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   console.log(`check: ok ${checked.ok}, wrong ${checked.wrong}`);
   assert.strictEqual(checked.wrong, 0, 'correct handwriting flagged wrong');
 
+  // 3c. A solved paper whose split missed (every digit printed): a duplicate = maybe a mistake on paper;
+  //     none → "Provjeri" opens the "Riješeno!" card.
+  await open(null);
+  await scan('handwritten.jpg');
+  console.log('solved paper: ' + await page.$eval('#msg', m => m.textContent));
+  const fill = g => page.evaluate(g => {
+    document.querySelectorAll('#grid input').forEach((x, i) => { x.value = g[i]; x.classList.remove('entry', 'low'); x.classList.add('given'); });
+    markConflicts(); entryLabel();
+  }, g);
+  await fill('9' + HW_FULL.slice(1));   // r1 already has a 9
+  assert.strictEqual(await page.$eval('#setTask', b => b.textContent), 'Provjeri');
+  await page.click('#setTask');
+  assert.ok(await page.evaluate(() => !task && /greška na papiru/.test(msg.textContent)), 'solved paper: a duplicate');
+  await fill(HW_FULL);
+  await page.click('#setTask');
+  assert.deepStrictEqual(await page.evaluate(() => [task.givens.join(''), solved.open, solvedText.textContent]), [HW_FULL, true, 'Sve je točno.'], 'solved paper: Riješeno card');
+  console.log('solved paper: duplicate flagged, right one → Riješeno');
+
+  // 3d. Screenshots (PNG): this app in dark mode, light digits on dark, bold = given, regular = typed;
+  //     a screen with only givens has no typed digits (the paper model would call some handwritten).
+  await open(null);
+  await scan('screenshot-dark.png');
+  assert.strictEqual(await grid(), '341259786789364125562871934475692813236780459198543672913427568657938241824005397', 'dark screenshot OCR');
+  const typedIn = ['100000011', '001010001', '100100100', '000001110', '100000101', '000110110', '101000010', '001011010', '011000000'].join('')
+    .split('').flatMap((k, i) => k === '0' && ![41, 75, 76].includes(i) ? [i] : []);
+  assert.deepStrictEqual(await cls('entry'), typedIn, 'dark screenshot: bold given, regular typed');
+  const onlyGivens = await page.evaluate(async g => {
+    const c = document.createElement('canvas'), x = c.getContext('2d'), s = 100;
+    c.width = 1080; c.height = 1500;
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.translate(90, 300); x.font = '60px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#111';
+    [...g].forEach((d, i) => +d && x.fillText(d, (i % 9 + 0.5) * s, ((i / 9 | 0) + 0.55) * s));
+    for (let k = 0; k <= 9; k++) { x.lineWidth = k % 3 ? 2 : 6; x.beginPath(); x.moveTo(k * s, 0); x.lineTo(k * s, 900); x.moveTo(0, k * s); x.lineTo(900, k * s); x.stroke(); }
+    const probs = await readGrid(await new Promise(r => c.toBlob(r)));
+    return [probs.map(best).join(''), lastPrinted.some(k => k === false)];
+  }, PRINTED);
+  assert.deepStrictEqual(onlyGivens, [PRINTED, false], 'screenshot, givens only: all printed');
+  console.log('screenshots: dark one read, bold/regular told apart; givens only all printed');
+
   // 4. Live camera: printed.jpg turned 90° as a fake camera stream (MJPEG of the same frame) → the
   //    reading freezes, "Riješi" draws all 81 digits, tapping a cell + the number pad changes it.
   const jpg = await page.evaluate(async () => {
@@ -395,6 +460,16 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await tap(own);
   await lp.click('#padKind');
   assert.strictEqual(await lp.evaluate(i => live.frozen.printed[i], own), true, 'pad: mine → printed');
+  // A solved paper (all 81, every one printed): no duplicates → "Točno riješeno"; a duplicate → maybe a mistake on paper.
+  const verdict = d => lp.evaluate(d => {
+    const f = live.frozen;
+    f.digits = [...d].map(Number); f.conf = f.conf.map(() => 1); f.printed = f.printed.map(() => true);
+    resolve(); showFrozen();
+    return [tipMain.textContent, tipSub.textContent, liveConfirm.disabled];
+  }, d);
+  const [right, dupe] = [await verdict(solution), await verdict(solution[1] + solution.slice(1))];
+  assert.ok(right[0] === 'Točno riješeno ✓' && !right[2], 'live: solved paper ' + right);
+  assert.ok(dupe[0] === 'Isti broj dvaput (crveno)' && /greška je na papiru/.test(dupe[1]) && dupe[2], 'live: solved paper with a duplicate ' + dupe);
   // Rescan → a fresh reading; "Potvrdi" puts it on the home board as the task and closes the camera.
   await lp.click('#liveRescan');
   assert.deepStrictEqual(await lp.evaluate(() => [live.frozen, video.paused]), [null, false], 'rescan unfreezes');

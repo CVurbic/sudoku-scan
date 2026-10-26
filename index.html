@@ -266,6 +266,8 @@
   #pad button::after { content: attr(data-left); color: var(--muted); font-size: 12px; line-height: 1.3; }
   #pad.noting button { color: var(--muted); }   /* digits go in as notes */
   #pad button.spent { visibility: hidden; }   /* all nine on the board */
+  #pad button[aria-pressed="true"] { background: var(--hue); color: var(--on-primary); }   /* armed: goes into each empty cell tapped */
+  #pad button[aria-pressed="true"]::after { color: inherit; }
   #pad .erase { display: none; }   /* the game has Obriši among the tools */
 
   @media (min-width: 880px) {
@@ -612,7 +614,13 @@ let model, featModel, printedModel = null, task = null;   // task = { givens, so
 let sel = null;   // cell picked for the pad
 
 // Tap on a cell → pick it for the pad (a task's printed digits are fixed); same cell again → put away.
+// With a digit armed, an empty cell gets it instead.
 function pick(k) {
+  if (armed && k !== null && !inputs[k].value && !task?.givens[k]) {
+    sel = k;
+    setCell(armed);
+    return arm(padKeys[armed - 1].classList.contains('spent') ? 0 : armed);   // all nine placed: put away
+  }
   const tapped = k;
   if (task?.givens[k]) k = null;
   sel = k === sel ? null : k;
@@ -621,6 +629,17 @@ function pick(k) {
   $('padKind').disabled = sel === null || !inputs[sel].value;   // before a task only
   $('padKind').lastChild.textContent = sel !== null && inputs[sel].classList.contains('entry') ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
 }
+
+// Number first: a pad digit tapped with no cell picked is armed (0: none); each empty cell tapped then
+// gets it (a note in notes mode). The same digit again, Esc, or leaving the game puts it away.
+let armed = 0;
+function arm(d) {
+  armed = d;
+  padKeys.forEach((b, j) => b.ariaPressed = String(j + 1 === d));
+  pick(null);
+  inputs.forEach(x => x.classList.toggle('same', !!d && x.value === String(d)));
+}
+addEventListener('keydown', e => e.key === 'Escape' && armed && arm(0));
 
 // The tapped cell's row, column and box, and every cell holding its digit (null: none).
 function light(k) {
@@ -740,20 +759,35 @@ async function readGrid(file) {
   const k = Math.min(1, 1000 / Math.max(img.width, img.height));
   const c = document.createElement('canvas');
   c.width = img.width * k | 0; c.height = img.height * k | 0;
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, c.width, c.height);
 
-  const grid = findGrid(cv.imread(c));
-  return grid && readTurns(grid.warped).probs;
+  let grid = findGrid(cv.imread(c));
+  if (!grid) {   // light lines on dark (a dark-mode screenshot): once more, inverted
+    x.filter = 'invert(1)';
+    x.drawImage(img, 0, 0, c.width, c.height);
+    grid = findGrid(cv.imread(c));
+  }
+  return grid && readTurns(grid.warped, file.type === 'image/png').probs;
 }
 
 // Warped RGBA grid (deleted here) → readCells result of the best of 4 turns, plus rot = clockwise turns.
-// Paper may lie rotated: keep the turn the model is most sure about.
-function readTurns(warped) {
+// Paper may lie rotated: keep the turn the model is most sure about. screen: a screenshot (printedKinds).
+function readTurns(warped, screen) {
   let best = null, color = warped, gray = new cv.Mat();
   cv.cvtColor(color, gray, cv.COLOR_RGBA2GRAY);
+  // Light digits on a dark ground (a dark-mode screenshot) → dark on light, as the reading expects. On paper
+  // most pixels are brighter than the mean (ink is the minority); here most are darker.
+  const g = gray.data, mean = g.reduce((a, b) => a + b, 0) / g.length;
+  let above = 0;
+  for (const x of g) if (x > mean) above++;
+  if (above < 0.3 * g.length) {
+    g.forEach((x, i) => g[i] = 255 - x);
+    color.data.forEach((x, i) => { if (i % 4 !== 3) color.data[i] = 255 - x; });   // alpha stays
+  }
   for (let r = 0; r < 4; r++) {
     if (r) [gray, color] = [gray, color].map(m => { const t = new cv.Mat(); cv.rotate(m, t, cv.ROTATE_90_CLOCKWISE); m.delete(); return t; });
-    const res = readCells(gray, color);
+    const res = readCells(gray, color, screen);
     if (!best || res.upright > best.upright + 0.05) { best = { ...res, rot: r }; cv.imshow('warped', gray); }   // +0.05: photos are usually upright
   }
   gray.delete(); color.delete();
@@ -770,7 +804,7 @@ const THRESHOLDS = [[31, 10], [51, 10]];
 // probabilities are the average over its binarisations. A digit seen in only one of them must be
 // read with ≥90% certainty, and its ink must be at least a third as dark as the grid's typical
 // digit; else it is noise (paper texture, specks, creases).
-function readCells(warped, color) {
+function readCells(warped, color, screen) {
   const found = [], bin = new cv.Mat();
   for (const [block, c] of THRESHOLDS) {
     cv.adaptiveThreshold(warped, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, block, c);
@@ -801,7 +835,7 @@ function readCells(warped, color) {
   // Printed or handwritten: shape (first binarisation's digit) + ink colourfulness, ink/paper brightness,
   // height and darkness relative to the grid's typical digit.
   const feats = Array(81).fill(null);
-  for (const [i, d] of found) if (probs[i] && !feats[i]) feats[i] = { v: d.v, s: [d.chroma, d.lum, d.h, ink[i] / typical] };
+  for (const [i, d] of found) if (probs[i] && !feats[i]) feats[i] = { v: d.v, s: [d.chroma, d.lum, d.h, ink[i] / typical], stroke: d.stroke, d: best(probs[i]) };
   const p = Array(81).fill(null), idx = feats.flatMap((f, i) => f ? [i] : []);
   if (printedModel && idx.length) {
     const out = tf.tidy(() => printedModel.predict([
@@ -809,13 +843,21 @@ function readCells(warped, color) {
       tf.tensor2d(idx.flatMap(i => feats[i].s), [idx.length, 4])]).dataSync());
     idx.forEach((i, k) => p[i] = out[k]);
   }
-  return { probs, upright, vecs, feats, printed: printedKinds(p, feats) };
+  return { probs, upright, vecs, feats, printed: printedKinds(p, feats, screen) };
 }
 
 // P(printed) per cell → true printed / false handwritten / null empty. Printed digits on one paper look
 // alike (same ink, size), so each cell also leans to the nearer of the grid's two groups (sure ones
 // as centres). Only 1-2 "handwritten" digits: more likely misreadings than a started sudoku → all printed.
-function printedKinds(p, feats) {
+// A screenshot holds no handwriting, so there the model (made for paper) is skipped: plain (black, white,
+// grey) digits next to coloured ones are the given ones; else bold ones next to regular ones (strokeCut);
+// else all are. Elsewhere a clear bold/regular split decides too.
+function printedKinds(p, feats, screen) {
+  const plain = feats.map(f => f && f.s[0] < 0.15);
+  if (screen && plain.filter(x => x === false).length >= 3 && plain.filter(Boolean).length >= 3) return plain;
+  const cut = strokeCut(feats.filter(Boolean), screen ? 4 : 20);
+  if (cut) return feats.map(f => f && f.stroke >= cut);
+  if (screen) return feats.map(f => f && true);
   const idx = p.flatMap((x, i) => x === null ? [] : [i]);
   const groups = [idx.filter(i => p[i] > 0.8), idx.filter(i => p[i] < 0.2)];
   if (groups.every(g => g.length >= 3)) {
@@ -829,6 +871,31 @@ function printedKinds(p, feats) {
   }
   const printed = p.map(x => x === null ? null : x > 0.5);
   return printed.filter(x => x === false).length > 2 ? printed : printed.map(x => x === null ? null : true);
+}
+
+// Screens: the given digits bold, the typed ones regular, each group even in stroke width. → the lowest
+// bold width, or 0 when the widths don't fall into two such groups (Fisher ≥ min, ≥ 1.2× wider, both
+// sizeable). min: 4 for a screenshot (PNG; serif fonts score ~5); 20 for anything else, as photos of
+// paper score up to ~14.5 (Wicht dataset), while a sans-serif screen sent on as JPEG still scores 23+.
+// The split must also run through the digits: one digit in both weights, clearly apart, for at least
+// three digits. A split by shape alone (one font: thin 1s, thick 8s) keeps each digit on one side.
+function strokeCut(cells, min) {   // cells: [{ stroke, d: digit read }]
+  const xs = cells.map(c => c.stroke).sort((a, b) => a - b);
+  const n = xs.length, side = Math.max(8, Math.ceil(0.15 * n)), mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+  const vari = a => { const m = mean(a); return a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length; };
+  let best = min, cut = 0;
+  for (let k = side; k <= n - side; k++) {
+    const lo = xs.slice(0, k), hi = xs.slice(k), f = (mean(hi) - mean(lo)) ** 2 / (vari(lo) + vari(hi) || 1e-9);
+    if (f > best && mean(hi) >= 1.2 * mean(lo)) { best = f; cut = xs[k]; }
+  }
+  let both = 0;
+  for (let d = 1; cut && d <= 9; d++) {
+    const lo = cells.filter(c => c.d === d && c.stroke < cut).map(c => c.stroke), hi = cells.filter(c => c.d === d && c.stroke >= cut).map(c => c.stroke);
+    if (!lo.length || !hi.length) continue;
+    if (mean(hi) < 1.15 * mean(lo)) return 0;
+    both++;
+  }
+  return both >= 3 ? cut : 0;
 }
 
 // --- Learning from use. Cells whose digit became known (confirmed givens, own entries matching the
@@ -916,7 +983,11 @@ function showScan(probs) {
   });
   if (task) learn(inputs.map((x, i) => [i, task.solution[i]]).filter(([i]) => inputs[i].classList.contains('ok')));
   markConflicts();
-  if (!task && entryLabel()) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".', Infinity);
+  const mine = !task && entryLabel();
+  if (!task && inputs.every(x => x.value)) return say(inputs.some(x => x.classList.contains('bad'))   // a solved paper
+    ? 'Isti broj dvaput (crveno): krivo pročitano ili greška na papiru. Ispravi krivo pročitano i stisni "Provjeri".'
+    : 'Točno riješeno ✓ Žuto = nesigurno: ako je nešto krivo pročitano, ispravi. "Provjeri" ga sprema.', Infinity);
+  if (mine) return say('Sivo = tiskano, plavo = upisano rukom, žuto = nesigurno, crveno = duplikat. Ispravi i stisni "Provjeri moje brojeve".', Infinity);
   if (!task) return say('Žuto = nesigurno, crveno = duplikat. Ispravi, obriši brojeve upisane rukom i stisni "Ovo je zadatak".', Infinity);
   sayEntries();
 }
@@ -1018,7 +1089,7 @@ function hintLabel(level) {
 // Handwritten digits on the board? The task button then checks them. → whether there are any.
 function entryLabel() {
   const any = inputs.some(x => x.classList.contains('entry'));
-  $('setTask').textContent = any ? 'Provjeri moje brojeve' : 'Ovo je zadatak';
+  $('setTask').textContent = any ? 'Provjeri moje brojeve' : inputs.every(x => x.value) ? 'Provjeri' : 'Ovo je zadatak';
   $('setTask').disabled = !inputs.some(x => x.value);
   gameHead();
   return any;
@@ -1031,7 +1102,8 @@ $('setTask').onclick = () => {
   let givens = g.map((d, i) => mine[i] ? 0 : d), sols = mine.some(Boolean) ? solve(givens) : [];
   const check = sols.length === 1 && !!lastProbs;
   if (!check) { givens = g; sols = solve(g); }
-  if (!sols.length) return say('Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.', Infinity);
+  if (!sols.length) return say(g.every(Boolean) ? 'Isti broj dvaput (crveno): krivo pročitano ili greška na papiru.'
+    : 'Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.', Infinity);
   if (sols.length > 1) return say('Ima više rješenja: vjerojatno fali neki broj.', Infinity);
   task = { givens, solution: sols[0] };
   undo = [];
@@ -1040,6 +1112,7 @@ $('setTask').onclick = () => {
   inputs.forEach(x => x.classList.remove('low'));
   showTask();
   if (check) return showScan(lastProbs);
+  if (g.every(Boolean)) return markConflicts();   // a solved paper whose split missed: the "Riješeno!" card
   say((mine.some(Boolean) ? 'Tiskani brojevi sami nemaju jedno rješenje, pa su svi brojevi uzeti kao zadatak. ' : '') +
     'Zadatak spremljen. Rješavaj na papiru ili ovdje; papir provjeriš kamerom (⋯).');
 };
@@ -1213,6 +1286,7 @@ function showHistory() {
 // Remembered, so a reload (or the app opened again) comes back where the user was.
 let view = 'menu';
 function go(v) {
+  if (armed) arm(0);
   view = v;
   try { localStorage.sudokuView = v; } catch {}
   $('menu').hidden = v !== 'menu';
@@ -1749,7 +1823,13 @@ function cellDigit(bin, gray, color, r, c) {
     const [R, G, B] = cv.mean(col, digit), [pR, pG, pB] = cv.mean(col, paper), lum = (r, g, b) => 0.3 * r + 0.59 * g + 0.11 * b;
     out = { v: toMnist(digit), ink: cv.mean(g, paper)[0] - cv.mean(g, digit)[0],
       chroma: (Math.max(R, G, B) - Math.min(R, G, B)) / 255, lum: lum(R, G, B) / (lum(pR, pG, pB) || 1), h: (y1 - y0) / S };
-    [mask, digit, g, col, paper].forEach(x => x.delete());
+    // Stroke width (2 · area / outline) per digit height: bold vs regular, as on screens.
+    const dc = new cv.MatVector(), dh = new cv.Mat();
+    cv.findContours(digit, dc, dh, cv.RETR_LIST, cv.CHAIN_APPROX_NONE);
+    let outline = 0;
+    for (let j = 0; j < dc.size(); j++) { const cnt = dc.get(j); outline += cv.arcLength(cnt, true); cnt.delete(); }
+    out.stroke = 2 * cv.countNonZero(digit) / (outline || 1) / (y1 - y0 || 1);
+    [mask, digit, g, col, paper, dc, dh].forEach(x => x.delete());
   }
   [cs, h, grp, k3, cell].forEach(x => x.delete());
   return out;
@@ -1786,7 +1866,7 @@ const padKeys = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => {
   const b = document.createElement('button');
   b.textContent = d || '⌫';
   if (!d) { b.ariaLabel = 'Prazno'; b.className = 'erase'; }
-  b.onclick = () => live ? fixCell(d) : setCell(d);
+  b.onclick = () => live ? fixCell(d) : sel === null && d ? arm(d === armed ? 0 : d) : setCell(d);
   return $('pad').appendChild(b);
 });
 $('eraseBtn').onclick = () => setCell(0);
@@ -1832,7 +1912,7 @@ async function backCamera() {
 }
 
 $('liveBtn').onclick = async () => {
-  pick(null);
+  arm(0);
   $('liveBar').before($('pad'));   // the camera's pad: digits, ⌫ and printed / own, shown for a tapped cell
   $('pad').append($('padKind'));
   $('pad').hidden = true;
@@ -2021,6 +2101,7 @@ function drawFrozen() {
   const f = live.frozen, o = $('overlay'), ctx = o.getContext('2d'), b = f.board;
   ctx.drawImage(f.still, 0, 0, o.width, o.height);
   const pen = painter(ctx), sel = f.sel === null ? [] : [[f.sel, 'rgba(59, 130, 246, 0.5)']];
+  const full = f.digits.every(Boolean);   // a solved paper: no duplicates = right, whatever is printed or not
   $('liveConfirm').disabled = !b;
   if (!b) {
     // Unsolvable: duplicates are the usual culprit (misread, or a wrong entry on paper);
@@ -2028,12 +2109,14 @@ function drawFrozen() {
     const dup = f.digits.map((d, i) => d && PEERS[i].some(j => f.digits[j] === d && f.conf[j] >= f.conf[i]));
     pen.outline(RED);
     render(pen, f.digits, f.conf, [...dup.map((x, i) => x && [i, 'rgba(239, 68, 68, 0.5)']).filter(Boolean), ...sel]);
-    return tip(dup.some(Boolean) ? 'Isti broj dvaput (crveno)' : f.why, 'Dodirni polje i ispravi broj, ili skeniraj ponovo.');
+    return tip(dup.some(Boolean) ? 'Isti broj dvaput (crveno)' : f.why, full ? 'Krivo pročitano? Dodirni polje i ispravi. Ako je dobro pročitano, greška je na papiru.'
+      : 'Dodirni polje i ispravi broj, ili skeniraj ponovo.');
   }
   pen.outline(GREEN);
   const count = e => f.entry.filter(x => x === e).length;
   render(pen, f.digits, f.conf, [...f.entry.flatMap((e, i) => e === 'wrong' ? [[i, 'rgba(239, 68, 68, 0.5)']] : e === 'maybe' ? [[i, 'rgba(255, 224, 138, 0.6)']] : []), ...sel],
     f.entry.map(e => e && ENTRY_INK[e]));   // own entries: blue right, red wrong, brown unsure
+  if (full) return tip('Točno riješeno ✓', 'Je li sve dobro pročitano? Dodirni broj da ga ispraviš. Zatim Potvrdi.');
   if (f.entry.some(Boolean)) return tip(`Tvoji brojevi: ${count('ok')} točno · ${count('wrong')} krivo · ${count('maybe')} nesigurno`,
     'Je li sve dobro pročitano? Dodirni broj da ga ispraviš ili označiš tiskani / tvoj. Zatim Potvrdi.');
   tip('Je li sve dobro pročitano?', 'Sivo = tiskano, žuto = nesigurno. Dodirni broj da ga ispraviš ili označiš kao svoj. Zatim Potvrdi.');
