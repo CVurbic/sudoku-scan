@@ -1503,21 +1503,30 @@ const TECH = {
     how: 'Izaberi polje oko kojeg ima puno brojeva. Skupi brojeve iz njegovog reda, stupca i kvadrata. Ako je to 8 različitih brojeva, deveti je odgovor.' },
   pointing: { name: 'Pokazivački par', en: 'Pointing',
     how: 'Ako u kvadratu neki broj može ići samo u jedan red (ili stupac), taj broj iz kvadrata sigurno zauzima taj red. Zato ga u ostatku tog reda precrtaj, pa potraži jedino mjesto ili jedini broj.' },
+  claiming: { name: 'Red u kvadratu', en: 'Claiming',
+    how: 'Ako u redu (ili stupcu) neki broj može ići samo u polja jednog kvadrata, taj broj sigurno stoji u tom kvadratu. Zato ga u ostatku kvadrata precrtaj, pa potraži jedino mjesto ili jedini broj.' },
   pair: { name: 'Goli par', en: 'Naked Pair',
     how: 'Ako dva polja u istom redu, stupcu ili kvadratu mogu imati samo ista dva broja, ta dva broja pripadaju njima. Iz ostalih polja tog reda, stupca ili kvadrata ih precrtaj, pa potraži jedino mjesto ili jedini broj.' },
+  hiddenPair: { name: 'Skriveni par', en: 'Hidden Pair',
+    how: 'Ako dva broja u redu, stupcu ili kvadratu mogu ići samo u ista dva polja, ta dva polja pripadaju njima. U njima precrtaj sve ostale brojeve, pa potraži jedino mjesto ili jedini broj.' },
 };
+// Dailies before this date were made without Claiming and Hidden Pair: same puzzle for that date on every version.
+const NEW_TECH = '2026-10-29';
 const HINT_NEXT = { 1: 'Zašto?', 2: 'Odgovor', 3: 'Savjet' };
 
 // How hard a puzzle is for a person, 0-100: solve it with the hints' own techniques, easiest first.
 // The hardest technique needed sets the band (null: beyond them, the cell is revealed). Within it:
 // fewer givens is harder (36 → bottom, 22 → top), and from naked singles up also how often the
 // hardest technique was needed.
-const BANDS = [[TECH.full, 0], [TECH.hidden, 10], [TECH.naked, 30], [TECH.pointing, 55], [TECH.pair, 65], [null, 80]];
-function difficulty(givens, solution) {
+// A band may hold sister techniques (one row/column ↔ one box; naked ↔ hidden pair): the bands, and so
+// every earlier difficulty, stay as they were. old: without the techniques added on NEW_TECH (an earlier day's daily).
+const BANDS = [[[TECH.full], 0], [[TECH.hidden], 10], [[TECH.naked], 30], [[TECH.pointing, TECH.claiming], 55],
+  [[TECH.pair, TECH.hiddenPair], 65], [[null], 80]];
+function difficulty(givens, solution, old) {
   const g = givens.slice();
   let hardest = 0, n = 0;
   while (g.some(d => !d)) {
-    const h = hint(g) || reveal(g, solution), k = BANDS.findIndex(([t]) => t === h.tech);
+    const h = hint(g, old) || reveal(g, solution), k = BANDS.findIndex(([t]) => t.includes(h.tech));
     if (k > hardest) { hardest = k; n = 0; }
     if (k === hardest) n++;
     g[h.cell] = h.digit;
@@ -1594,8 +1603,9 @@ function nakedSingle(g, i, ex) {
 
 // Advanced steps place nothing themselves: they rule out candidates, then a single follows.
 // → [{ tech, area, focus, removed: [[cell, digit]], look, why }]
-function eliminations(g) {
+function eliminations(g, old) {
   const out = [];
+  const add = e => e.removed.length && out.push(e);
   for (const box of BOXES) for (const d of missing(g, box)) {   // pointing: d of a box only in one row/column
     const spots = box.cells.filter(i => candidates(g, i).includes(d));
     if (spots.length < 2) continue;
@@ -1606,6 +1616,14 @@ function eliminations(g) {
         look: `Pogledaj ${box.name}. Gdje sve u njemu može ići ${d}?`,
         why: `U ${box.loc} ${d} može ići samo u ${line.loc} (plava polja). Taj ${d} sigurno zauzima ${line.name}, pa ${d} ne može nigdje drugdje u ${line.loc} (izvan tog kvadrata).` });
     }
+  }
+  if (!old) for (const line of [...ROWS, ...COLS]) for (const d of missing(g, line)) {   // claiming: d of a row/column only in one box
+    const spots = line.cells.filter(i => candidates(g, i).includes(d)), box = BOXES.find(b => spots.every(i => b.cells.includes(i)));
+    if (spots.length < 2 || !box) continue;
+    add({ tech: TECH.claiming, area: line.cells, focus: spots,
+      removed: box.cells.filter(i => !line.cells.includes(i) && candidates(g, i).includes(d)).map(i => [i, d]),
+      look: `Pogledaj ${line.name}. Gdje sve u njemu može ići ${d}?`,
+      why: `U ${line.loc} ${d} može ići samo u polja u ${box.loc} (plava polja). Taj ${d} zato sigurno stoji u tom kvadratu, pa ${d} ne može nigdje drugdje u ${box.loc} (izvan ${line.kind === 'row' ? 'tog reda' : 'tog stupca'}).` });
   }
   for (const u of UNITS) {   // naked pair: two cells of a unit with the same two candidates
     const two = u.cells.filter(i => candidates(g, i).length === 2);
@@ -1618,14 +1636,25 @@ function eliminations(g) {
         why: `${cap(cellName(a))} i ${cellName(b)} mogu imati samo ${pair[0]} ili ${pair[1]}. Ta dva broja sigurno zauzimaju ta dva polja, pa ${pair[0]} i ${pair[1]} ne mogu nigdje drugdje u ${u.loc}.` });
     }
   }
+  if (!old) for (const u of UNITS) {   // hidden pair: two digits of a unit that fit only the same two cells
+    const spots = d => u.cells.filter(i => candidates(g, i).includes(d)), ds = missing(g, u);
+    for (const x of ds) for (const y of ds) {
+      const [a, b] = spots(x);
+      if (y <= x || b === undefined || spots(x).length !== 2 || spots(y).join() !== [a, b].join()) continue;
+      const removed = [a, b].flatMap(i => candidates(g, i).filter(d => d !== x && d !== y).map(d => [i, d]));
+      add({ tech: TECH.hiddenPair, area: u.cells, focus: [a, b], removed,
+        look: `Pogledaj ${u.name}. Nađi dva broja koja mogu ići samo u ista dva polja.`,
+        why: `U ${u.loc} ${x} i ${y} mogu ići samo u ${cellName(a)} i ${cellName(b)} (plava polja). Ta dva polja zato pripadaju njima, pa u njima ne može ništa drugo (${[...new Set(removed.map(([, d]) => d))].join(', ')} otpada).` });
+    }
+  }
   return out;
 }
 
 // An advanced step plus the single it opens up (only for `cell`, if given). → step or null.
 // ponytail: one elimination per step; chains of them fall back to reveal().
-function advanced(g, cell = -1) {
+function advanced(g, cell = -1, old) {
   const fits = s => s && (cell < 0 || s.cell === cell);
-  for (const e of eliminations(g)) {
+  for (const e of eliminations(g, old)) {
     const ex = new Set(e.removed.map(([i, d]) => i * 10 + d));
     const s = UNITS.flatMap(u => missing(g, u).map(d => hiddenSingle(g, u, d, ex))).find(fits)
       || Array.from({ length: 81 }, (_, i) => nakedSingle(g, i, ex)).find(fits);
@@ -1636,11 +1665,11 @@ function advanced(g, cell = -1) {
 }
 
 // Next step, easiest technique first. → step or null.
-function hint(g) {
+function hint(g, old) {
   for (const u of UNITS) { const s = fullHouse(g, u); if (s) return s; }
   for (const u of UNITS) for (const d of missing(g, u)) { const s = hiddenSingle(g, u, d); if (s) return s; }
   for (let i = 0; i < 81; i++) { const s = nakedSingle(g, i); if (s) return s; }
-  return advanced(g);
+  return advanced(g, -1, old);
 }
 
 // The user put d in empty cell i (g = known digits): why is that right or wrong? Clearest reason first.
@@ -1667,7 +1696,7 @@ function judgeMove(g, i, d, solution) {
 }
 
 // ponytail: nothing explainable left → reveal the cell with fewest candidates. Add more techniques
-// (box/line, hidden pairs, X-wing) to eliminations() when hard puzzles need them.
+// (X-wing, Y-wing) to eliminations() when hard puzzles need them.
 function reveal(g, solution) {
   let best = -1;
   for (let i = 0; i < 81; i++) if (!g[i] && (best < 0 || candidates(g, i).length < candidates(g, best).length)) best = i;
@@ -2379,7 +2408,7 @@ function makeDaily(date, lvl) {
       givens[i] = 0;
       if (solve(givens, 2).length !== 1) givens[i] = v;
     }
-    const p = { givens, solution, diff: difficulty(givens, solution) };
+    const p = { givens, solution, diff: difficulty(givens, solution, date < NEW_TECH) };
     if (p.diff >= lo && p.diff < hi) return p;
     if (!best || Math.abs(p.diff - (lo + hi) / 2) < Math.abs(best.diff - (lo + hi) / 2)) best = p;
   }

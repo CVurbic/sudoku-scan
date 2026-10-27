@@ -324,6 +324,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     for (const p of puzzles) {
       const g = [...p].map(Number), sol = solve(g)[0];
       while (g.some(d => !d)) {
+        for (const e of eliminations(g)) for (const [i, d] of e.removed) if (d === sol[i]) return { bad: `${p}: ${e.tech.name} ruled out ${d} at ${i}` };
         const h = hint(g) || reveal(g, sol);
         if (h.digit !== sol[h.cell]) return { bad: `${p}: ${h.tech?.name} put ${h.digit} at ${h.cell}` };
         if (h.tech) techs[h.tech.name] = (techs[h.tech.name] || 0) + 1; else reveals++;
