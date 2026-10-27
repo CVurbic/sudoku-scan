@@ -762,12 +762,13 @@ async function readGrid(file) {
   const x = c.getContext('2d');
   x.drawImage(img, 0, 0, c.width, c.height);
 
-  let grid = findGrid(cv.imread(c));
-  if (!grid) {   // light lines on dark (a dark-mode screenshot): once more, inverted
-    x.filter = 'invert(1)';
-    x.drawImage(img, 0, 0, c.width, c.height);
-    grid = findGrid(cv.imread(c));
-  }
+  // Also inverted, for light lines on dark (a dark-mode screenshot): there the plain picture may still
+  // show a grid-like part (one 3×3 box), so the better grid of the two wins.
+  const plain = findGrid(cv.imread(c));
+  x.filter = 'invert(1)';
+  x.drawImage(img, 0, 0, c.width, c.height);
+  const inv = findGrid(cv.imread(c)), grid = !plain || inv?.score > plain.score ? inv : plain;
+  (grid === inv ? plain : inv)?.warped.delete();
   return grid && readTurns(grid.warped, file.type === 'image/png').probs;
 }
 
@@ -1105,6 +1106,7 @@ $('setTask').onclick = () => {
   if (!sols.length) return say(g.every(Boolean) ? 'Isti broj dvaput (crveno): krivo pročitano ili greška na papiru.'
     : 'Ovaj sudoku nema rješenja: neki broj je krivo pročitan ili višak. Provjeri žuta i crvena polja.', Infinity);
   if (sols.length > 1) return say('Ima više rješenja: vjerojatno fali neki broj.', Infinity);
+  if (toDaily(sols[0])) return;
   task = { givens, solution: sols[0] };
   undo = [];
   learn(givens.map((d, i) => [i, d]).filter(([, d]) => d));
@@ -1709,7 +1711,7 @@ function findGrid(src) {
     M.delete();
   }
   [wb, src, gray, bin, thick, k3].forEach(m => m.delete());
-  return out && { warped: out, quad };
+  return out && { warped: out, quad, score: bestScore };
 }
 
 function gridQuads(bin, minArea) {
@@ -1979,6 +1981,7 @@ $('liveRescan').onclick = () => {
 $('liveConfirm').onclick = () => {
   const f = live?.frozen;
   if (!f?.board) return;
+  if (toDaily(f.board.solution)) return closeLive();
   task = { givens: f.givens, solution: f.board.solution };
   try { localStorage.sudokuTask = JSON.stringify(task); } catch {}
   learn(f.digits.map((d, i) => [i, d]).filter(([i, d]) => d && (f.givens[i] || f.entry[i] === 'ok')));
@@ -2405,6 +2408,13 @@ function openDaily(lvl) {
   $('dailyDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
   showLevels();
   $('dailyDlg').showModal();
+}
+// Today's daily typed or scanned in (the same solution): its card, so it stays solo, never a task with help.
+// ponytail: only dailies opened on this device are known; a rotated or relabelled copy gets through.
+function toDaily(sol) {
+  const lvl = loadDays().levels.findIndex(st => st?.solution.join('') === sol.join(''));
+  if (lvl >= 0) openDaily(lvl);
+  return lvl >= 0;
 }
 const levelText = st => st?.solvedAt ? `Riješeno za ${clock(st.elapsed)} ✓` : st?.elapsed ? `U tijeku · ${clock(st.elapsed)}` : 'Nije počet';
 function showLevels() {

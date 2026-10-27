@@ -304,7 +304,18 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(await ranks(), ['Jučer', 'Još nitko=', 'Još nitko=', 'Još nitko='], 'ranks: yesterday');
   await page.evaluate(() => { for (let i = 0; i < 6; i++) ranksPrev.click(); });
   assert.deepStrictEqual(await page.evaluate(() => [ranksPrev.disabled, ranksNext.disabled]), [true, false], 'ranks: a week back at most');
-  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels`);
+  // Today's daily typed in by hand: its card again, no task with help.
+  const retyped = await page.evaluate(() => {
+    clearBoard();
+    days.levels[0].givens.forEach((d, i) => inputs[i].value = d || '');
+    entryLabel();
+    setTask.click();
+    const r = [task, dailyDlg.open, pickLvl];
+    dailyDlg.close();
+    return r;
+  });
+  assert.deepStrictEqual(retyped, [null, true, 0], 'daily typed in: its card, no task');
+  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels; typed in again → its card`);
 
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
   const hard = await page.evaluate((puzzles, printed) => {
@@ -396,6 +407,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   const typedIn = ['100000011', '001010001', '100100100', '000001110', '100000101', '000110110', '101000010', '001011010', '011000000'].join('')
     .split('').flatMap((k, i) => k === '0' && ![41, 75, 76].includes(i) ? [i] : []);
   assert.deepStrictEqual(await cls('entry'), typedIn, 'dark screenshot: bold given, regular typed');
+  // The same game with pencil notes (and highlighted cells): the plain picture's best "grid" is one 3×3 box,
+  // the inverted one is the whole grid; notes are no digits.
+  await open(null);
+  await scan('screenshot-notes.png');
+  const noted = '300059086089360025500800934005692813236080459198543672913000568657938241824005397';
+  assert.strictEqual(await grid(), noted, 'screenshot with notes OCR');
+  assert.deepStrictEqual(await cls('entry'), typedIn.filter(i => +noted[i]), 'screenshot with notes: given / typed');
   const onlyGivens = await page.evaluate(async g => {
     const c = document.createElement('canvas'), x = c.getContext('2d'), s = 100;
     c.width = 1080; c.height = 1500;
