@@ -228,7 +228,12 @@
     border: 1px solid var(--control); }
   #explainBox.up .tail { top: -9px; border-right: 0; border-bottom: 0; }      /* bubble under the cells, tail points up */
   #explainBox.down .tail { bottom: -9px; border-left: 0; border-top: 0; }     /* bubble over the cells, tail points down */
-  #explainBox.free .tail { display: none; }
+  #explainBox.free .tail, #explainBox.below .tail { display: none; }
+  #explainBox.below .ehead span { visibility: hidden; }   /* under the board: nothing under it to peek at */
+  #explainSteps { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-right: 10px; }
+  #explainSteps[hidden] { display: none; }
+  #stepCount { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  #stepNext { min-height: 40px; padding: 0 16px; font-size: 15px; }
   #explain { overflow-y: auto; touch-action: none; }   /* a scroller sets its own touch-action: without this a drag on the text scrolls the page and ends the peek */
   .ehead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; font-weight: 500; }
   #explainToggle { min-height: 36px; padding: 0 12px; border-color: transparent; background: transparent; font-size: 15px; }
@@ -245,6 +250,20 @@
   #cands > span { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.4cqi; color: var(--muted);
     font-size: 2.6cqi; font-weight: 500; line-height: 1; text-align: center; align-items: center; }
   #cands.mine > span { color: var(--pencil); }   /* the user's own notes, not the computed candidates */
+  /* A step-by-step "why" (X-Wing, Y-Wing): the candidates it points at (k), rules out (x) or sets aside (off),
+     and lines between cells, each drawn once when its part opens. */
+  #cands .k { color: var(--hue); font-size: 1.45em; font-weight: 700; }
+  #cands .x { color: var(--negative); font-size: 1.45em; font-weight: 700; text-decoration: line-through 2px; transition: opacity .16s ease-out; }
+  #cands .off { opacity: 0.4; text-decoration: line-through; }
+  #hintLines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  #hintLines path { fill: none; stroke: var(--hue); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset .26s cubic-bezier(0.23, 1, 0.32, 1); }
+  #hintLines path.alt { stroke-dasharray: 0.07 0.06; opacity: 0.7; transition: opacity .16s ease-out; }
+  @starting-style { #hintLines path { stroke-dashoffset: 1; } #hintLines path.alt, #cands .x { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    #hintLines path { stroke-dasharray: none; transition: opacity .16s ease-out; }
+    @starting-style { #hintLines path { opacity: 0; } }
+  }
 
   #about h2 { margin: 0 0 12px; font-size: 24px; font-weight: 700; }
   .credits { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
@@ -552,6 +571,7 @@
     <span class="tail"></span>
     <div class="ehead"><span>Drži za pogled ispod</span><button id="explainToggle">Sakrij</button></div>
     <p id="explain"></p>
+    <div id="explainSteps" hidden><small id="stepCount"></small><button id="stepNext">Dalje</button></div>
   </section>
 </div>
   <div class="controls">
@@ -610,6 +630,8 @@ const candCells = (() => {
   const layer = $('grid').appendChild(Object.assign(document.createElement('div'), { id: 'cands', hidden: true }));
   return inputs.map(() => layer.appendChild(document.createElement('span')));
 })();
+// Lines a step draws over the board (markStep), in the 90×90 box of line().
+$('grid').insertAdjacentHTML('beforeend', '<svg id="hintLines" viewBox="0 0 90 90" aria-hidden="true"></svg>');
 let model, featModel, printedModel = null, task = null;   // task = { givens, solution }: 81 numbers each, 0 = empty
 let sel = null;   // cell picked for the pad
 
@@ -1075,7 +1097,7 @@ try { setQuiet(localStorage.sudokuQuiet === '1'); } catch {}
 let hintState = null;   // { h, level } of the step being explained: 1 where to look, 2 why, 3 answer
 
 function clearHint() {
-  inputs.forEach(x => x.classList.remove('hint', 'area', 'focus', 'beam', 'blocker', 'crossed'));
+  markStep(null);
   $('explain').textContent = '';
   hintState = null;
   hintLabel(3);
@@ -1120,15 +1142,26 @@ $('setTask').onclick = () => {
 };
 
 // Highlights of a step in the grid: where to look, and from level 2 on what rules cells out.
-function markStep(h, level) {
+// f: the part of a step-by-step "why" on show (h.steps), with its own candidates (notes) and lines.
+function markStep(h, level, f = h) {
   inputs.forEach(x => x.classList.remove('hint', 'area', 'focus', 'beam', 'blocker', 'crossed'));
+  drawCands();
+  $('hintLines').replaceChildren();
   if (!h) return;
-  h.area.forEach(j => inputs[j].classList.add('area'));
-  h.focus.forEach(j => inputs[j].classList.add('focus'));
+  f.area.forEach(j => inputs[j].classList.add('area'));
+  f.focus.forEach(j => inputs[j].classList.add('focus'));
+  if (level < 3) for (const [i, n] of Object.entries(f.notes || {}))
+    candCells[i].replaceChildren(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => Object.assign(document.createElement('span'),
+      { textContent: n.show.includes(d) ? d : '', className: ['k', 'x', 'off'].find(c => n[c]?.includes(d)) || '' })));
+  if (level < 3) for (const [ds, cls] of [[f.lines, ''], [f.alt, 'alt']]) for (const d of ds || []) {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d); p.setAttribute('pathLength', '1'); if (cls) p.setAttribute('class', cls);
+    $('hintLines').append(p);
+  }
   if (level < 2) return;
-  h.beams.forEach(v => v.cells.forEach(j => inputs[j].classList.add('beam')));
-  h.blockers.forEach(j => inputs[j].classList.add('blocker'));
-  h.crossed.forEach(j => inputs[j].classList.add('crossed'));
+  f.beams.forEach(v => v.cells.forEach(j => inputs[j].classList.add('beam')));
+  f.blockers.forEach(j => inputs[j].classList.add('blocker'));
+  f.crossed.forEach(j => inputs[j].classList.add('crossed'));
 }
 
 // Givens and correct entries; wrong or unsure entries count as empty.
@@ -1137,19 +1170,29 @@ const knownGrid = () => inputs.map((x, i) => task.givens[i] || (+x.value === tas
 // "Sljedeći korak" teaches: each press goes one level deeper (where to look → why → answer), then on
 // to the next step. Meanwhile the user may type a try (tryMove).
 $('hintBtn').onclick = () => {
-  if (hintState && hintState.level < 3) hintState.level++;
+  if (hintState && hintState.level < 3) { hintState.level++; hintState.sub = 0; }
   else {
     clearHint();
     const g = knownGrid();
     if (g.every(Boolean)) return explainAt('Sve je riješeno!', []);
     const h = hint(g) || reveal(g, task.solution);
-    hintState = { h, level: h.tech ? 1 : 3 };
+    hintState = { h, level: h.tech ? 1 : 3, sub: 0 };
     task.techs ??= {};   // Savjet used in this game (no stuck bubble then); the techniques it showed, for "Riješeno!"
     if (h.tech) task.techs[h.tech.name] = (task.techs[h.tech.name] || 0) + 1;
     saveState();
   }
-  const { h, level } = hintState;
-  markStep(h, level);
+  showStep();
+  hintLabel(hintState.level);
+  if ($('explainBox').classList.contains('quiet') && quietTold !== task.solution.join('')) {
+    quietTold = task.solution.join('');
+    say('Objašnjenje je isključeno: Savjet pokazuje samo oznake na mreži.', 6000, ['Uključi', back]);
+  }
+};
+
+// The open step on the board and in the bubble. A step-by-step "why" shows its part `sub`; Dalje the next.
+function showStep() {
+  const { h, level, sub } = hintState, f = level === 2 && h.steps ? h.steps[sub] : h;
+  markStep(h, level, f);
   if (level === 3) {
     const inp = inputs[h.cell];
     inp.value = h.digit;
@@ -1158,28 +1201,28 @@ $('hintBtn').onclick = () => {
     markConflicts();
   }
   const wrong = inputs.filter(x => x.classList.contains('wrong')).length;
-  explainAt((wrong ? `Pazi: ${wrong} polja su kriva (crveno).\n` : '') + hintText(h, level),
-    level === 3 ? [h.cell] : h.focus.length ? h.focus : h.area,   // keep the area and, from "why" on, the reasons in sight
-    level === 1 ? h.area : [...h.area, ...h.focus, ...h.blockers, ...h.blockers, ...h.crossed]);   // twice: the reasons matter most
-  hintLabel(level);
-  if ($('explainBox').classList.contains('quiet') && quietTold !== task.solution.join('')) {
-    quietTold = task.solution.join('');
-    say('Objašnjenje je isključeno: Savjet pokazuje samo oznake na mreži.', 6000, ['Uključi', back]);
-  }
-};
+  explainAt((wrong ? `Pazi: ${wrong} polja su kriva (crveno).\n` : '') + (f === h ? hintText(h, level) : f.text),
+    level === 3 ? [h.cell] : f.focus.length ? f.focus : f.area,   // keep the area and, from "why" on, the reasons in sight
+    level === 1 ? f.area : [...f.area, ...f.focus, ...f.blockers, ...f.blockers, ...f.crossed],   // twice: the reasons matter most
+    f === h ? null : [sub, h.steps.length]);
+}
+$('stepNext').onclick = () => { hintState.sub++; showStep(); };
 
 // The explanation bubble: text, its tail on the main cells, kept clear of the marked ones (avoid).
-// No cells: centred, no tail.
+// No cells: centred, no tail. part: [k, n] while showing part k of n of a step-by-step "why".
 let bubbleAt = { main: [], avoid: [] };
-function explainAt(text, main, avoid = []) {
+function explainAt(text, main, avoid = [], part) {
   $('explain').textContent = text;
+  $('explainSteps').hidden = !part;
+  if (part) { $('stepCount').textContent = `${part[0] + 1} od ${part[1]}`; $('stepNext').hidden = part[0] === part[1] - 1; }
   bubbleAt = { main, avoid: [...main, ...avoid] };
   placeBubble();
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches)   // grows out of its tail
     $('explainBox').animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
 }
 // Where the bubble goes: full text, board-wide, at the height that covers the fewest marked cells
-// (avoid; the main ones count triple), nearest the main cells on a tie. It may cover the name row
+// (avoid; the main ones count triple), then the least of the board: under it if it fits before the
+// buttons (class below), else reaching into it no further than needed. It may cover the name row
 // above the board, never the top bar or the buttons below it. The tail points at the main cells from whichever side
 // the bubble ended up on (class up: bubble below them, down: above; free: no cells, or on them).
 function placeBubble() {
@@ -1190,12 +1233,16 @@ function placeBubble() {
   const h = box.offsetHeight, roof = (bar.bottom <= b.top ? bar.bottom + 4 : 8) - b.top;   // roof: under the top bar (phone) or the screen's top
   const span = i => { const r = inputs[i].getBoundingClientRect(); return [r.top - b.top, r.bottom - b.top]; };
   const main = bubbleAt.main.map(span), mT = Math.min(...main.map(s => s[0])), mB = Math.max(...main.map(s => s[1]));
+  const ctl = $('tools').getBoundingClientRect(), floor = (ctl.top > b.top + H ? ctl.top : innerHeight) - b.top - 8;   // the buttons under the board, or the screen's bottom
+  // Marked cells covered cost most, then any of the board (with the gap under it) covered, so it sinks
+  // under the board as far as it fits, then distance from the main cells.
   const cost = top => bubbleAt.avoid.reduce((c, i) => { const [t, btm] = span(i); return c + (t < top + h && btm > top ? (bubbleAt.main.includes(i) ? 3 : 1) : 0); }, 0) * 1e4
-    + (main.length ? Math.max(top - mB, mT - (top + h), 0) : Math.abs(top - (H - h) / 2));
-  let best = Math.min(roof, H - h - 8);
-  for (let top = roof; top <= H - h - 8; top += 4) if (cost(top) < cost(best)) best = top;
-  const side = !main.length ? 'free' : best >= mB - 2 ? 'up' : best + h <= mT + 2 ? 'down' : 'free';
-  box.classList.remove('up', 'down', 'free');
+    + Math.max(0, Math.min(H + 8, top + h) - Math.max(0, top)) + (main.length ? Math.max(top - mB, mT - (top + h), 0) / 1e3 : 0);
+  let best = roof;
+  for (let top = roof; top <= floor - h; top++) if (cost(top) < cost(best)) best = top;
+  const near = H / 9;   // a tail only reaches cells about a row away
+  const side = best >= H ? 'below' : !main.length ? 'free' : best >= mB - 2 && best - mB < near ? 'up' : best + h <= mT + 2 && mT - best - h < near ? 'down' : 'free';
+  box.classList.remove('up', 'down', 'free', 'below');
   box.classList.add(side);
   box.style.top = best + 'px';
   const r = bubbleAt.main.map(i => inputs[i].getBoundingClientRect()), cx = r.length ? (Math.min(...r.map(x => x.left)) + Math.max(...r.map(x => x.right))) / 2 - b.left : b.width / 2;
@@ -1509,8 +1556,12 @@ const TECH = {
     how: 'Ako dva polja u istom redu, stupcu ili kvadratu mogu imati samo ista dva broja, ta dva broja pripadaju njima. Iz ostalih polja tog reda, stupca ili kvadrata ih precrtaj, pa potraži jedino mjesto ili jedini broj.' },
   hiddenPair: { name: 'Skriveni par', en: 'Hidden Pair',
     how: 'Ako dva broja u redu, stupcu ili kvadratu mogu ići samo u ista dva polja, ta dva polja pripadaju njima. U njima precrtaj sve ostale brojeve, pa potraži jedino mjesto ili jedini broj.' },
+  xWing: { name: 'Pravokutnik', en: 'X-Wing',
+    how: 'Ako neki broj u dva reda može ići samo u ista dva stupca, ta četiri polja čine pravokutnik. Broj tada sigurno zauzima oba stupca, pa ga u ostatku tih stupaca precrtaj (isto vrijedi za dva stupca i dva reda). Zatim potraži jedino mjesto ili jedini broj.' },
+  yWing: { name: 'Kliješta', en: 'Y-Wing',
+    how: 'Polje s dva broja (A ili B) je drška. Dva polja koja ona vidi, jedno s A ili C i drugo s B ili C, su krakovi. Jedan krak sigurno je C, pa C precrtaj iz svih polja koja vide oba kraka. Zatim potraži jedino mjesto ili jedini broj.' },
 };
-// Dailies before this date were made without Claiming and Hidden Pair: same puzzle for that date on every version.
+// Dailies before this date were made without Claiming, Hidden Pair, X-Wing and Y-Wing: same puzzle for that date on every version.
 const NEW_TECH = '2026-10-29';
 const HINT_NEXT = { 1: 'Zašto?', 2: 'Odgovor', 3: 'Savjet' };
 
@@ -1518,10 +1569,11 @@ const HINT_NEXT = { 1: 'Zašto?', 2: 'Odgovor', 3: 'Savjet' };
 // The hardest technique needed sets the band (null: beyond them, the cell is revealed). Within it:
 // fewer givens is harder (36 → bottom, 22 → top), and from naked singles up also how often the
 // hardest technique was needed.
-// A band may hold sister techniques (one row/column ↔ one box; naked ↔ hidden pair): the bands, and so
-// every earlier difficulty, stay as they were. old: without the techniques added on NEW_TECH (an earlier day's daily).
+// A band may hold sister techniques (one row/column ↔ one box; naked ↔ hidden pair; the wings only replace
+// reveals): the bands, and so every earlier difficulty, stay as they were. old: without the techniques
+// added on NEW_TECH (an earlier day's daily).
 const BANDS = [[[TECH.full], 0], [[TECH.hidden], 10], [[TECH.naked], 30], [[TECH.pointing, TECH.claiming], 55],
-  [[TECH.pair, TECH.hiddenPair], 65], [[null], 80]];
+  [[TECH.pair, TECH.hiddenPair, TECH.xWing, TECH.yWing], 65], [[null], 80]];
 function difficulty(givens, solution, old) {
   const g = givens.slice();
   let hardest = 0, n = 0;
@@ -1647,7 +1699,91 @@ function eliminations(g, old) {
         why: `U ${u.loc} ${x} i ${y} mogu ići samo u ${cellName(a)} i ${cellName(b)} (plava polja). Ta dva polja zato pripadaju njima, pa u njima ne može ništa drugo (${[...new Set(removed.map(([, d]) => d))].join(', ')} otpada).` });
     }
   }
+  if (old) return out;
+  const C = Array.from({ length: 81 }, (_, i) => candidates(g, i));
+  for (const [bases, covers] of [[ROWS, COLS], [COLS, ROWS]]) for (let d = 1; d <= 9; d++) {   // X-wing: d of two rows only in the same two columns (or the other way)
+    const two = bases.map(u => ({ u, s: u.cells.filter(i => C[i].includes(d)) })).filter(x => x.s.length === 2);
+    for (const [k, p] of two.entries()) for (const q of two.slice(k + 1)) {
+      const cov = p.s.map(i => covers.find(c => c.cells.includes(i)));
+      if (q.s.some((i, j) => !cov[j].cells.includes(i))) continue;
+      const removed = cov.flatMap(c => c.cells.filter(i => !p.s.includes(i) && !q.s.includes(i) && C[i].includes(d))).map(i => [i, d]);
+      if (removed.length) out.push(xWing(d, p.u, q.u, cov, [...p.s, ...q.s], removed));
+    }
+  }
+  for (let p = 0; p < 81; p++) {   // Y-wing: pivot a|b, wings a|c and b|c it sees → c off cells seeing both wings
+    if (C[p].length !== 2) continue;
+    const [a, b] = C[p], twos = PEERS[p].filter(i => C[i].length === 2);
+    for (const A of twos) for (const B of twos) {
+      const c = C[A].find(x => x !== a);
+      if (!C[A].includes(a) || C[A].includes(b) || !C[B].includes(b) || !C[B].includes(c)) continue;
+      const removed = PEERS[A].filter(i => i !== B && PEERS[B].includes(i) && C[i].includes(c)).map(i => [i, c]);
+      if (removed.length) out.push(yWing(C, p, A, B, a, b, c, removed));
+    }
+  }
   return out;
+}
+
+// Lines over the board, in a 90×90 box (10 a cell): a cell's centre, the spot of candidate d in it,
+// a line from p to q with both ends pulled in (bow: bent sideways, past the digits between), a closed shape.
+const ctr = i => [i % 9 * 10 + 5, (i / 9 | 0) * 10 + 5];
+const spot = (i, d) => [i % 9 * 10 + (d - 1) % 3 * 10 / 3 + 5 / 3, (i / 9 | 0) * 10 + ((d - 1) / 3 | 0) * 10 / 3 + 5 / 3];
+const xy = ([x, y]) => `${+x.toFixed(2)} ${+y.toFixed(2)}`;
+function line(p, q, pull, bow = 0) {
+  const l = Math.hypot(q[0] - p[0], q[1] - p[1]), ux = (q[0] - p[0]) / l, uy = (q[1] - p[1]) / l;
+  const a = [p[0] + ux * pull, p[1] + uy * pull], b = [q[0] - ux * pull, q[1] - uy * pull];
+  return `M${xy(a)} ` + (bow ? `Q${xy([(p[0] + q[0]) / 2 + uy * bow, (p[1] + q[1]) / 2 - ux * bow])} ` : 'L') + xy(b);
+}
+const shape = ps => `M${ps.map(xy).join(' L')} Z`;
+
+// The wings explain step by step (steps: what the bubble shows on each Dalje, with its own marks).
+// notes: { cell: { show: digits, k: pointed at, x: ruled out, off: set aside } }
+function xWing(d, b1, b2, [c1, c2], corners, removed) {
+  const [p1, p2, q1, q2] = corners, both = [...b1.cells, ...b2.cells], two = b1.kind === 'row' ? 'dva reda' : 'dva stupca';
+  const notes = (k, off = []) => Object.fromEntries([...k.map(i => [i, { show: [d], k: [d] }]), ...off.map(i => [i, { show: [d], off: [d] }])]);
+  const d1 = line(spot(p1, d), spot(q2, d), 1.6), d2 = line(spot(p2, d), spot(q1, d), 1.6);
+  const steps = [
+    { area: b1.cells, focus: [p1, p2], notes: notes([p1, p2]),
+      text: `U ${b1.loc} broj ${d} može ići samo u dva polja: u ${c1.name} ili ${c2.name} (plava polja).` },
+    { area: both, focus: corners, notes: notes(corners), text: `U ${b2.loc} isto: ${d} može ići samo u ${c1.name} ili ${c2.name}.` },
+    { area: both, focus: corners, notes: notes(corners), lines: [shape([p1, p2, q2, q1].map(i => spot(i, d)))],
+      text: `Ta četiri polja čine pravokutnik. I u ${b1.loc} i u ${b2.loc} broj ${d} mora stati u jedan od njegovih kutova.` },
+    { area: both, focus: corners, notes: notes([p1, q2], [p2, q1]), lines: [d1],
+      text: `Ako je ${d} u ${b1.loc} u ${c1.loc}, onda u ${b2.loc} ne može u ${c1.name}. Ide u ${c2.name} (puna crta).` },
+    { area: both, focus: corners, notes: notes([p2, q1], [p1, q2]), alt: [d2],
+      text: `Ako je ${d} u ${b1.loc} u ${c2.loc}, onda u ${b2.loc} ide u ${c1.name} (isprekidana crta).` },
+    { area: [...c1.cells, ...c2.cells], focus: corners, notes: { ...notes(corners), ...Object.fromEntries(removed.map(([i]) => [i, { show: [d], x: [d] }])) },
+      lines: [d1], alt: [d2],
+      text: `Kako god, ${d} iz ta ${two} zauzima i ${c1.name} i ${c2.name}. Zato ${d} ne može nigdje drugdje u ${c1.loc} ni u ${c2.loc}: precrtaj ga (crveno).` },
+  ];
+  return { tech: TECH.xWing, area: both, focus: [], removed, steps, look: `Pogledaj ${b1.name} i ${b2.name}. Gdje sve u njima može ići ${d}?`,
+    why: steps.map(s => s.text).join('\n') };
+}
+
+function yWing(C, p, A, B, a, b, c, removed) {
+  const seen = i => (i / 9 | 0) === (p / 9 | 0) ? 'isti red' : i % 9 === p % 9 ? 'isti stupac' : 'isti kvadrat';
+  const far = i => seen(i) !== 'isti kvadrat' && Math.abs(i - p) > (seen(i) === 'isti red' ? 1 : 9);   // a straight line would cross digits
+  const arm = i => line(ctr(p), ctr(i), 3, far(i) ? -8 : 0), arms = [arm(A), arm(B)];
+  const n = (i, k = [], off = []) => ({ show: C[i], k, off }), x = removed.map(([i]) => i);
+  const notes = { [p]: n(p), [A]: n(A), [B]: n(B) };
+  const steps = [
+    { focus: [p], notes: { ...notes, [p]: n(p, [a, b]) }, text: `${cap(cellName(p))} može biti samo ${a} ili ${b}. To je drška kliješta.` },
+    { focus: [p, A], notes: { ...notes, [A]: n(A, [a, c]) }, lines: [arms[0]],
+      text: `${cap(cellName(A))} vidi dršku (${seen(A)}) i može biti samo ${a} ili ${c}.` },
+    { focus: [p, A, B], notes: { ...notes, [B]: n(B, [b, c]) }, lines: arms,
+      text: `${cap(cellName(B))} isto vidi dršku (${seen(B)}) i može biti samo ${b} ili ${c}. To su dva kraka.` },
+    { focus: [p, A], notes: { ...notes, [p]: n(p, [a], [b]), [A]: n(A, [c], [a]) }, lines: [arms[0]],
+      text: `Ako je drška ${a}: ${cellName(A)} ne može biti ${a}, pa je ${c}.` },
+    { focus: [p, B], notes: { ...notes, [p]: n(p, [b], [a]), [B]: n(B, [c], [b]) }, lines: [arms[1]],
+      text: `Ako je drška ${b}: ${cellName(B)} ne može biti ${b}, pa je ${c}.` },
+    { focus: [p, A, B], notes: { ...notes, [A]: n(A, [c]), [B]: n(B, [c]) }, lines: arms,
+      text: `Drška je ${a} ili ${b}, pa je barem jedan krak sigurno ${c}. Samo ne znamo koji.` },
+    { focus: [A, B], notes: { [A]: n(A, [c]), [B]: n(B, [c]), ...Object.fromEntries(x.map(i => [i, { show: C[i], x: [c] }])) }, lines: arms,
+      text: x.length === 1 ? `${cap(cellName(x[0]))} vidi oba kraka, pa ne može biti ${c} (crveno).`
+        : `${cap(x.map(cellName).join(' i '))} vide oba kraka, pa ne mogu biti ${c} (crveno).` },
+  ];
+  return { tech: TECH.yWing, area: [], focus: [p, A, B], removed, steps, notes,
+    look: 'Pogledaj tri plava polja. U svakom mogu biti samo dva broja. Što je zajedničko krajnjim dvama?',
+    why: steps.map(s => s.text).join('\n') };
 }
 
 // An advanced step plus the single it opens up (only for `cell`, if given). → step or null.
@@ -1659,7 +1795,9 @@ function advanced(g, cell = -1, old) {
     const s = UNITS.flatMap(u => missing(g, u).map(d => hiddenSingle(g, u, d, ex))).find(fits)
       || Array.from({ length: 81 }, (_, i) => nakedSingle(g, i, ex)).find(fits);
     if (s) return { ...s, tech: e.tech, area: [...new Set([...e.area, ...s.area])], focus: [...e.focus, ...s.focus],
-      look: e.look, why: `${e.why}\n\n${s.why}` };
+      look: e.look, why: `${e.why}\n\n${s.why}`, notes: e.notes,
+      steps: e.steps && [...e.steps.map(f => ({ beams: [], blockers: [], crossed: [], ...f, area: f.area || [] })),
+        { ...s, notes: Object.fromEntries(e.removed.map(([i, d]) => [i, { show: [d], x: [d] }])), text: `Sad pogledaj ${s.unit ? s.unit.name : cellName(s.cell)}.\n${s.why}` }] };
   }
   return null;
 }
@@ -1696,7 +1834,7 @@ function judgeMove(g, i, d, solution) {
 }
 
 // ponytail: nothing explainable left → reveal the cell with fewest candidates. Add more techniques
-// (X-wing, Y-wing) to eliminations() when hard puzzles need them.
+// (chains) to eliminations() when hard puzzles need them.
 function reveal(g, solution) {
   let best = -1;
   for (let i = 0; i < 81; i++) if (!g[i] && (best < 0 || candidates(g, i).length < candidates(g, best).length)) best = i;
@@ -1710,7 +1848,7 @@ function hintText(h, level) {
   const head = `Tehnika: ${h.tech.name} (${h.tech.en})\n`;
   if (level === 1) return head + h.look;
   if (level === 2) return head + h.why;
-  return `${h.answer}\n\nKako radi ${h.tech.name.toLowerCase()}: ${h.tech.how}\nSljedeći korak pokušaj pronaći istom tehnikom.`;
+  return `${h.answer}\n\nKako ${h.tech === TECH.yWing ? 'rade' : 'radi'} ${h.tech.name.toLowerCase()}: ${h.tech.how}\nSljedeći korak pokušaj pronaći istom tehnikom.`;
 }
 
 // Candidate corner sets from the raw and the line-thickened (gaps closed) binary image: outer contour
@@ -2394,21 +2532,30 @@ function fullGrid(r) {
   })(0);
   return g;
 }
-// Date "YYYY-MM-DD" + level → { givens, solution, diff }: a random full grid emptied cell by cell while
-// the solution stays unique; the first try in the level's difficulty range wins, else the closest one.
-// ponytail: up to ~3 s for Teško (computer); made once a day, then kept in the day's save.
+// Try k of a day's level: a random full grid emptied cell by cell while the solution stays unique.
+function dailyTry(date, lvl, k) {
+  const r = rng(hash(`${date}#${lvl}#${k}`)), solution = fullGrid(r), givens = solution.slice();
+  for (const i of shuffle([...Array(81).keys()], r)) {
+    if (givens.filter(Boolean).length <= DAILY[lvl][1]) break;
+    const v = givens[i];
+    givens[i] = 0;
+    if (solve(givens, 2).length !== 1) givens[i] = v;
+  }
+  return { givens, solution, diff: difficulty(givens, solution, date < NEW_TECH) };
+}
+// Teško from NEW_TECH on: the day's first try that needs its hardest technique at least twice, not once in
+// an otherwise easy sudoku (~1 try in 20: too many for a phone). pool.js found them on a computer; two
+// base-36 digits a day. ponytail: two years; run pool.js again before it ends (then the search below).
+const HARD_TRIES = '030k060803030s110z041q070d090t0c0a3c0o0l0k0e1a0v060r170f1t000k0r0f020l040n09010a0d1n0f06020625080b0f0m07030a0f0b09151o020e210d1g0n0r110w13010k170l0203000d0b0i0915050d1006030f060j0i0u0c1l010c0f0s001b07002d0i0r011x090s070004020b1r090n09131p0t030407150v0s120d060018040z0104051x1d0o092u050704080e070u000429041k0113090s07000v0000060b071g0f1f1c1w0s090i0n0n021s0m1t0i20010l040n09000m0p0x000q03020i0n0t01060d0h0o0f0419080b060l01010e0f0w19020800420p03150q0q210o0b091h000h0w000d00020c0t1h161a0g060b0716011104070d032d08130w0o080i010s050129110k0h051d071909150g1h07020e0q0n140620050j0e0n0d090c0q0c0a0n0c020v0i0t0702190800120c0f2f080e04060h020e020y0r0g1a0b1m0901060k0f110h0s0e060503070z0t04070h0b1015020v092b22011g0g0b021k240r170e0n001314111q0n0u0z06030d0c04010b020y0a0m010n0l05090o0j0k11040b020a010g0a0t11131m040e100u0u0m0914040607061o0b110j0r082j0k0r0006000e0a0e0d060h08060k0i0w0l141t1z1o03100s000l0h0u11070c1t021b0707020c000g000908061d070y0m1l0m080100050q040f140t0l0j040108020i1e1d000g070e020d140u0v0s060g0a04070x0e000p12110c01240204190105170u080v000f02071h0g1i0g0k0211121n010a1v1p0d0m130l1f0i0j0i3b0d0j0r0k260d0n0k01020f0n0c190j0b0u0g010e04090n07210x031p01040w1309052107081d1s1j030y0d0o1706121709030a0q0h0c0401060i0x0d0b0f0903070103100d040t1h0e0004020l060r0202040406082g021h140b17090d1c0n0m210l0m1d010n060r1e0r1d0a0k0k0i18010p0b0316010k0f0c1x0j1j09130002070m0b0226032r0f0n070n0w020r0j011o1n0d06000m0g0h050e0c00030d2k0e0k0h000a090f13100b04020q00101q001m03131a100103190d0c';
+// Date "YYYY-MM-DD" + level → { givens, solution, diff }: the first try in the level's difficulty range
+// wins, else the closest one. ponytail: up to ~3 s for Teško (computer); made once a day, then kept in the day's save.
 function makeDaily(date, lvl) {
-  const [, keep, lo, hi] = DAILY[lvl];
+  const [, , lo, hi] = DAILY[lvl], day = (Date.parse(date) - Date.parse(NEW_TECH)) / 864e5;
+  const pooled = lvl === 2 && day >= 0 ? parseInt(HARD_TRIES.substr(day * 2, 2), 36) : NaN;
+  if (pooled >= 0) return dailyTry(date, lvl, pooled);
   let best = null;
   for (let k = 0; k < 80; k++) {
-    const r = rng(hash(`${date}#${lvl}#${k}`)), solution = fullGrid(r), givens = solution.slice();
-    for (const i of shuffle([...Array(81).keys()], r)) {
-      if (givens.filter(Boolean).length <= keep) break;
-      const v = givens[i];
-      givens[i] = 0;
-      if (solve(givens, 2).length !== 1) givens[i] = v;
-    }
-    const p = { givens, solution, diff: difficulty(givens, solution, date < NEW_TECH) };
+    const p = dailyTry(date, lvl, k);
     if (p.diff >= lo && p.diff < hi) return p;
     if (!best || Math.abs(p.diff - (lo + hi) / 2) < Math.abs(best.diff - (lo + hi) / 2)) best = p;
   }

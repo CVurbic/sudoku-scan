@@ -219,6 +219,10 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return { same: lv[0].givens.join('') === again.givens.join(''), unique: lv.every(p => solve(p.givens).length === 1), diffs: lv.map(p => p.diff) };
   });
   assert.ok(gen.same && gen.unique && gen.diffs[0] < 30 && gen.diffs[1] >= 30 && gen.diffs[1] < 55 && gen.diffs[2] >= 55 && gen.diffs[2] < 80, 'daily generator: ' + JSON.stringify(gen));
+  // Teško from HARD_TRIES (pool.js): the day's listed try, unique, in range, made in one go.
+  const pooled = await page.evaluate(() => { const t = performance.now(), p = makeDaily('2027-03-14', 2);
+    return { ms: performance.now() - t, unique: solve(p.givens).length === 1, diff: p.diff, days: HARD_TRIES.length / 2 }; });
+  assert.ok(pooled.unique && pooled.diff >= 55 && pooled.diff < 80 && pooled.days >= 730 && pooled.ms < 2000, 'pooled Teško: ' + JSON.stringify(pooled));
   // The card first (rules, three levels, "Kreni"); the clock waits for it. Then solo: no help buttons, a
   // clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
   await page.click('#homeDaily');
@@ -341,6 +345,33 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   console.log(`hard puzzles: every step right, techniques ${JSON.stringify(hard.techs)}, reveals ${hard.reveals}; difficulty ${hard.diffs.join('/')}%, printed.jpg ${hard.easy}%`);
   assert.ok(hard.diffs.every(d => d >= 0 && d <= 100) && hard.easy < Math.max(...hard.diffs), 'difficulty ranks the newspaper puzzle below the hard ones');
   assert.ok(hard.techs['Pokazivački par'] && hard.techs['Goli par'], 'advanced techniques used');
+
+  // 1c. X-Wing and Y-Wing (positions from the Teško generator), explained step by step: Dalje walks the
+  //     parts, each with its marks; the last one is the single; Odgovor puts the right digit.
+  const WINGS = [['Pravokutnik', '060078000000600005800000040000900200320004180040010006400030000200107090030200010', '560478901004600805800000640000900204320004189040012006400030062200107090030200010'],
+    ['Kliješta', '000500000080970002004000650900008000000000015030000207000002000046080700001040800', '000504378583976142004803659917258463000037915035091287000162534246385791351749826']];
+  const wp = await browser.newPage();
+  await wp.setViewport({ width: 390, height: 844 });
+  await wp.goto('http://localhost:8768/');
+  for (const [name, givens, known] of WINGS) {
+    await wp.evaluate(gv => { const g = [...gv].map(Number); localStorage.sudokuTask = JSON.stringify({ givens: g, solution: solve(g)[0] }); localStorage.sudokuView = 'game'; }, givens);
+    await wp.reload();
+    await wp.evaluate(k => [...k].forEach((d, i) => { if (d !== '0' && !task.givens[i]) inputs[i].value = d; }), known);
+    await wp.click('#hintBtn'); await wp.click('#hintBtn');
+    const parts = [];
+    for (;;) {
+      parts.push(await wp.evaluate(() => [stepCount.textContent, hintLines.children.length, cands.querySelectorAll('.k, .x').length, explainBox.className]));
+      if (await wp.evaluate(() => stepNext.hidden)) break;
+      await wp.click('#stepNext');
+    }
+    await wp.click('#hintBtn');
+    const done = await wp.evaluate(() => [hintState.h.tech.name, inputs[hintState.h.cell].value === String(task.solution[hintState.h.cell]), explainSteps.hidden, hintLines.children.length]);
+    assert.deepStrictEqual(done, [name, true, true, 0], `${name}: answer`);
+    assert.ok(parts.length >= 7 && parts.every(([c, , marks], k) => c === `${k + 1} od ${parts.length}` && marks > 0) && parts.some(([, lines]) => lines) &&
+      parts.slice(0, 3).every(([, , , cls]) => /below/.test(cls)), `${name}: parts ${JSON.stringify(parts)}`);
+  }
+  await wp.close();
+  console.log(`X-Wing, Y-Wing: explained in parts with Dalje, marks and lines, the bubble under the board; answer right`);
 
   // 2. Handwritten progress: every entry is right, so nothing may be flagged wrong.
   const hwSolution = await page.evaluate(g => solve([...g].map(Number))[0].join(''), HW_GIVENS);
