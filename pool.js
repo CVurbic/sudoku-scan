@@ -1,12 +1,12 @@
-// HARD_TRIES for index.html: per day from NEW_TECH, the first Teško try (dailyTry) in the level's range whose
+// HARD_TRIES for sudoku.js: per day from NEW_TECH, the first Teško try (dailyTry) in the level's range whose
 // hardest technique is needed at least twice. Runs the app's own sudoku code in Node, no browser.
 // Usage: node pool.js [days=730] [from day=0] > tries.txt   (~6 s a day), then paste the string into HARD_TRIES.
 const fs = require('fs'), vm = require('vm');
-const src = fs.readFileSync(__dirname + '/index.html', 'utf8');
+const src = fs.readFileSync(__dirname + '/sudoku.js', 'utf8');
 const cut = (a, b) => { const i = src.indexOf(a); return src.slice(i, src.indexOf(b, i)); };
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(cut('// --- Sudoku logic.', 'function findGrid') + cut('const DAILY =', 'const dayKey') +
+vm.runInContext(cut('// --- Sudoku logic.', '// Digits 1-9') + cut('const DAILY =', 'const dayKey') +
   ';this.m = { dailyTry, hint, reveal, BANDS, DAILY, NEW_TECH };', ctx);
 const { dailyTry, hint, reveal, BANDS, DAILY, NEW_TECH } = ctx.m;
 
