@@ -373,6 +373,44 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await wp.close();
   console.log(`X-Wing, Y-Wing: explained in parts with Dalje, marks and lines, the bubble under the board; answer right`);
 
+  // 1d. Tango: a fresh start is Igre. The daily is one board per date (one solution, finished by Savjet's steps
+  //     alone, at least 4 printed), solo; three alike turn red; solved → the card (Igre, Sudoku, share), the tile
+  //     and Povijest. Then Nova igra with Savjet: a wrong cell first, then every step right to the end.
+  await open(null);
+  assert.strictEqual(await page.evaluate(() => view), 'games', 'start: Igre');
+  assert.deepStrictEqual(await page.evaluate(() => [...Array(20)].map((_, d) => {
+    const a = tMake(`tango#2026-11-${d}`), g = a.giv.slice();
+    for (let h; (h = tHint(g, a.signs)); ) { if (h.v !== a.sol[h.k]) return 'wrong step'; g[h.k] = h.v; }
+    return [JSON.stringify(a) === JSON.stringify(tMake(`tango#2026-11-${d}`)), tSolve(a.giv, a.signs).length, g.join() === a.sol.join(), a.giv.filter(x => x >= 0).length >= 4].join();
+  }).filter(r => r !== 'true,1,true,true')), [], 'tango: same board per date, one solution, Savjet finishes it');
+  await page.click('#tileTango');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Tango · dnevni', true], 'tango daily: solo');
+  await page.evaluate(() => T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3).forEach(k => tCells[k].click()));
+  assert.ok(await page.$$eval('#tb .bad', x => x.length >= 3), 'tango: three alike are red');
+  await page.click('#tClearBtn');
+  await page.evaluate(() => tg.sol.forEach((v, k) => { if (tg.giv[k] < 0) { tCells[k].click(); if (v) tCells[k].click(); } }));
+  assert.deepStrictEqual(await page.evaluate(() => [solved.open, /^Riješeno za \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedLevel.textContent, solvedShare.textContent, lbHead.textContent]),
+    [true, true, 'Igre', 'Sudoku', 'Podijeli rezultat', 'Upiši se na današnju ljestvicu'], 'tango solved: the card');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tileTango.lastChild.className]), ['games', 'solved'], 'tango: the tile says solved');
+  await page.click('#tabPast');
+  assert.strictEqual(await page.$$eval('#tangoPast li', x => x.length), 1, 'tango: in Povijest');
+  await page.click('#tabGames');
+  await page.click('#tileTango');
+  await page.click('#tangoNew');
+  assert.deepStrictEqual(await page.evaluate(() => [tangoName.textContent, tHintBtn.hidden]), ['Tango · Nova igra', false], 'tango game: with Savjet');
+  await page.evaluate(() => { const k = tg.values.findIndex(v => v < 0); tCells[k].click(); if (tg.sol[k] === 0) tCells[k].click(); });
+  await page.click('#tHintBtn');
+  assert.strictEqual(await page.evaluate(() => tTip.title), 'Nešto ne štima', 'tango Savjet: a wrong cell first');
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent]), ['tango', 'Tango · Nova igra'], 'tango: a reload goes on');
+  assert.strictEqual(await page.evaluate(() => {
+    for (let i = 0; i < 40 && !tg.solvedAt; i++) { tHintBtn.click(); if (tTip.v >= 0 && tTip.v !== tg.sol[tTip.k]) return 'wrong step'; tTipDo.click(); }
+    return [solved.open, solvedNext.hidden, solvedShare.hidden].join();
+  }), 'true,false,true', 'tango game: Savjet to the end, then Nova igra');
+  await page.click('#solvedMenu');
+  console.log('tango: Igre first, a board per date (unique, Savjet finishes it), solo daily, red rules, card, tile, Povijest, game with Savjet');
+
   // 2. Handwritten progress: every entry is right, so nothing may be flagged wrong.
   const hwSolution = await page.evaluate(g => solve([...g].map(Number))[0].join(''), HW_GIVENS);
   assert.strictEqual(hwSolution, HW_FULL, 'handwritten puzzle solution');
@@ -478,6 +516,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   lp.on('pageerror', e => console.log('PAGE ERROR', e.message));
   await lp.goto('http://localhost:8768/');
   await lp.waitForFunction(() => !document.getElementById('liveBtn').disabled, { timeout: 120000 });
+  assert.strictEqual(await lp.evaluate(() => view), 'games', 'a fresh start: Igre');
+  await lp.click('#tileSudoku');   // Skeniraj lives on the sudoku's screen
   await lp.click('#liveBtn');
   await lp.waitForFunction(() => live?.frozen, { timeout: 30000 });
   await new Promise(r => setTimeout(r, 500));   // the picture slides up (liftGrid)
