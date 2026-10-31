@@ -172,6 +172,69 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
 #tTip .quiet { border-color: transparent; background: transparent; color: var(--muted); }
 #tangoNew { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 
+/* Križaljke: topics as cards (a small picture of the grid), the form, ideas; the wait while a topic is made.
+   The game: white cells with numbers, the clue in a bar, own keyboard (Č Ć Ž Š Đ, LJ NJ DŽ as one key). */
+#xw, #xwplay { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
+#xwHome { margin-left: -8px; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+#xwPick { display: flex; flex-direction: column; gap: var(--gap); padding-bottom: 24px; }
+#xwPick h2 { margin: 4px 0 -4px; color: var(--muted); font-size: 14px; font-weight: 600; }
+#xwCards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.xcard { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 128px; padding: 14px;
+  border: 0; border-radius: 14px; text-align: left; }
+.xcard b { display: block; font-size: 17px; font-weight: 700; line-height: 1.2; }
+.xcard small { color: var(--muted); font-size: 14px; font-weight: 400; }
+.xcard small.solved { color: var(--positive); }
+.xcard.plus { align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed var(--control); background: transparent; color: var(--hue); font-weight: 700; }
+.xcard.plus svg { width: 28px; height: 28px; }
+.xmini { display: grid; gap: 1px; width: 64px; }
+.xmini i { aspect-ratio: 1; }
+.xmini i.e { background: var(--raised); }
+.xmini i.f { background: var(--hue); }
+#xwForm { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 14px; background: var(--surface); }
+#xwForm label { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+#xwForm p { margin: -4px 0 0; color: var(--muted); font-size: 14px; }
+#xwTopic { height: 50px; padding: 0 14px; border: 1.5px solid var(--box); border-radius: 10px; background: var(--surface); color: var(--text); font: 400 17px var(--font); }
+#xwGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+#xwIdeas { display: flex; flex-wrap: wrap; gap: 8px; }
+#xwIdeas button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 99px; background: var(--raised); font-size: 15px; }
+#xwWait { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding-bottom: 15vh; text-align: center; }
+#xwWait > b { font-size: 22px; letter-spacing: -0.01em; }
+#xwWait > p { margin: 0; color: var(--muted); }
+.weave { display: grid; grid-template-columns: repeat(5, 22px); gap: 3px; }
+.weave i { width: 22px; height: 22px; border: 1.5px solid var(--box); background: var(--surface); opacity: 0; animation: weave 2.4s cubic-bezier(.23, 1, .32, 1) infinite; }
+.weave i.e { visibility: hidden; }
+@keyframes weave { 0%, 8% { opacity: 0; transform: scale(.9); } 20%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .weave i { animation: none; opacity: 1; } }
+#xwSteps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 15px; text-align: left; color: var(--muted); }
+#xwSteps li::before { content: "· "; color: var(--hue); }
+#xwSteps.at1 li:first-child, #xwSteps.at2 li:nth-child(-n+2) { color: var(--text); }
+#xwSteps.at1 li:first-child::before, #xwSteps.at2 li:nth-child(-n+2)::before { content: "✓ "; color: var(--positive); }
+#xwBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+#xg { display: grid; width: 100%; flex: none; }
+#xg > div { position: relative; min-width: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+#xg .l { margin: 0 -1px -1px 0; border: 1px solid var(--box); background: var(--surface); color: var(--pencil); font-size: 17px; font-weight: 500; cursor: pointer; }
+#xg .l.two { font-size: 12px; letter-spacing: -.5px; }
+#xg sup { position: absolute; left: 2px; top: 0; font-size: 8px; font-weight: 600; color: var(--muted); line-height: 1.2; }
+#xg .act { background: var(--area); }
+#xg .cur { background: var(--focus); box-shadow: inset 0 0 0 2px var(--hue); }
+#xg .ok { color: var(--text); font-weight: 700; }
+#xg .bad { color: var(--negative); background: var(--bad-bg); }
+#xwplay .controls { gap: 10px; }
+#xwClue { display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 4px; border-radius: 12px; background: var(--area); }
+#xwClue p { flex: 1; margin: 0; font-size: 16px; line-height: 1.3; }
+#xwClue p b { color: var(--hue); }
+#xwClue button { flex: none; width: 40px; min-height: 52px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 24px; }
+#xwKb { display: flex; flex-direction: column; gap: 6px; margin: 0 -10px; }
+#xwKb div { display: flex; justify-content: center; gap: 4px; }
+#xwKb button { flex: 1; max-width: 36px; min-height: 46px; padding: 0; border: 0; border-radius: 6px; background: var(--surface); font-size: 17px; transition: none; }
+#xwKb button:active { transform: none; background: var(--focus); }
+#xwKb button.w { max-width: 44px; background: var(--raised); font-size: 15px; }
+#xwKb button:last-child.w { max-width: 56px; }
+#xwDone { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+#xwDone b { color: var(--positive); font-size: 20px; }
+#xwAgain { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+
 /* Buttons: one filled primary per screen: Skeniraj in the menu, "Ovo je zadatak" before a task. */
 button, .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px;
   border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); color: var(--text);
@@ -323,7 +386,7 @@ canvas { max-width: 100%; }
   #menu .bar { grid-area: bar; }
   #home { grid-area: home; }
   .dock { grid-area: dock; align-self: start; position: static; margin: 0; padding: 0; border: 0; background: none; }
-  #games, #past, #tango { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
+  #games, #past, #tango, #xw, #xwplay { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
   #tabs { width: 520px; margin: auto auto 0; border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0; }
   /* The last row takes the board's spare height, so the controls keep their own (no stretched keys). */
   #game { grid-template-rows: auto auto 1fr; padding-top: 24px;

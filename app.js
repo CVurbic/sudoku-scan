@@ -1,5 +1,5 @@
-// Shared by every game: messages, the screens (Igre, Povijest, Sudoku, its game, Tango) and the tab bar,
-// "Instaliraj", the leaderboard, the clock. Loaded first, then sudoku.js, scan.js, tango.js; index.html starts the app.
+// Shared by every game: messages, the screens (Igre, Povijest, Sudoku, its game, Tango, Križaljke) and the tab bar,
+// "Instaliraj", the leaderboard, the clock. Loaded first, then sudoku.js, scan.js, tango.js, krizaljka.js; index.html starts the app.
 
 const $ = id => document.getElementById(id);
 // A message as a toast under the top bar (*word* = bold). Info goes by itself after ms (3 s, longer for
@@ -25,7 +25,7 @@ const loading = t => { $('loading').textContent = t; $('loading').hidden = !t; }
 // The screens: Igre and Povijest (on the tab bar), Sudoku's menu and its game, Tango. Going between them
 // animates nothing and keeps everything: a game stays on its board. Remembered, so a reload (or the app
 // opened again) comes back where the user was.
-const VIEWS = ['games', 'past', 'menu', 'game', 'tango'];
+const VIEWS = ['games', 'past', 'menu', 'game', 'tango', 'xw', 'xwplay'];
 let view = 'games';
 function go(v) {
   if (armed) arm(0);
@@ -36,7 +36,7 @@ function go(v) {
   $('tabGames').ariaCurrent = v === 'games' ? 'page' : null;
   $('tabPast').ariaCurrent = v === 'past' ? 'page' : null;
   say('');   // a message belongs to the screen it was said on
-  ({ games: showGames, past: showPast, menu: showMenu, game: placeBubble, tango: drawTango })[v]();
+  ({ games: showGames, past: showPast, menu: showMenu, game: placeBubble, tango: drawTango, xw: showXw, xwplay: drawXw })[v]();
 }
 $('tabGames').onclick = () => go('games');
 $('tabPast').onclick = () => go('past');
@@ -50,6 +50,7 @@ function showGames() {
   Object.assign($('tileSudoku').lastChild, { textContent: solved === 3 ? 'Dnevni riješen ✓' : `Dnevni ${solved} od 3`, className: solved === 3 ? 'solved' : '' });
   Object.assign($('tileTango').lastChild, { className: tDone ? 'solved' : '',
     textContent: tDone ? `✓ ${clock(t.elapsed)} · ${daysWord(streak(Object.keys(tangoDone())))}` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Dnevni čeka' });
+  xwTile();
 }
 // Povijest: Tango's solved dailies (newest first), then every sudoku.
 function showPast() {

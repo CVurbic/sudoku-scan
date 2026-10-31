@@ -2,7 +2,7 @@
 // shows up on the next load) and the cache answers only when the network can't.
 // ponytail: every response is cached again on each load; versioned cache-first if loads ever feel slow.
 const CACHE = 'sudoku-scan';
-const FILES = ['./', 'style.css', 'app.js', 'sudoku.js', 'scan.js', 'tango.js', 'manifest.webmanifest', 'vendor/tf.min.js', 'vendor/opencv.js',
+const FILES = ['./', 'style.css', 'app.js', 'sudoku.js', 'scan.js', 'tango.js', 'krizaljka.js', 'manifest.webmanifest', 'vendor/tf.min.js', 'vendor/opencv.js',
   'model/model.json', 'model/weights.bin', 'model/printed/model.json', 'model/printed/weights.bin',
   'fonts/schibsted-grotesk-latin.woff2', 'fonts/schibsted-grotesk-latin-ext.woff2',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];

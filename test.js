@@ -411,6 +411,36 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.click('#solvedMenu');
   console.log('tango: Igre first, a board per date (unique, Savjet finishes it), solo daily, red rules, card, tile, Povijest, game with Savjet');
 
+  // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
+  // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
+  const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');
+  await page.setRequestInterception(true);
+  const xwRoute = r => !r.url().includes('/functions/v1/krizaljka') ? r.continue()
+    : r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'apikey, content-type' },
+      body: r.method() === 'OPTIONS' ? '' : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
+  page.on('request', xwRoute);
+  await page.click('#tileXw');
+  await page.type('#xwTopic', 'knjigovodstvo');
+  await page.click('#xwGo');
+  await page.waitForFunction(() => view === 'xwplay');
+  assert.ok(await page.evaluate(() => xw.words.length >= 12 && xw.words.some(w => w.cells.includes('NJ'))), 'xw: woven, NJ one cell');
+  await page.evaluate(() => { for (const ch of xw.sel.cells) [...xwKb.querySelectorAll('button')].find(b => b.textContent === ch).click(); });
+  assert.strictEqual(await page.evaluate(() => xwSide.textContent.startsWith('1 od ')), true, 'xw: a word typed is solved');
+  await page.evaluate(() => { for (let i = xw.sel.cells.length; i--;) [...xwKb.querySelectorAll('button')].find(b => b.textContent === 'Đ').click(); });
+  assert.ok(await page.evaluate(() => document.querySelectorAll('#xg .bad').length > 0), 'xw: a wrong full word is red');
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [view, xwSide.textContent.startsWith('1 od ')]), ['xwplay', true], 'xw: a reload goes on');
+  assert.strictEqual(await page.evaluate(() => {
+    for (const w of xw.words) w.cells.forEach((ch, j) => { xw.sel = w; xw.k = w.at[j]; xwPut(ch); });   // cell by cell: the cursor skips filled ones
+    return [xwDone.hidden, xwKb.hidden].join();
+  }), 'false,true', 'xw: all solved → done');
+  await page.click('#xwBack');
+  await page.click('#xwHome');
+  assert.strictEqual(await page.evaluate(() => tileXw.lastChild.textContent), 'Knjigovodstvo ✓', 'xw: the tile says solved');
+  page.off('request', xwRoute);
+  await page.setRequestInterception(false);
+  console.log('križaljke: topic from the server, woven with NJ as one cell, keys, red wrong word, reload, done, tile');
+
   // 2. Handwritten progress: every entry is right, so nothing may be flagged wrong.
   const hwSolution = await page.evaluate(g => solve([...g].map(Number))[0].join(''), HW_GIVENS);
   assert.strictEqual(hwSolution, HW_FULL, 'handwritten puzzle solution');
