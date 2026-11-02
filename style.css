@@ -191,13 +191,20 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 .xmini i { aspect-ratio: 1; }
 .xmini i.e { background: var(--raised); }
 .xmini i.f { background: var(--hue); }
-#xwForm { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 14px; background: var(--surface); }
-#xwForm label { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
-#xwForm p { margin: -4px 0 0; color: var(--muted); font-size: 14px; }
-#xwTopic { height: 50px; padding: 0 14px; border: 1.5px solid var(--box); border-radius: 10px; background: var(--surface); color: var(--text); font: 400 17px var(--font); }
-#xwGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
-#xwIdeas { display: flex; flex-wrap: wrap; gap: 8px; }
-#xwIdeas button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 99px; background: var(--raised); font-size: 15px; }
+#xwForm { display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 0 0 14px; border: 1.5px solid var(--box); border-radius: 10px; background: var(--surface); color: var(--muted); }
+#xwTopic { flex: 1; min-width: 0; height: 100%; padding: 0 14px 0 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 400 17px var(--font); }
+#xwForm:focus-within { outline: 2px solid var(--hue); outline-offset: 2px; }
+.xlist { display: flex; flex-direction: column; border-radius: 14px; background: var(--surface); overflow: hidden; }
+.xlist:empty { display: none; }
+.xlist button { justify-content: space-between; gap: 12px; min-height: 58px; padding: 8px 14px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
+.xlist button:first-child { border-top: 0; }
+.xlist b, #xwGo b { display: block; font-size: 16px; font-weight: 600; }
+.xlist small, #xwGo small { color: var(--muted); font-size: 14px; font-weight: 400; white-space: nowrap; }
+.xlist small.solved { color: var(--positive); font-weight: 600; }
+#xwGo { justify-content: flex-start; gap: 12px; min-height: 58px; padding: 8px 14px; border: 1.5px dashed var(--control); border-radius: 14px; background: transparent; color: var(--hue); text-align: left; }
+#xwGo small { display: block; }
+#xwPop { display: grid; grid-auto-flow: column; grid-auto-columns: 42%; gap: var(--gap); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
+#xwPop .xcard { min-height: 96px; }
 #xwWait { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding-bottom: 15vh; text-align: center; }
 #xwWait > b { font-size: 22px; letter-spacing: -0.01em; }
 #xwWait > p { margin: 0; color: var(--muted); }

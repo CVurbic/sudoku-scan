@@ -417,11 +417,18 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.setRequestInterception(true);
   const xwRoute = r => !r.url().includes('/functions/v1/krizaljka') ? r.continue()
     : r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'apikey, content-type' },
-      body: r.method() === 'OPTIONS' ? '' : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
+      body: r.method() === 'OPTIONS' ? '' : r.method() === 'GET' ? JSON.stringify([{ kljuc: 'knjigovodstvo', tema: 'Knjigovodstvo', broj: 24, igrano: 1284 }, { kljuc: 'žabe', tema: 'Žabe', broj: 31, igrano: 2 }])
+        : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
   page.on('request', xwRoute);
   await page.click('#tileXw');
-  await page.type('#xwTopic', 'knjigovodstvo');
-  await page.click('#xwGo');
+  await page.waitForFunction(() => xwPop.childElementCount === 2);
+  assert.strictEqual(await page.evaluate(() => xwPop.firstChild.textContent), 'Knjigovodstvo1.284 igrača', 'xw: everyone\'s topics, most played first');
+  await page.type('#xwTopic', 'zab');
+  assert.deepStrictEqual(await page.evaluate(() => [xwFound.textContent, xwGo.hidden]), ['Žabe31 pojam2 igrača', false], 'xw: the field finds a topic without č ć ž, offers a new one');
+  await page.evaluate(() => { xwTopic.value = ''; });
+  await page.type('#xwTopic', 'Knjigovodstvo');
+  assert.strictEqual(await page.evaluate(() => xwGo.hidden), true, 'xw: no new topic when it is already there');
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => view === 'xwplay');
   assert.ok(await page.evaluate(() => xw.words.length >= 12 && xw.words.some(w => w.cells.includes('NJ'))), 'xw: woven, NJ one cell');
   await page.evaluate(() => { for (const ch of xw.sel.cells) [...xwKb.querySelectorAll('button')].find(b => b.textContent === ch).click(); });

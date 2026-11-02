@@ -63,11 +63,13 @@ function xwMake(terms, seed, tries = 600) {
 // game (C1: white cells, the clue in a bar, own keyboard with LJ NJ DŽ). Topics and games stay on the device:
 // xwTopics { key: { tema, pojmovi } }, xwGames { key: { seed, lay: [[term, row, col, dir]], rows, cols, fill, done, at } }. ---
 const XW_URL = 'https://fgllmnemukhouwyebfop.supabase.co/functions/v1/krizaljka';
-const XW_IDEAS = ['Svemir', 'Dinosauri', 'Grčki bogovi', 'Hrvatski otoci', 'Nogomet', 'Kuhinja', 'Glazbala', 'Harry Potter'];
 const XW_KEYS = ['E R T Z U I O P Š Đ', 'A S D F G H J K L Č Ć Ž', 'LJ NJ DŽ C V B N M ⌫'];
 const xwGet = k => { try { return JSON.parse(localStorage[k] || '{}'); } catch { return {}; } };
 const xwSet = (k, v) => { try { localStorage[k] = JSON.stringify(v); } catch {} };
 let xw = null, xwBusy = false;   // xw: the game on screen; xwBusy: a topic is being made
+let xwAll = null;   // everyone's topics from the server, most played first: [{ kljuc, tema, broj, igrano }]
+const xwFold = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');   // dino finds Dinosaurusi, zabe finds Žabe
+const xwN = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : n % 10 > 1 && n % 10 < 5 && (n % 100 < 12 || n % 100 > 14) ? few : many;
 
 // A game's words with their cells and numbers (reading order of the first cells, one number per start).
 function xwWords(key) {
@@ -88,12 +90,23 @@ function xwTile() {
     textContent: xwGet('xwTopics')[key].tema + (games[key].done ? ' ✓' : ` · ${n} od ${words.length}`) });
 }
 
-// Križaljke: a card per topic (a small picture of its grid, how far), "Nova tema", the form and ideas.
+// Križaljke: one field that searches every topic and offers a new one when nothing fits, the most played
+// topics of everyone (open at once, nothing to wait for), and your own as cards (a small picture of the grid, how far).
 function showXw() {
   $('xwPick').hidden = xwBusy;
   $('xwWait').hidden = !xwBusy;
+  if (!xwAll) { xwAll = []; xwLoad(); }
   const games = xwGet('xwGames'), topics = xwGet('xwTopics');
-  $('xwCards').replaceChildren($('xwPlus'), ...Object.keys(games).sort((a, b) => games[b].at - games[a].at).map(key => {
+  $('xwPopH').hidden = !xwAll.length;
+  $('xwPop').replaceChildren(...xwAll.slice(0, 10).map(t => {
+    const b = Object.assign(document.createElement('button'), { className: 'xcard', onclick: () => xwAsk(t.kljuc, t.tema) }), s = document.createElement('span');
+    s.append(Object.assign(document.createElement('b'), { textContent: t.tema }), xwPlayed(t, games));
+    b.append(s);
+    return b;
+  }));
+  xwFind();
+  $('xwMineH').hidden = !Object.keys(games).length;
+  $('xwCards').replaceChildren(...Object.keys(games).sort((a, b) => games[b].at - games[a].at).map(key => {
     const g = games[key], words = xwWords(key), n = words.filter(w => xwSolved(w, g.fill)).length;
     const b = Object.assign(document.createElement('button'), { className: 'xcard', onclick: () => xwOpen(key) });
     const mini = Object.assign(document.createElement('div'), { className: 'xmini' }), on = new Set(words.flatMap(w => w.at));
@@ -108,22 +121,47 @@ function showXw() {
     b.append(mini, t);
     return b;
   }));
-  if (!$('xwIdeas').childElementCount) $('xwIdeas').append(...XW_IDEAS.map(t => Object.assign(document.createElement('button'), {
-    type: 'button', textContent: t, onclick: () => { $('xwTopic').value = t; xwAsk(t); } })));
+}
+const xwPlayed = (t, games) => games[t.kljuc] ? Object.assign(document.createElement('small'), { textContent: 'Igrano ✓', className: 'solved' })
+  : Object.assign(document.createElement('small'), { textContent: `${t.igrano.toLocaleString('hr')} ${xwN(t.igrano, 'igrač', 'igrača', 'igrača')}` });
+async function xwLoad() {
+  try {
+    const res = await fetch(XW_URL, { headers: { apikey: LB_KEY } });
+    if (res.ok) xwAll = await res.json();
+  } catch {}   // offline: only your own topics
+  if (view === 'xw') showXw();
+}
+
+// What the field finds (your topics and everyone's), and "Složi novu" unless the topic is already there.
+function xwFind() {
+  const raw = $('xwTopic').value.trim(), q = xwFold(raw), mine = xwGet('xwTopics'), games = xwGet('xwGames');
+  const all = [...xwAll, ...Object.keys(mine).filter(k => !xwAll.some(t => t.kljuc === k)).map(k => ({ kljuc: k, tema: mine[k].tema, broj: mine[k].pojmovi.length, igrano: 1 }))];
+  const same = all.find(t => xwFold(t.kljuc) === q || xwFold(t.tema) === q);
+  $('xwFound').replaceChildren(...(q ? all.filter(t => xwFold(t.kljuc + ' ' + t.tema).includes(q)) : []).slice(0, 5).map(t => {
+    const b = Object.assign(document.createElement('button'), { onclick: () => xwAsk(t.kljuc, t.tema) }), s = document.createElement('span');
+    s.append(Object.assign(document.createElement('b'), { textContent: t.tema }), Object.assign(document.createElement('small'), { textContent: `${t.broj} ${xwN(t.broj, 'pojam', 'pojma', 'pojmova')}` }));
+    b.append(s, xwPlayed(t, games));
+    return b;
+  }));
+  $('xwGo').hidden = raw.length < 2 || !!same;
+  $('xwGo').querySelector('b').textContent = `Složi novu: „${raw}“`;
+  return same;
 }
 document.querySelectorAll('.weave i:not(.e)').forEach((i, n) => i.style.animationDelay = n * 0.08 + 's');   // the cells appear one by one
-$('xwPlus').onclick = () => $('xwTopic').focus();
-$('xwForm').onsubmit = e => { e.preventDefault(); xwAsk($('xwTopic').value); };
+$('xwTopic').oninput = xwFind;
+$('xwForm').onsubmit = e => { e.preventDefault(); const t = xwFind(); t ? xwAsk(t.kljuc, t.tema) : xwAsk($('xwTopic').value); };
+$('xwGo').onclick = () => xwAsk($('xwTopic').value);
 $('xwHome').onclick = () => go('games');
 $('tileXw').onclick = () => go('xw');
 
-// A topic: from the device if it was made before, else from the server (Claude, up to a minute the first time).
-async function xwAsk(raw) {
+// A topic: from the device if it was made before, else from the server (someone's topic at once; a new one
+// by Claude, up to a minute). The server knows a topic by its key (what was typed first), so that is what goes.
+async function xwAsk(raw, name) {
   const tema = raw.trim().replace(/\s+/g, ' '), key = tema.toLowerCase();
   if (tema.length < 2) return say('Upiši temu, npr. *svemir*.');
   if (xwGet('xwTopics')[key]) return xwGet('xwGames')[key] ? xwOpen(key) : xwNew(key);
   xwBusy = true;
-  $('xwWaitName').textContent = tema;
+  $('xwWaitName').textContent = name || tema;
   $('xwSteps').className = 'at1';
   showXw();
   try {
@@ -158,6 +196,7 @@ function xwOpen(key) {
   xw = { key, g, words, sel: words.find(w => !xwSolved(w, g.fill)) || words[0] };
   xw.k = xw.sel.at.find(k => !g.fill[k]) || xw.sel.at[0];
   try { localStorage.xwOn = key; } catch {}
+  $('xwTopic').value = '';
   go('xwplay');
 }
 const xwSave = () => { const games = xwGet('xwGames'); xw.g.at = Date.now(); games[xw.key] = xw.g; xwSet('xwGames', games); };
