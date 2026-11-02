@@ -454,13 +454,32 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
   assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo')]),
     ['flex', 'none', 3, true], 'rail: shown, no tab bar, Danas with the dailies and the crossword');
-  await page.click('#rail [data-v="tango"]');
+  await page.evaluate(() => rail.querySelector('[data-v="tango"]').click());   // not by position: the rail is still animating its width
   assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
-  await page.click('#rail [data-v="games"]');
+  await page.evaluate(() => rail.querySelector('[data-v="games"]').click());
   assert.strictEqual(await page.evaluate(() => document.body.classList.contains('railmini')), false, 'rail: open again after the game');
-  await page.click('#railFold');
+  await page.evaluate(() => $('railFold').click());
   await page.reload();
   assert.deepStrictEqual(await page.evaluate(() => [document.body.classList.contains('railmini'), rail.querySelector('[aria-current]').dataset.v]), [true, 'games'], 'rail: the fold is kept');
+  // The crossword on a big screen: every clue beside the grid, arrows, Tab, space, a clicked clue, N then J → NJ in one cell.
+  await page.evaluate(() => xwNew('knjigovodstvo'));
+  assert.deepStrictEqual(await page.evaluate(() => [xwA.children.length + xwD.children.length === xw.words.length, getComputedStyle(xwKb).display, getComputedStyle(xwA.parentNode).display]),
+    [true, 'none', 'block'], 'xw big: the clue lists, no keys on screen');
+  assert.strictEqual(await page.evaluate(() => {
+    const w = xw.words.find(w => w.dir === 'a'), [r, c] = w.at[0].split(',').map(Number);
+    xw.sel = w; xw.k = w.at[0]; drawXw();
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    return xw.k === `${r},${c + 1}` && xw.sel === w;
+  }), true, 'xw big: an arrow moves along the word');
+  assert.strictEqual(await page.evaluate(() => { const s = xw.sel; dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' })); return xw.sel === xw.words[xw.words.indexOf(s) + 1]; }), true, 'xw big: Tab → the next clue');
+  assert.strictEqual(await page.evaluate(() => { xwD.firstChild.click(); return xw.sel.dir === 'd' && xwD.firstChild.className === 'on'; }), true, 'xw big: a clicked clue is chosen');
+  assert.strictEqual(await page.evaluate(() => {
+    const w = xw.words.find(w => w.cells.indexOf('NJ') > 0), j = w.cells.indexOf('NJ');
+    xw.sel = w; xw.k = w.at[j]; drawXw();
+    for (const key of ['n', 'j']) dispatchEvent(new KeyboardEvent('keydown', { key }));
+    return xw.g.fill[w.at[j]];
+  }), 'NJ', 'xw big: N then J is NJ in one cell');
+  await page.evaluate(() => go('games'));
   await page.evaluate(() => localStorage.removeItem('railMini'));
   await page.setViewport({ width: 800, height: 600 });
   console.log('rail: from 1100px, Danas, folds in a game, the fold kept');

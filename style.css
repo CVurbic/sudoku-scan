@@ -237,6 +237,7 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 #xg .ok { color: var(--text); font-weight: 700; }
 #xg .bad { color: var(--negative); background: var(--bad-bg); }
 #xwplay .controls { gap: 10px; }
+.xwlist, #xwKeys { display: none; }   /* the clue lists and the keys line: big screens only */
 #xwClue { display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 4px; border-radius: 12px; background: var(--area); }
 #xwClue p { flex: 1; margin: 0; font-size: 16px; line-height: 1.3; }
 #xwClue p b { color: var(--hue); }
@@ -549,6 +550,30 @@ canvas { max-width: 100%; }
   #xwCols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
   #xwCols:has(> div:first-child > h2[hidden]) { grid-template-columns: 1fr; }   /* no topics of your own yet */
   #xwCards { grid-auto-flow: row; grid-template-columns: 1fr 1fr; margin: 0; padding: 0; overflow: visible; }
+
+  /* The game as in a newspaper: Vodoravno | grid | Okomito; the clue chosen is marked in its list (no clue bar),
+     typed on the computer's keyboard (no keys on screen). A cell as big as the height and width allow, at most 58px. */
+  #xwplay { max-width: 1320px; padding-bottom: 24px; }
+  #xwClue, #xwKb { display: none; }
+  #xwBoard { display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr); gap: 32px; align-items: start; }
+  #xg { --cell: min(58px, calc((100dvh - 170px) / var(--r)), calc((100vw - var(--rail) - 560px) / var(--c))); width: calc(var(--cell) * var(--c)); }
+  #xg .l { font-size: calc(var(--cell) * .48); }
+  #xg .l.two { font-size: calc(var(--cell) * .34); }
+  #xg sup { left: 3px; top: 1px; font-size: max(9px, calc(var(--cell) * .19)); }
+  .xwlist { display: block; max-height: calc(100dvh - 150px); overflow-y: auto; scrollbar-width: thin; }
+  .xwlist h3 { position: sticky; top: 0; margin: 0; padding: 0 8px 6px; background: var(--ground); color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .xwlist ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 1px; font-size: 14px; line-height: 1.35; }
+  .xwlist li { display: flex; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  .xwlist li:hover { background: var(--raised); }
+  .xwlist li b { flex: none; width: 20px; text-align: right; }
+  .xwlist li.on { background: var(--area); }
+  .xwlist li.cross { box-shadow: inset 3px 0 0 var(--hue); }
+  .xwlist li.done { color: var(--muted); }
+  .xwlist li.done span { text-decoration: line-through; text-decoration-color: var(--control); }
+  #xwplay .controls { align-items: center; }
+  #xwDone { width: min(100%, 420px); }
+  #xwKeys { display: block; margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
+  #xwKeys kbd { padding: 1px 6px; border: 1px solid var(--control); border-radius: 4px; font: 600 12px var(--font); }
 }
 @media (min-width: 1100px) and (prefers-reduced-motion: reduce) { body, #rail { transition: none; } }
 

@@ -212,6 +212,8 @@ function drawXw() {
   $('xwName').textContent = xwGet('xwTopics')[xw.key].tema;
   $('xwSide').textContent = `${n} od ${words.length}`;
   $('xg').style.gridTemplateColumns = `repeat(${g.cols}, minmax(0, 1fr))`;
+  $('xg').style.setProperty('--c', g.cols);   // the big screen sizes a cell from these
+  $('xg').style.setProperty('--r', g.rows);
   const nums = Object.fromEntries(words.map(w => [w.at[0], w.n]));
   $('xg').replaceChildren(...Array.from({ length: g.rows * g.cols }, (_, i) => {
     const k = ((i / g.cols) | 0) + ',' + (i % g.cols), d = document.createElement('div');
@@ -225,6 +227,18 @@ function drawXw() {
   $('xwClue').hidden = $('xwKb').hidden = g.done;
   $('xwDone').hidden = !g.done;
   $('xwClue').querySelector('p').replaceChildren(Object.assign(document.createElement('b'), { textContent: `${sel.n} ${sel.dir === 'a' ? '→' : '↓'} ` }), `${sel.clue} (${sel.cells.length})`);
+  // Every clue (shown from 1100px): the chosen one blue, the one crossing the cursor marked, solved ones struck through; a click goes to its word.
+  const cross = g.done ? null : words.find(w => w !== sel && w.at.includes(xw.k));
+  for (const [id, dir] of [['xwA', 'a'], ['xwD', 'd']]) {
+    $(id).replaceChildren(...words.filter(w => w.dir === dir).map(w => {
+      const li = document.createElement('li');
+      li.className = !g.done && w === sel ? 'on' : w === cross ? 'cross' : xwSolved(w, g.fill) ? 'done' : '';
+      li.append(Object.assign(document.createElement('b'), { textContent: w.n }), Object.assign(document.createElement('span'), { textContent: `${w.clue} (${w.cells.length})` }));
+      li.onclick = () => { if (g.done) return; xw.sel = w; xw.k = w.at.find(k => !g.fill[k]) || w.at[0]; drawXw(); };
+      return li;
+    }));
+    $(id).querySelector('.on')?.scrollIntoView({ block: 'nearest' });
+  }
   if (!$('xwKb').childElementCount) $('xwKb').append(...XW_KEYS.map(row => {
     const div = document.createElement('div');
     div.append(...row.split(' ').map(ch => Object.assign(document.createElement('button'), { textContent: ch, className: ch.length > 1 ? 'w' : '',
@@ -245,6 +259,7 @@ $('xg').onclick = e => {
 function xwPut(ch) {
   const { g, sel } = xw, i = sel.at.indexOf(xw.k);
   g.fill[xw.k] = ch;
+  xw.last = xw.k;
   if (xwSolved(sel, g.fill)) {   // word done: on to the next unsolved one
     const rest = xw.words.filter(w => !xwSolved(w, g.fill));
     g.done = !rest.length;
@@ -265,9 +280,37 @@ $('xwPrev').onclick = () => xwStep(-1);
 $('xwNext').onclick = () => xwStep(1);
 $('xwBack').onclick = () => go('xw');
 $('xwAgain').onclick = () => xwNew(xw.key);
-// A computer keyboard: letters and Backspace (ponytail: LJ/NJ/DŽ only from the on-screen keys).
+// Arrows: to the next letter cell that way, in the word running that way if there is one.
+function xwMove(dr, dc) {
+  let [r, c] = xw.k.split(',').map(Number), k;
+  do { r += dr; c += dc; k = r + ',' + c; } while (r >= 0 && c >= 0 && r < xw.g.rows && c < xw.g.cols && !xw.words.some(w => w.at.includes(k)));
+  if (!xw.words.some(w => w.at.includes(k))) return;
+  const mine = xw.words.filter(w => w.at.includes(k));
+  xw.sel = mine.find(w => w.dir === (dc ? 'a' : 'd')) || (mine.includes(xw.sel) ? xw.sel : mine[0]);
+  xw.k = k;
+  drawXw();
+}
+// Space: the other word through the cursor.
+function xwTurn() {
+  const other = xw.words.find(w => w !== xw.sel && w.at.includes(xw.k));
+  if (other) { xw.sel = other; drawXw(); }
+}
+// A computer keyboard: letters, Backspace, arrows, Tab (Shift+Tab back), space. L then J (N J, D Ž) right after
+// becomes LJ in that one cell when the cell holds LJ (ponytail: reads the answer for that, as the cell count already tells).
 addEventListener('keydown', e => {
   if (view !== 'xwplay' || xw.g.done || e.ctrlKey || e.metaKey || e.altKey) return;
+  const arrow = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] }[e.key];
+  if (arrow) { e.preventDefault(); return xwMove(...arrow); }
+  if (e.key === 'Tab') { e.preventDefault(); return xwStep(e.shiftKey ? -1 : 1); }
+  if (e.key === ' ') { e.preventDefault(); return xwTurn(); }
   if (e.key === 'Backspace') { e.preventDefault(); return xwBack(); }
-  if (/^[a-zčćžšđ]$/i.test(e.key)) xwPut(e.key.toUpperCase());
+  if (!/^[a-zčćžšđ]$/i.test(e.key)) return;
+  const ch = e.key.toUpperCase(), prev = xw.last, i = xw.sel.at.indexOf(xw.k), two = xw.g.fill[prev] + ch;
+  const answer = prev && xw.words.flatMap(w => w.at.map((k, j) => k === prev ? w.cells[j] : null)).find(Boolean);
+  if (['LJ', 'NJ', 'DŽ'].includes(two) && answer === two && (prev === xw.k || prev === xw.sel.at[i - 1])) {
+    xw.k = prev;
+    if (!xw.sel.at.includes(prev)) xw.sel = xw.words.find(w => w.at.includes(prev));
+    return xwPut(two);
+  }
+  xwPut(ch);
 });

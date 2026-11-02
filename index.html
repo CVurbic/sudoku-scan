@@ -157,11 +157,17 @@
     <button id="xwBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Križaljke</button>
   </div>
   <p class="gname"><b id="xwName"></b><span id="xwSide"></span></p>
-  <div id="xg"></div>
+  <div id="xwClue"><button id="xwPrev" aria-label="Prethodno pitanje">‹</button><p aria-live="polite"></p><button id="xwNext" aria-label="Sljedeće pitanje">›</button></div>
+  <!-- From 1100px: the clues beside the grid, as in a newspaper (no clue bar, no keyboard on screen). -->
+  <div id="xwBoard">
+    <div class="xwlist"><h3>Vodoravno</h3><ol id="xwA"></ol></div>
+    <div id="xg"></div>
+    <div class="xwlist"><h3>Okomito</h3><ol id="xwD"></ol></div>
+  </div>
   <div class="controls">
-    <div id="xwClue"><button id="xwPrev" aria-label="Prethodno pitanje">‹</button><p aria-live="polite"></p><button id="xwNext" aria-label="Sljedeće pitanje">›</button></div>
     <div id="xwKb"></div>
     <div id="xwDone" hidden><b>Riješeno ✓</b><button id="xwAgain">Nova križaljka na istu temu</button></div>
+    <p id="xwKeys">Tipkaj slova (LJ, NJ, DŽ se spoje sami) · <kbd>← → ↑ ↓</kbd> kroz mrežu · <kbd>Tab</kbd> sljedeće pitanje · <kbd>razmak</kbd> drugi smjer · klik na pitanje skače na riječ</p>
   </div>
 </section>
 
