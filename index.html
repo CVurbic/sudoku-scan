@@ -81,6 +81,22 @@
   </div>
 </dialog>
 
+<!-- From 1100px: a rail beside every screen (wide, or folded to icons; folded by itself in a game). -->
+<nav id="rail" aria-label="Igre">
+  <div class="rbrand">
+    <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
+    <span class="t">Igre</span>
+    <button id="railFold" aria-label="Suzi ili proširi traku" title="Suzi ili proširi traku ( [ )"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M9.5 5v14"/></svg></button>
+  </div>
+  <button data-v="games" title="Danas"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span class="t">Danas</span></button>
+  <hr>
+  <button data-v="menu" data-tile="tileSudoku" title="Sudoku"><span class="t">Sudoku</span><small></small></button>
+  <button data-v="tango" data-tile="tileTango" title="Tango"><span class="t">Tango</span><small></small></button>
+  <button data-v="xw" data-tile="tileXw" title="Križaljke"><span class="t">Križaljke</span><small></small></button>
+  <hr>
+  <button data-v="past" title="Povijest"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="t">Povijest</span></button>
+</nav>
+
 <section id="games" hidden>
   <header class="bar">
     <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
@@ -91,6 +107,19 @@
     <button id="tileSudoku" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg><b>Sudoku</b><small></small></button>
     <button id="tileTango" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 1v20M1 11h20" stroke="currentColor" stroke-width="1.2"/><rect x="3.2" y="3.2" width="5.6" height="5.6" rx=".8" fill="var(--hue)"/><circle cx="16" cy="6" r="3" fill="var(--hard)"/><circle cx="6" cy="16" r="3" fill="var(--hard)"/><rect x="13.2" y="13.2" width="5.6" height="5.6" rx=".8" fill="var(--hue)"/></svg><b>Tango</b><small></small></button>
     <button id="tileXw" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M2 3h6v6H2zM8 3h6v6H8zM14 3h6v6h-6zM8 9h6v6H8zM8 15h6v6H8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="9.6" y="10.6" width="2.8" height="2.8" fill="var(--hue)"/></svg><b>Križaljke</b><small></small></button>
+  </div>
+  <!-- Danas: Igre on a big screen (with the rail), the tiles as cards with today's state, the board and the last sudokus. -->
+  <div id="today">
+    <div class="dhead"><p id="dDate"></p><h1>Danas</h1></div>
+    <div class="dcards">
+      <div class="dcard"><div class="dtop" data-tile="tileSudoku"><b>Sudoku</b></div><ul id="dSudoku"></ul><button id="dSudokuGo" class="go"></button></div>
+      <div class="dcard"><div class="dtop" data-tile="tileTango"><b>Tango</b></div><ul id="dTango"></ul><button id="dTangoGo" class="go"></button></div>
+      <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
+    </div>
+    <div class="drow">
+      <div class="dpanel"><h2>Ljestvica · danas</h2><ul id="dRanks"></ul></div>
+      <div class="dpanel"><h2>Nedavno</h2><ul id="dRecent" class="hlist"></ul></div>
+    </div>
   </div>
 </section>
 

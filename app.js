@@ -37,6 +37,73 @@ function go(v) {
   $('tabPast').ariaCurrent = v === 'past' ? 'page' : null;
   say('');   // a message belongs to the screen it was said on
   ({ games: showGames, past: showPast, menu: showMenu, game: placeBubble, tango: drawTango, xw: showXw, xwplay: drawXw })[v]();
+  showRail();
+}
+
+// The rail (from 1100px, CSS): where you are, each game's state today, a dot where something waits.
+// Folded to icons by the button or [, kept; in a game it folds by itself and opens again after.
+const RAIL_ON = { games: 'games', past: 'past', menu: 'menu', game: 'menu', tango: 'tango', xw: 'xw', xwplay: 'xw' };
+const railMini = () => { try { return localStorage.railMini === '1'; } catch { return false; } };
+function showRail() {
+  document.body.classList.toggle('railmini', railMini() || ['game', 'tango', 'xwplay'].includes(view));
+  // days as it is (not loadDays(): that would swap the object under a daily being played)
+  const solved = (days?.date === dayKey() ? days.levels : []).filter(st => st?.solvedAt).length, t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt;
+  const games = xwGet('xwGames'), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0];
+  const xwText = key ? (games[key].done ? '✓' : `${xwWords(key).filter(w => xwSolved(w, games[key].fill)).length} od ${xwWords(key).length}`) : '';
+  const state = { menu: [solved === 3 ? '✓' : `${solved} od 3`, solved < 3], tango: [tDone ? '✓' : t?.date === dayKey() && t.elapsed ? 'u tijeku' : 'čeka', !tDone], xw: [xwText, false] };
+  for (const b of $('rail').querySelectorAll('[data-v]')) {
+    b.ariaCurrent = RAIL_ON[view] === b.dataset.v ? 'page' : null;
+    if (!state[b.dataset.v]) continue;
+    const [text, waits] = state[b.dataset.v];
+    Object.assign(b.querySelector('small'), { textContent: text, className: text === '✓' ? 'solved' : '' });
+    b.classList.toggle('waits', waits);
+  }
+}
+document.querySelectorAll('[data-tile]').forEach(el => el.prepend($(el.dataset.tile).firstChild.cloneNode(true)));   // the tiles' pictures
+$('rail').onclick = e => {
+  const v = e.target.closest('[data-v]')?.dataset.v;
+  if (v) v === 'tango' ? openTango() : go(v);
+};
+function railFold() {
+  const mini = !document.body.classList.contains('railmini');
+  if (!['game', 'tango', 'xwplay'].includes(view)) try { localStorage.railMini = mini ? '1' : '0'; } catch {}
+  document.body.classList.toggle('railmini', mini);
+}
+$('railFold').onclick = railFold;
+addEventListener('keydown', e => { if (e.key === '[' && !e.target.closest('input, textarea') && matchMedia('(min-width: 1100px)').matches) railFold(); });
+
+// Danas (Igre with the rail): each game's card with today's state and one button, the board's leaders, the last sudokus.
+let todayAsk = 0;
+function showToday() {
+  const li = (a, b, cls = '') => { const x = document.createElement('li'); x.append(...[a, b].map((t, i) => Object.assign(document.createElement('span'), { textContent: t, className: i ? cls : '' }))); return x; };
+  const dot = (el, color) => { el.firstChild.prepend(Object.assign(document.createElement('span'), { className: 'dot', style: `background: var(${color})` })); return el; };
+  $('dDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
+  const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt);
+  $('dSudoku').replaceChildren(...DAILY.map(([name], i) => dot(li(name, levelText(lv[i]), lv[i]?.solvedAt ? 'solved' : 'muted'), LEVELS[i][2])));
+  Object.assign($('dSudokuGo'), next < 0 ? { textContent: 'Nova igra', onclick: () => go('menu') } : { textContent: `Igraj ${DAILY[next][0].toLowerCase()}`, onclick: () => openDaily(next) });
+  const t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt, run = streak(Object.keys(tangoDone()));
+  $('dTango').replaceChildren(li('Dnevni', tDone ? `Riješeno za ${clock(t.elapsed)} ✓` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Čeka', tDone ? 'solved' : 'muted'),
+    ...run ? [li('Niz', daysWord(run) + ' zaredom')] : []);
+  Object.assign($('dTangoGo'), tDone ? { textContent: 'Nova igra', onclick: () => tangoGame() } : { textContent: 'Igraj dnevni', onclick: () => openTango() });
+  const games = xwGet('xwGames'), keys = Object.keys(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics');
+  $('dXw').replaceChildren(...keys.slice(0, 3).map(k => {
+    const w = xwWords(k), n = w.filter(x => xwSolved(x, games[k].fill)).length;
+    return li(topics[k].tema, games[k].done ? 'Riješeno ✓' : `${n} od ${w.length}`, games[k].done ? 'solved' : '');
+  }));
+  if (!keys.length) $('dXw').append(li('Tema po izboru', 'Složi prvu', 'muted'));
+  const open = keys.find(k => !games[k].done);
+  Object.assign($('dXwGo'), open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
+  const recent = saved().slice(0, 3);
+  $('dRecent').replaceChildren(...recent.length ? recent.map(historyItem) : [li('Još nema sudokua', '', 'muted')]);
+  // The board: today's fastest per daily (sudoku's three, Tango), asked anew each time (4 small requests).
+  const ask = ++todayAsk, colors = ['--easy', '--medium', '--hard', '--hue'];
+  Promise.all([0, 1, 2, 3].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
+    if (ask !== todayAsk) return;
+    $('dRanks').replaceChildren(...res.map((b, l) => {
+      const top = b?.rows[0], name = lvName(l)[0].toUpperCase() + lvName(l).slice(1);
+      return dot(li(top ? `${name} · ${top.children[1].textContent}` : name, !b ? 'Nije se učitalo' : top ? top.children[2].textContent : 'Još nitko', top ? 'time' : 'muted'), colors[l]);
+    }));
+  });
 }
 $('tabGames').onclick = () => go('games');
 $('tabPast').onclick = () => go('past');
@@ -51,7 +118,9 @@ function showGames() {
   Object.assign($('tileTango').lastChild, { className: tDone ? 'solved' : '',
     textContent: tDone ? `✓ ${clock(t.elapsed)} · ${daysWord(streak(Object.keys(tangoDone())))}` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Dnevni čeka' });
   xwTile();
+  if (matchMedia('(min-width: 1100px)').matches) showToday();
 }
+matchMedia('(min-width: 1100px)').onchange = () => view === 'games' && showGames();   // a window made wider gets Danas
 // Povijest: Tango's solved dailies (newest first), then every sudoku.
 function showPast() {
   const done = Object.entries(tangoDone()).sort((a, b) => a[0] < b[0] ? 1 : -1);

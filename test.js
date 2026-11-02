@@ -448,6 +448,22 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.setRequestInterception(false);
   console.log('križaljke: topic from the server, woven with NJ as one cell, keys, red wrong word, reload, done, tile');
 
+  // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
+  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo')]),
+    ['flex', 'none', 3, true], 'rail: shown, no tab bar, Danas with the dailies and the crossword');
+  await page.click('#rail [data-v="tango"]');
+  assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
+  await page.click('#rail [data-v="games"]');
+  assert.strictEqual(await page.evaluate(() => document.body.classList.contains('railmini')), false, 'rail: open again after the game');
+  await page.click('#railFold');
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [document.body.classList.contains('railmini'), rail.querySelector('[aria-current]').dataset.v]), [true, 'games'], 'rail: the fold is kept');
+  await page.evaluate(() => localStorage.removeItem('railMini'));
+  await page.setViewport({ width: 800, height: 600 });
+  console.log('rail: from 1100px, Danas, folds in a game, the fold kept');
+
   // 2. Handwritten progress: every entry is right, so nothing may be flagged wrong.
   const hwSolution = await page.evaluate(g => solve([...g].map(Number))[0].join(''), HW_GIVENS);
   assert.strictEqual(hwSolution, HW_FULL, 'handwritten puzzle solution');
