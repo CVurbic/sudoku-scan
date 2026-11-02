@@ -1,9 +1,12 @@
 // Claude writes the terms for a topic: { tema, pojmovi: [{ slova: ['K','NJ',…], trag }] }, cleaned here.
+// Then, in a second call (the first one already takes 70–90 s), the hints: trag2, the same answer said another, easier way.
 import Anthropic from "npm:@anthropic-ai/sdk";
 
 const CELL = /^(LJ|NJ|DŽ|[A-ZČĆŽŠĐ])$/;
+// An empty clue, or one with the answer as a word or starting one (REP may stand in REPTIL; DINOSAUR may not in DINOSAURA)
+const tells = (clue: string, w: string) => !clue.trim() || clue.toUpperCase().split(/[^A-ZČĆŽŠĐ]+/).some((x) => x === w || (w.length > 3 && x.startsWith(w)));
 const client = new Anthropic();   // ANTHROPIC_API_KEY from the function's secrets
-export const SYSTEM = `You write the word list for a Croatian crossword on a topic the user picks. Give about 40 terms, the ones someone who wants to know this topic should know, from easy to harder.
+export const SYSTEM = `You write the word list for a Croatian crossword on a topic the user picks. Give about 40 terms, the ones someone who wants to know this topic should know, ordered from the easiest (known to most people) to the hardest: the game takes its easy level from the first half and its hard level from the second.
 
 The terms belong to this topic specifically. At least three quarters are the topic's own names and terms: the people, characters, works, places, species, events, parts and technical words that someone outside the topic would not use. For a book, film, series, game or genre, that means its titles, characters, places, creatures and authors. A general word (a sword, an egg, a bird) goes in only when it is central to the topic, and then its clue says how it belongs to the topic.
 
@@ -25,17 +28,17 @@ export const FORMAT = { type: "json_schema", schema: {
   },
 } } as const;
 
-export type Pojam = { slova: string[]; trag: string };
+export type Pojam = { slova: string[]; trag: string; trag2?: string };
 
 // Returns the cleaned terms, or a message for the user in "greska" (status beside it).
 // Haiku 5.5 at high effort (Chris, 2. 11.: the fewest general words, a tenth of Sonnet's price): 55–70 s,
-// up to ~15k tokens with its thinking, so a stream with room above 16k (the function may run 150 s).
+// up to ~16k tokens with its thinking, so a stream with room (the function may run 150 s).
 export async function pojmovi(tema: string, model: string, effort: "low" | "medium" | "high" = "high", system = SYSTEM) {
   let msg;
   try {
     msg = await client.messages.stream({
       model,
-      max_tokens: 24000,
+      max_tokens: 32000,
       output_config: { effort, format: FORMAT },
       system,
       messages: [{ role: "user", content: "Tema: " + tema }],
@@ -57,11 +60,36 @@ export async function pojmovi(tema: string, model: string, effort: "low" | "medi
   const split = (c: string) => CELL.test(c) ? [c] : c.toUpperCase().match(/LJ|NJ|DŽ|./gu) ?? [];
   const clean = out.pojmovi.map((p) => ({ ...p, slova: p.slova.flatMap(split) })).filter(({ slova, trag }) => {
     const w = slova.join("");
-    if (slova.length < 2 || slova.length > 12 || !slova.every((c) => CELL.test(c)) || seen.has(w)) return false;
-    // the answer as a clue word, or starting one (REP may stand in REPTIL; DINOSAUR may not in DINOSAURA)
-    if (!trag.trim() || trag.toUpperCase().split(/[^A-ZČĆŽŠĐ]+/).some((x) => x === w || (w.length > 3 && x.startsWith(w)))) return false;
+    if (slova.length < 2 || slova.length > 12 || !slova.every((c) => CELL.test(c)) || seen.has(w) || tells(trag, w)) return false;
     seen.add(w);
     return true;
   });
   return { tema: out.tema || tema, pojmovi: clean, usage: msg.usage, poslano: out.pojmovi.length };
+}
+
+const HINTS = `You write hints for a Croatian crossword. You get its answers, each with its clue. For every answer write "trag2": a second clue, shown when the player asks for a hint. It is easier and comes from another side (what it looks like, where one meets it, a well-known example), in plain standard Croatian, at most 90 characters. It never contains the answer or a word from the same root, it is true, and it does not repeat the first clue. Keep the answers' order.`;
+const HINT_FORMAT = { type: "json_schema", schema: {
+  type: "object", additionalProperties: false, required: ["savjeti"],
+  properties: { savjeti: { type: "array", items: { type: "string" } } },
+} } as const;
+
+// The hints for a topic's terms, in their order ("" where a hint came out bad: that term then has none).
+export async function savjeti(tema: string, terms: Pojam[], model: string, effort: "low" | "medium" | "high" = "high") {
+  let msg;
+  try {
+    msg = await client.messages.stream({
+      model,
+      max_tokens: 32000,
+      output_config: { effort, format: HINT_FORMAT },
+      system: HINTS,
+      messages: [{ role: "user", content: `Tema: ${tema}\n` + terms.map((p, i) => `${i + 1}. ${p.slova.join("")}: ${p.trag}`).join("\n") }],
+    }).finalMessage();
+  } catch (e) {
+    console.error(e);
+    return { greska: "Savjeti trenutno ne rade.", status: 502 };
+  }
+  const text = msg.content.find((b) => b.type === "text");
+  if (msg.stop_reason !== "end_turn" || !text || text.type !== "text") return { greska: "Savjeti nisu stigli.", status: 502 };
+  const out = (JSON.parse(text.text) as { savjeti: string[] }).savjeti;
+  return { savjeti: terms.map((p, i) => { const h = (out[i] ?? "").trim(); return tells(h, p.slova.join("")) || h === p.trag ? "" : h; }), usage: msg.usage };
 }
