@@ -34,9 +34,9 @@
   <p>Tri nova sudokua svaki dan. Rješavaš sam, bez pomoći: crveno su samo brojevi koji se ponavljaju.
     Timer kreće kad stisneš Kreni i stoji dok si izvan aplikacije.</p>
   <div id="dailyLevels">
-    <button><span class="dot" style="background: var(--easy)"></span><b>Lagano</b><small></small></button>
-    <button><span class="dot" style="background: var(--medium)"></span><b>Srednje</b><small></small></button>
-    <button><span class="dot" style="background: var(--hard)"></span><b>Teško</b><small></small></button>
+    <button><span data-stairs="0"></span><b>Lagano</b><small></small></button>
+    <button><span data-stairs="1"></span><b>Srednje</b><small></small></button>
+    <button><span data-stairs="2"></span><b>Teško</b><small></small></button>
   </div>
   <div class="row"><button id="dailyCancel">Odustani</button><button id="dailyGo">Kreni</button></div>
 </dialog>
@@ -53,7 +53,7 @@
     <ol id="lbList" class="lblist"></ol>
   </div>
   <div class="row"><button id="solvedMenu" autofocus>Izbornik</button><button id="solvedNext" hidden>Nova igra</button><button id="solvedClose">Zatvori</button>
-    <button id="solvedLevel" hidden><span class="dot"></span><span></span></button>
+    <button id="solvedLevel" hidden><span data-stairs="0"></span><span></span></button>
     <button id="solvedShare" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></svg><span></span></button></div>
 </dialog>
 <dialog id="about" aria-labelledby="aboutTitle">
@@ -155,9 +155,12 @@
 <section id="xwplay" hidden>
   <div class="gbar">
     <button id="xwBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Križaljke</button>
+    <label id="xwLvBox"><span id="xwLvSt"></span><select id="xwLv" aria-label="Razina"><option value="0">Lagano</option><option value="1">Srednje</option><option value="2">Teško</option></select></label>
   </div>
   <p class="gname"><b id="xwName"></b><span id="xwSide"></span></p>
-  <div id="xwClue"><button id="xwPrev" aria-label="Prethodno pitanje">‹</button><p aria-live="polite"></p><button id="xwNext" aria-label="Sljedeće pitanje">›</button></div>
+  <div id="xwClue"><button id="xwPrev" aria-label="Prethodno pitanje">‹</button><p aria-live="polite"></p><button id="xwHint" hidden>Savjet</button><button id="xwNext" aria-label="Sljedeće pitanje">›</button></div>
+  <!-- Teško: once the grid is full, how many letters are wrong; where, only when asked. -->
+  <div id="xwCheck" hidden><span><b></b><small>Križaljka je puna, ali nešto ne štima.</small></span><button id="xwQuiet">Tražim sam</button><button id="xwShow">Pokaži gdje</button></div>
   <!-- From 1100px: the clues beside the grid, as in a newspaper (no clue bar, no keyboard on screen). -->
   <div id="xwBoard">
     <div class="xwlist"><h3>Vodoravno</h3><ol id="xwA"></ol></div>
@@ -166,7 +169,8 @@
   </div>
   <div class="controls">
     <div id="xwKb"></div>
-    <div id="xwDone" hidden><b>Riješeno ✓</b><button id="xwAgain">Nova križaljka na istu temu</button></div>
+    <div id="xwDone" hidden><span id="xwDoneSt"></span><b id="xwDoneT"></b><small id="xwDoneS"></small><button id="xwNextLv"></button><button id="xwAgain"></button></div>
+    <button id="xwHint2" hidden>Savjet <kbd>?</kbd></button>
     <p id="xwKeys">Tipkaj slova (LJ, NJ, DŽ se spoje sami) · <kbd>← → ↑ ↓</kbd> kroz mrežu · <kbd>Tab</kbd> sljedeće pitanje · <kbd>razmak</kbd> drugi smjer · klik na pitanje skače na riječ</p>
   </div>
 </section>
@@ -211,9 +215,9 @@
       <b>Nova igra</b>
       <small>Vježba: savjeti kad zapneš, bez kazne</small>
       <div id="newLevels">
-        <button><span class="dot" style="background: var(--easy)"></span>Lagano</button>
-        <button><span class="dot" style="background: var(--medium)"></span>Srednje</button>
-        <button><span class="dot" style="background: var(--hard)"></span>Teško</button>
+        <button><span data-stairs="0"></span>Lagano</button>
+        <button><span data-stairs="1"></span>Srednje</button>
+        <button><span data-stairs="2"></span>Teško</button>
       </div>
     </div>
     <h2 id="recentTitle">Nedavno</h2>
@@ -228,9 +232,9 @@
       </span>
     </div>
     <div id="ranks">
-      <div><b><span class="dot" style="background: var(--easy)"></span>Lagano<small></small></b><ol class="lblist"></ol></div>
-      <div><b><span class="dot" style="background: var(--medium)"></span>Srednje<small></small></b><ol class="lblist"></ol></div>
-      <div><b><span class="dot" style="background: var(--hard)"></span>Teško<small></small></b><ol class="lblist"></ol></div>
+      <div><b><span data-stairs="0"></span>Lagano<small></small></b><ol class="lblist"></ol></div>
+      <div><b><span data-stairs="1"></span>Srednje<small></small></b><ol class="lblist"></ol></div>
+      <div><b><span data-stairs="2"></span>Teško<small></small></b><ol class="lblist"></ol></div>
     </div>
     <div class="links"><button id="manualBtn">Upiši ručno</button><button id="aboutBtn">O aplikaciji</button></div>
   </div>

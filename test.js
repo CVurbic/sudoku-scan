@@ -418,6 +418,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   const xwRoute = r => !r.url().includes('/functions/v1/krizaljka') ? r.continue()
     : r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'apikey, content-type' },
       body: r.method() === 'OPTIONS' ? '' : r.method() === 'GET' ? JSON.stringify([{ kljuc: 'knjigovodstvo', tema: 'Knjigovodstvo', broj: 24, igrano: 1284 }, { kljuc: 'žabe', tema: 'Žabe', broj: 31, igrano: 2 }])
+        : r.postData().includes('savjeti') ? JSON.stringify({ savjeti: XW.map(w => 'Savjet za ' + w.length) })
         : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
   page.on('request', xwRoute);
   await page.click('#tileXw');
@@ -431,23 +432,40 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await page.evaluate(() => xwGo.hidden), true, 'xw: no new topic when it is already there');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => view === 'xwplay');
-  assert.ok(await page.evaluate(() => xw.words.length >= 12 && xw.words.some(w => w.cells.includes('NJ'))), 'xw: woven, NJ one cell');
+  assert.deepStrictEqual(await page.evaluate(() => [xw.lvl, xwLv.value, xw.g.cols <= 9 && xw.g.rows <= 11, xw.words.every(w => w.i < 12), xw.words.length >= 6]),
+    [0, '0', true, true, true], 'xw: a new topic starts at Lagano, a small grid of the easier half');
+  await page.waitForFunction(() => !xwHint.hidden);   // the hints come in the background
+  assert.strictEqual(await page.evaluate(() => { xwHint.click(); return xwClue.querySelector('em')?.textContent === xw.sel.hint && xwHint.hidden; }), true, 'xw: Savjet shows the second clue');
   await page.evaluate(() => { for (const ch of xw.sel.cells) [...xwKb.querySelectorAll('button')].find(b => b.textContent === ch).click(); });
   assert.strictEqual(await page.evaluate(() => xwSide.textContent.startsWith('1 od ')), true, 'xw: a word typed is solved');
   await page.evaluate(() => { for (let i = xw.sel.cells.length; i--;) [...xwKb.querySelectorAll('button')].find(b => b.textContent === 'Đ').click(); });
   assert.ok(await page.evaluate(() => document.querySelectorAll('#xg .bad').length > 0), 'xw: a wrong full word is red');
   await page.reload();
   assert.deepStrictEqual(await page.evaluate(() => [view, xwSide.textContent.startsWith('1 od ')]), ['xwplay', true], 'xw: a reload goes on');
-  assert.strictEqual(await page.evaluate(() => {
+  assert.deepStrictEqual(await page.evaluate(() => {
     for (const w of xw.words) w.cells.forEach((ch, j) => { xw.sel = w; xw.k = w.at[j]; xwPut(ch); });   // cell by cell: the cursor skips filled ones
-    return [xwDone.hidden, xwKb.hidden].join();
-  }), 'false,true', 'xw: all solved → done');
+    return [xwDone.hidden, xwKb.hidden, xwDoneT.textContent, xwDoneS.textContent.endsWith('· 1 savjet'), xwNextLv.textContent, !!xwDoneSt.querySelector('.stairs .grow')];
+  }), [false, true, 'Lagano riješeno ✓', true, 'Sljedeće: Srednje', true], 'xw: all solved → done, the hint counted, on to Srednje');
+  await page.click('#xwNextLv');
+  assert.deepStrictEqual(await page.evaluate(() => [xw.lvl, xw.words.length >= 10, xw.words.some(w => w.cells.includes('NJ')), [...xwLv.options].map(o => o.textContent).join()]),
+    [1, true, true, 'Lagano ✓,Srednje,Teško'], 'xw: Srednje, all the terms (NJ one cell), Lagano ticked');
+  // Teško: nothing on the way; the grid full with one wrong letter → "Ima 1 krivo slovo", where only when asked; no Savjet.
+  await page.evaluate(() => { xwLv.value = '2'; xwLv.dispatchEvent(new Event('change')); });
+  assert.deepStrictEqual(await page.evaluate(() => {
+    const last = xw.words.at(-1), k = last.at[0];
+    for (const w of xw.words) w.cells.forEach((ch, j) => { xw.sel = w; xw.k = w.at[j]; if (w.at[j] !== k) xwPut(ch); });
+    xw.sel = last; xw.k = k; xwPut(last.cells[0] === 'Đ' ? 'A' : 'Đ');
+    const r = [xw.lvl, xwCheck.hidden, xwCheck.querySelector('b').textContent, document.querySelectorAll('#xg .bad, #xg .ok').length, xwHint.hidden];
+    xwShow.click();
+    return [...r, document.querySelectorAll('#xg .bad').length];
+  }), [2, false, 'Ima 1 krivo slovo', 0, true, 1], 'xw Teško: the count once full, nothing marked until "Pokaži gdje", no Savjet');
   await page.click('#xwBack');
+  assert.strictEqual(await page.evaluate(() => xwCards.firstChild.querySelectorAll('.stairs i.f').length), 3, 'xw: the card shows Teško as three stairs');
   await page.click('#xwHome');
-  assert.strictEqual(await page.evaluate(() => tileXw.lastChild.textContent), 'Knjigovodstvo ✓', 'xw: the tile says solved');
+  assert.ok(await page.evaluate(() => tileXw.lastChild.textContent.startsWith('Knjigovodstvo · Teško ')), 'xw: the tile says the topic and its level');
   page.off('request', xwRoute);
   await page.setRequestInterception(false);
-  console.log('križaljke: topic from the server, woven with NJ as one cell, keys, red wrong word, reload, done, tile');
+  console.log('križaljke: topic from the server, levels (Lagano small and easy, Srednje, Teško checked at the end), Savjet, NJ as one cell, keys, red wrong word, reload, done → next level, tile');
 
   // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
   await page.setViewport({ width: 1440, height: 900 });

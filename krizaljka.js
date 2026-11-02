@@ -1,11 +1,15 @@
 // --- Moja križaljka: the user names a topic, the server (Supabase function "krizaljka", Claude) sends
 // back terms with clues, and the grid is woven here: each term goes where it crosses the most, no two
 // letters side by side outside a word, many random orders, the densest kept. LJ, NJ and DŽ are one cell. ---
-const XW_W = 11, XW_H = 13;
+// The levels: name and grid size (width, height). Lagano weaves the easier half of the terms (the server lists them
+// easy first): 9–11 words. Srednje all of them: 12–15. Teško all of them in a bigger grid: 14–20 words, no hints,
+// and it says only once the grid is full what is wrong. (Teško from the harder half alone came out no bigger than Srednje.)
+const XW_LV = [['Lagano', 9, 11], ['Srednje', 11, 13], ['Teško', 13, 15]];
+const xwLvTerms = (terms, lvl) => lvl === 0 ? terms.slice(0, Math.ceil(terms.length / 2)) : terms;
 const xwCells = w => w.toUpperCase().match(/LJ|NJ|DŽ|./gu);   // when the server sends no cells of its own
 
 // One try: terms in this order, each placed at its best crossing. Returns the placed terms and the size.
-function xwWeave(order, r) {
+function xwWeave(order, r, W, H) {
   const g = new Map(), placed = [];   // "row,col" → { ch, a: across word here?, d: down word here? }
   const at = (y, x) => g.get(y + ',' + x);
   let r0 = 0, r1 = 0, c0 = 0, c1 = 0;
@@ -37,7 +41,7 @@ function xwWeave(order, r) {
         const y0 = dir === 'd' ? y - i : y, x0 = dir === 'a' ? x - i : x, cross = fits(w, y0, x0, dir);
         if (cross < 1) continue;
         const h = Math.max(r1, y0 + (dir === 'd' ? w.length - 1 : 0)) - Math.min(r0, y0) + 1, wd = Math.max(c1, x0 + (dir === 'a' ? w.length - 1 : 0)) - Math.min(c0, x0) + 1;
-        if (h > XW_H || wd > XW_W) continue;
+        if (h > H || wd > W) continue;
         const score = cross * 100 - h * wd / 10 + r();
         if (!best || score > best.score) best = { score, y0, x0, dir };
       }
@@ -48,12 +52,12 @@ function xwWeave(order, r) {
   return { placed: placed.map(p => ({ ...p, r: p.r - r0, c: p.c - c0 })), rows: r1 - r0 + 1, cols: c1 - c0 + 1, crossings };
 }
 
-// terms: [{ cells: ['K','NJ',…], clue }]. The same seed gives the same grid.
-function xwMake(terms, seed, tries = 600) {
+// terms: [{ cells: ['K','NJ',…], clue }], in a grid of at most W × H. The same seed gives the same grid.
+function xwMake(terms, seed, W = 11, H = 13, tries = 600) {
   const r = rng(seed);
   let best = null;
   for (let i = 0; i < tries; i++) {
-    const res = xwWeave(shuffle(terms.slice(), r), r), val = res.placed.length * 1000 + res.crossings * 10 - res.rows * res.cols / 20;
+    const res = xwWeave(shuffle(terms.slice(), r), r, W, H), val = res.placed.length * 1000 + res.crossings * 10 - res.rows * res.cols / 20;
     if (!best || val > best.val) best = { ...res, val };
   }
   return best;
@@ -61,7 +65,8 @@ function xwMake(terms, seed, tries = 600) {
 
 // --- The screens: Križaljke (your topics as cards, a new one below, the wait while it is made) and the
 // game (C1: white cells, the clue in a bar, own keyboard with LJ NJ DŽ). Topics and games stay on the device:
-// xwTopics { key: { tema, pojmovi } }, xwGames { key: { seed, lay: [[term, row, col, dir]], rows, cols, fill, done, at } }. ---
+// xwTopics { key: { tema, pojmovi: [{ slova, trag, trag2? }] } }, xwGames { key: { lvl, at, l: [a game per level or null] } },
+// a game { seed, lay: [[term, row, col, dir]], rows, cols, fill, done, hints: [term], show, quiet }. ---
 const XW_URL = 'https://fgllmnemukhouwyebfop.supabase.co/functions/v1/krizaljka';
 const XW_KEYS = ['E R T Z U I O P Š Đ', 'A S D F G H J K L Č Ć Ž', 'LJ NJ DŽ C V B N M ⌫'];
 const xwGet = k => { try { return JSON.parse(localStorage[k] || '{}'); } catch { return {}; } };
@@ -71,10 +76,26 @@ let xwAll = null;   // everyone's topics from the server, most played first: [{ 
 const xwFold = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');   // dino finds Dinosaurusi, zabe finds Žabe
 const xwN = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : n % 10 > 1 && n % 10 < 5 && (n % 100 < 12 || n % 100 > 14) ? few : many;
 
+// Every topic's games; a game kept from before the levels is its Srednje.
+const xwGames = () => {
+  const all = xwGet('xwGames');
+  for (const k in all) if (all[k].lay) all[k] = { lvl: 1, at: all[k].at, l: [null, all[k], null] };
+  return all;
+};
+// Where a topic stands: its level, that level's game and words, how many solved, and which levels are done.
+function xwProgress(key, games = xwGames()) {
+  const t = games[key], g = t.l[t.lvl], words = g ? xwWords(key, g) : [];
+  const n = words.filter(w => t.lvl === 2 ? w.at.every(k => g.fill[k]) : xwSolved(w, g.fill)).length;   // Teško counts full words: right ones would tell
+  return { lvl: t.lvl, g, words, n, done: !!g?.done, solved: t.l.map(x => !!x?.done) };
+}
+// "Lagano ✓ · Srednje · 4 od 17": the levels done, then where the topic is now.
+const xwLvText = p => [...p.solved.map((d, i) => d && i !== p.lvl ? XW_LV[i][0] + ' ✓' : ''),
+  `${XW_LV[p.lvl][0]}${p.done ? ' ✓' : ` · ${p.n} od ${p.words.length}`}`].filter(Boolean).join(' · ');
+
 // A game's words with their cells and numbers (reading order of the first cells, one number per start).
-function xwWords(key) {
-  const g = xwGet('xwGames')[key], terms = xwGet('xwTopics')[key].pojmovi;
-  const words = g.lay.map(([i, r, c, dir]) => ({ cells: terms[i].slova, clue: terms[i].trag, dir,
+function xwWords(key, g) {
+  const terms = xwGet('xwTopics')[key].pojmovi;
+  const words = g.lay.map(([i, r, c, dir]) => ({ i, cells: terms[i].slova, clue: terms[i].trag, hint: terms[i].trag2, dir,
     at: terms[i].slova.map((_, j) => (r + (dir === 'd' ? j : 0)) + ',' + (c + (dir === 'a' ? j : 0))) }));
   const starts = [...new Set(words.map(w => w.at[0]))].sort((a, b) => { const [ra, ca] = a.split(','), [rb, cb] = b.split(','); return ra - rb || ca - cb; });
   words.forEach(w => w.n = starts.indexOf(w.at[0]) + 1);
@@ -83,11 +104,11 @@ function xwWords(key) {
 const xwSolved = (w, fill) => w.at.every((k, j) => fill[k] === w.cells[j]);
 
 function xwTile() {
-  const games = xwGet('xwGames'), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0];
+  const games = xwGames(), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0];
   if (!key) return Object.assign($('tileXw').lastChild, { textContent: 'Odaberi temu', className: '' });
-  const words = xwWords(key), n = words.filter(w => xwSolved(w, games[key].fill)).length;
-  Object.assign($('tileXw').lastChild, { className: games[key].done ? 'solved' : '',
-    textContent: xwGet('xwTopics')[key].tema + (games[key].done ? ' ✓' : ` · ${n} od ${words.length}`) });
+  const p = xwProgress(key, games);
+  Object.assign($('tileXw').lastChild, { className: p.done ? 'solved' : '',
+    textContent: `${xwGet('xwTopics')[key].tema} · ${XW_LV[p.lvl][0]}` + (p.done ? ' ✓' : ` ${p.n} od ${p.words.length}`) });
 }
 
 // Križaljke: one field that searches every topic and offers a new one when nothing fits, the most played
@@ -96,7 +117,7 @@ function showXw() {
   $('xwPick').hidden = xwBusy;
   $('xwWait').hidden = !xwBusy;
   if (!xwAll) { xwAll = []; xwLoad(); }
-  const games = xwGet('xwGames'), topics = xwGet('xwTopics');
+  const games = xwGames(), topics = xwGet('xwTopics');
   $('xwPopH').hidden = !xwAll.length;
   $('xwPop').replaceChildren(...xwAll.slice(0, 10).map((t, i) => xwRow(t, games, i + 1)));
   $('xwChips').replaceChildren(...xwAll.slice(0, matchMedia('(min-width: 1100px)').matches ? 6 : 4).map(t =>
@@ -104,7 +125,7 @@ function showXw() {
   xwFind();
   $('xwMineH').hidden = !Object.keys(games).length;
   $('xwCards').replaceChildren(...Object.keys(games).sort((a, b) => games[b].at - games[a].at).map(key => {
-    const g = games[key], words = xwWords(key), n = words.filter(w => xwSolved(w, g.fill)).length;
+    const p = xwProgress(key, games), { g, words } = p;
     const b = Object.assign(document.createElement('button'), { className: 'xcard', onclick: () => xwOpen(key) });
     const mini = Object.assign(document.createElement('div'), { className: 'xmini' }), on = new Set(words.flatMap(w => w.at));
     mini.style.gridTemplateColumns = `repeat(${g.cols}, 1fr)`;
@@ -112,10 +133,11 @@ function showXw() {
       const k = r + ',' + c;
       mini.append(Object.assign(document.createElement('i'), { className: !on.has(k) ? '' : g.fill[k] ? 'f' : 'e' }));
     }
-    const t = document.createElement('span');
+    const top = Object.assign(document.createElement('span'), { className: 'xtop' }), t = document.createElement('span');
+    top.append(mini, stairs(p.lvl, true));
     t.append(Object.assign(document.createElement('b'), { textContent: topics[key].tema }),
-      Object.assign(document.createElement('small'), { textContent: g.done ? 'Riješeno ✓' : `${n} od ${words.length}`, className: g.done ? 'solved' : '' }));
-    b.append(mini, t);
+      Object.assign(document.createElement('small'), { textContent: xwLvText(p) }));
+    b.append(top, t);
     return b;
   }));
 }
@@ -138,7 +160,7 @@ async function xwLoad() {
 
 // What the field finds (your topics and everyone's), and "Složi novu" unless the topic is already there.
 function xwFind() {
-  const raw = $('xwTopic').value.trim(), q = xwFold(raw), mine = xwGet('xwTopics'), games = xwGet('xwGames');
+  const raw = $('xwTopic').value.trim(), q = xwFold(raw), mine = xwGet('xwTopics'), games = xwGames();
   const all = [...xwAll, ...Object.keys(mine).filter(k => !xwAll.some(t => t.kljuc === k)).map(k => ({ kljuc: k, tema: mine[k].tema, broj: mine[k].pojmovi.length, igrano: 1 }))];
   const same = all.find(t => xwFold(t.kljuc) === q || xwFold(t.tema) === q);
   $('xwFound').replaceChildren(...(q ? all.filter(t => xwFold(t.kljuc + ' ' + t.tema).includes(q)) : []).slice(0, 5).map(t => xwRow(t, games)));
@@ -159,7 +181,7 @@ $('tileXw').onclick = () => go('xw');
 async function xwAsk(raw, name) {
   const tema = raw.trim().replace(/\s+/g, ' '), key = tema.toLowerCase();
   if (tema.length < 2) return say('Upiši temu, npr. *svemir*.');
-  if (xwGet('xwTopics')[key]) return xwGet('xwGames')[key] ? xwOpen(key) : xwNew(key);
+  if (xwGet('xwTopics')[key]) return xwGames()[key] ? xwOpen(key) : xwNew(key, 0);
   xwBusy = true;
   $('xwWaitName').textContent = name || tema;
   $('xwSteps').className = 'at1';
@@ -173,7 +195,7 @@ async function xwAsk(raw, name) {
     xwSet('xwTopics', topics);
     $('xwSteps').className = 'at2';
     await new Promise(r => setTimeout(r, 50));   // let the step show before the grid is woven
-    xwNew(key);
+    xwNew(key, 0);   // a new topic starts at Lagano
   } catch (e) {
     xwBusy = false;
     if (view === 'xw') showXw();
@@ -181,36 +203,87 @@ async function xwAsk(raw, name) {
   }
 }
 
-// A new grid from the topic's terms (a new seed each time: other terms, other crossings).
-function xwNew(key) {
-  const terms = xwGet('xwTopics')[key].pojmovi.map((p, i) => ({ cells: p.slova, i })), seed = Date.now() % 2147483647;
-  const res = xwMake(terms, seed), games = xwGet('xwGames');
-  games[key] = { seed, lay: res.placed.map(p => [p.t.i, p.r, p.c, p.dir]), rows: res.rows, cols: res.cols, fill: {}, done: false, at: Date.now() };
+// A new grid for a level of the topic (a new seed each time: other terms, other crossings).
+function xwNew(key, lvl = xwGames()[key]?.lvl ?? 0) {
+  const all = xwGet('xwTopics')[key].pojmovi.map((p, i) => ({ cells: p.slova, i })), seed = Date.now() % 2147483647;
+  const [, W, H] = XW_LV[lvl], res = xwMake(xwLvTerms(all, lvl), seed, W, H), games = xwGames();
+  const t = games[key] ||= { lvl, at: 0, l: [null, null, null] };
+  t.l[lvl] = { seed, lay: res.placed.map(p => [p.t.i, p.r, p.c, p.dir]), rows: res.rows, cols: res.cols, fill: {}, done: false, hints: [] };
   xwSet('xwGames', games);
   xwBusy = false;
-  xwOpen(key);
+  xwOpen(key, lvl);
 }
 
-function xwOpen(key) {
-  const g = xwGet('xwGames')[key], words = xwWords(key);
-  xw = { key, g, words, sel: words.find(w => !xwSolved(w, g.fill)) || words[0] };
+// A topic at a level (its own level when none is given; a level not played yet gets its grid first).
+function xwOpen(key, lvl) {
+  const games = xwGames(), t = games[key];
+  lvl ??= t.lvl;
+  if (!t.l[lvl]) return xwNew(key, lvl);
+  t.lvl = lvl;
+  t.at = Date.now();
+  xwSet('xwGames', games);
+  const g = t.l[lvl], words = xwWords(key, g);
+  xw = { key, lvl, g, words, sel: words.find(w => !xwSolved(w, g.fill)) || words[0] };
   xw.k = xw.sel.at.find(k => !g.fill[k]) || xw.sel.at[0];
   try { localStorage.xwOn = key; } catch {}
   $('xwTopic').value = '';
   go('xwplay');
+  xwHints(key);
 }
-const xwSave = () => { const games = xwGet('xwGames'); xw.g.at = Date.now(); games[xw.key] = xw.g; xwSet('xwGames', games); };
+const xwSave = () => { const games = xwGames(); games[xw.key].l[xw.lvl] = xw.g; games[xw.key].at = Date.now(); xwSet('xwGames', games); };
 
+// The hints (Savjet) come from the server once per topic, in the background: written the first time (under a
+// minute), kept with the terms after. Until they are here, or offline, the game just has no Savjet button.
+const xwHintAsk = new Set();
+async function xwHints(key) {
+  const topics = xwGet('xwTopics');
+  if (xwHintAsk.has(key) || topics[key].pojmovi.every(p => 'trag2' in p)) return;
+  xwHintAsk.add(key);
+  try {
+    const res = await fetch(XW_URL, { method: 'POST', headers: { apikey: LB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ tema: key, savjeti: true }) });
+    const data = await res.json();
+    if (!res.ok || !data.savjeti) throw 0;
+    const now = xwGet('xwTopics');
+    now[key].pojmovi.forEach((p, i) => p.trag2 = data.savjeti[i] || '');
+    xwSet('xwTopics', now);
+    if (view === 'xwplay' && xw.key === key) { xw.words = xwWords(key, xw.g); xw.sel = xw.words.find(w => w.i === xw.sel.i && w.dir === xw.sel.dir); drawXw(); }
+  } catch { xwHintAsk.delete(key); }   // asked again next time the topic opens
+}
+
+// Teško tells nothing on the way: no word turns bold or red; once the grid is full it says how many letters are
+// wrong ("Pokaži gdje" marks them). Lagano and Srednje show a solved word bold and a full wrong word's letters red.
+const xwFull = (w, fill) => w.at.every(k => fill[k]);
 function drawXw() {
-  const { g, words, sel } = xw, cell = {}, solved = new Set(), bad = new Set();
+  const { g, words, sel, lvl } = xw, hard = lvl === 2, cell = {}, solved = new Set(), bad = new Set();
   for (const w of words) {
     w.at.forEach((k, j) => cell[k] = w.cells[j]);
-    if (xwSolved(w, g.fill)) w.at.forEach(k => solved.add(k));
-    else if (w.at.every(k => g.fill[k])) w.at.forEach((k, j) => g.fill[k] !== w.cells[j] && bad.add(k));   // a full word, wrong: show where
+    if (hard) { if (g.show) w.at.forEach((k, j) => g.fill[k] && g.fill[k] !== w.cells[j] && bad.add(k)); }
+    else if (xwSolved(w, g.fill)) w.at.forEach(k => solved.add(k));
+    else if (xwFull(w, g.fill)) w.at.forEach((k, j) => g.fill[k] !== w.cells[j] && bad.add(k));   // a full word, wrong: show where
   }
-  const n = words.filter(w => xwSolved(w, g.fill)).length;
+  const n = words.filter(w => hard ? xwFull(w, g.fill) : xwSolved(w, g.fill)).length, full = words.every(w => xwFull(w, g.fill));
+  const wrong = Object.keys(cell).filter(k => g.fill[k] !== cell[k]).length;
   $('xwName').textContent = xwGet('xwTopics')[xw.key].tema;
-  $('xwSide').textContent = `${n} od ${words.length}`;
+  $('xwSide').textContent = `${n} od ${words.length}` + (hard ? ' popunjeno' : '');
+  $('xwLvSt').replaceChildren(stairs(lvl));
+  $('xwLv').value = lvl;
+  [...$('xwLv').options].forEach((o, i) => o.textContent = XW_LV[i][0] + (xwGames()[xw.key].l[i]?.done ? ' ✓' : ''));
+  $('xwCheck').hidden = !hard || g.done || !full || g.quiet;
+  $('xwCheck').querySelector('b').textContent = `Ima ${wrong} ${xwN(wrong, 'krivo slovo', 'kriva slova', 'krivih slova')}`;
+  $('xwShow').hidden = !!g.show;
+  // Savjet: on Lagano and Srednje, once the topic's hints are here; a word's hint stays shown once asked.
+  const hinted = new Set(g.hints || []);
+  $('xwHint').hidden = $('xwHint2').hidden = hard || g.done || !sel.hint || hinted.has(sel.i);
+  if (g.done) {
+    const st = Object.assign(document.createElement('span'), { className: 'xdst' });
+    st.append(stairs(lvl, true, true));
+    $('xwDoneSt').replaceChildren(st);
+    $('xwDoneT').textContent = `${XW_LV[lvl][0]} riješeno ✓`;
+    $('xwDoneS').textContent = `${words.length} ${xwN(words.length, 'pojam', 'pojma', 'pojmova')}` + (hinted.size ? ` · ${hinted.size} ${xwN(hinted.size, 'savjet', 'savjeta', 'savjeta')}` : '');
+    $('xwNextLv').hidden = lvl === 2;
+    if (lvl < 2) $('xwNextLv').textContent = `Sljedeće: ${XW_LV[lvl + 1][0]}`;
+    $('xwAgain').textContent = `Ponovo ${XW_LV[lvl][0].toLowerCase()} (nova mreža)`;
+  }
   $('xg').style.gridTemplateColumns = `repeat(${g.cols}, minmax(0, 1fr))`;
   $('xg').style.setProperty('--c', g.cols);   // the big screen sizes a cell from these
   $('xg').style.setProperty('--r', g.rows);
@@ -226,14 +299,17 @@ function drawXw() {
   }));
   $('xwClue').hidden = $('xwKb').hidden = g.done;
   $('xwDone').hidden = !g.done;
-  $('xwClue').querySelector('p').replaceChildren(Object.assign(document.createElement('b'), { textContent: `${sel.n} ${sel.dir === 'a' ? '→' : '↓'} ` }), `${sel.clue} (${sel.cells.length})`);
+  $('xwClue').querySelector('p').replaceChildren(Object.assign(document.createElement('b'), { textContent: `${sel.n} ${sel.dir === 'a' ? '→' : '↓'} ` }), `${sel.clue} (${sel.cells.length})`,
+    ...hinted.has(sel.i) ? [Object.assign(document.createElement('em'), { textContent: sel.hint })] : []);
   // Every clue (shown from 1100px): the chosen one blue, the one crossing the cursor marked, solved ones struck through; a click goes to its word.
   const cross = g.done ? null : words.find(w => w !== sel && w.at.includes(xw.k));
   for (const [id, dir] of [['xwA', 'a'], ['xwD', 'd']]) {
     $(id).replaceChildren(...words.filter(w => w.dir === dir).map(w => {
       const li = document.createElement('li');
-      li.className = !g.done && w === sel ? 'on' : w === cross ? 'cross' : xwSolved(w, g.fill) ? 'done' : '';
-      li.append(Object.assign(document.createElement('b'), { textContent: w.n }), Object.assign(document.createElement('span'), { textContent: `${w.clue} (${w.cells.length})` }));
+      li.className = !g.done && w === sel ? 'on' : w === cross ? 'cross' : !hard && xwSolved(w, g.fill) ? 'done' : '';
+      const s = Object.assign(document.createElement('span'), { textContent: `${w.clue} (${w.cells.length})` });
+      if (hinted.has(w.i)) s.append(Object.assign(document.createElement('em'), { textContent: w.hint }));
+      li.append(Object.assign(document.createElement('b'), { textContent: w.n }), s);
       li.onclick = () => { if (g.done) return; xw.sel = w; xw.k = w.at.find(k => !g.fill[k]) || w.at[0]; drawXw(); };
       return li;
     }));
@@ -257,12 +333,13 @@ $('xg').onclick = e => {
   drawXw();
 };
 function xwPut(ch) {
-  const { g, sel } = xw, i = sel.at.indexOf(xw.k);
+  const { g, sel } = xw, i = sel.at.indexOf(xw.k), over = xw.lvl === 2 ? xwFull : xwSolved;   // Teško moves on when a word is full, not right
   g.fill[xw.k] = ch;
   xw.last = xw.k;
-  if (xwSolved(sel, g.fill)) {   // word done: on to the next unsolved one
-    const rest = xw.words.filter(w => !xwSolved(w, g.fill));
-    g.done = !rest.length;
+  g.quiet = false;   // a change: the count of wrong letters may speak again
+  g.done = xw.words.every(w => xwSolved(w, g.fill));
+  if (over(sel, g.fill)) {   // word done: on to the next one still open
+    const rest = xw.words.filter(w => !over(w, g.fill));
     if (rest.length) { xw.sel = rest.find(w => w.n > sel.n) || rest[0]; xw.k = xw.sel.at.find(k => !g.fill[k]) || xw.sel.at[0]; }
   } else xw.k = sel.at.slice(i + 1).find(k => !g.fill[k]) ?? sel.at[Math.min(i + 1, sel.at.length - 1)];
   xwSave();
@@ -272,6 +349,7 @@ function xwBack() {
   const { g, sel } = xw, i = sel.at.indexOf(xw.k);
   if (!g.fill[xw.k] && i > 0) xw.k = sel.at[i - 1];
   delete g.fill[xw.k];
+  g.quiet = false;
   xwSave();
   drawXw();
 }
@@ -279,7 +357,19 @@ const xwStep = d => { const i = xw.words.indexOf(xw.sel), w = xw.words[(i + d + 
 $('xwPrev').onclick = () => xwStep(-1);
 $('xwNext').onclick = () => xwStep(1);
 $('xwBack').onclick = () => go('xw');
-$('xwAgain').onclick = () => xwNew(xw.key);
+$('xwAgain').onclick = () => xwNew(xw.key, xw.lvl);
+$('xwNextLv').onclick = () => xwOpen(xw.key, xw.lvl + 1);
+$('xwLv').onchange = () => xwOpen(xw.key, +$('xwLv').value);
+// Savjet: the chosen word's second clue, shown under the first (and counted on the solved card).
+function xwHintUse() {
+  if (xw.lvl === 2 || xw.g.done || !xw.sel.hint) return;
+  xw.g.hints = [...new Set([...(xw.g.hints || []), xw.sel.i])];
+  xwSave();
+  drawXw();
+}
+$('xwHint').onclick = $('xwHint2').onclick = xwHintUse;
+$('xwQuiet').onclick = () => { xw.g.quiet = true; xwSave(); drawXw(); };
+$('xwShow').onclick = () => { xw.g.show = true; xwSave(); drawXw(); };
 // Arrows: to the next letter cell that way, in the word running that way if there is one.
 function xwMove(dr, dc) {
   let [r, c] = xw.k.split(',').map(Number), k;
@@ -304,6 +394,7 @@ addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); return xwStep(e.shiftKey ? -1 : 1); }
   if (e.key === ' ') { e.preventDefault(); return xwTurn(); }
   if (e.key === 'Backspace') { e.preventDefault(); return xwBack(); }
+  if (e.key === '?') return xwHintUse();
   if (!/^[a-zčćžšđ]$/i.test(e.key)) return;
   const ch = e.key.toUpperCase(), prev = xw.last, i = xw.sel.at.indexOf(xw.k), two = xw.g.fill[prev] + ch;
   const answer = prev && xw.words.flatMap(w => w.at.map((k, j) => k === prev ? w.cells[j] : null)).find(Boolean);

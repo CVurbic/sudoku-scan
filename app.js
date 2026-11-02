@@ -40,6 +40,18 @@ function go(v) {
   showRail();
 }
 
+// Stairs: the sign of a level everywhere, 1, 2 or 3 bars in green, yellow, orange (Lagano, Srednje, Teško).
+// grow: the level's own bar fills once (only on a solved card: rare, so it may please).
+function stairs(lvl, big, grow) {
+  const s = Object.assign(document.createElement('span'), { className: 'stairs' + (big ? ' big' : '') });
+  s.role = 'img';
+  s.ariaLabel = ['Lagano', 'Srednje', 'Teško'][lvl];
+  s.style.setProperty('--c', `var(${['--easy', '--medium', '--hard'][lvl]})`);
+  s.append(...[0, 1, 2].map(j => Object.assign(document.createElement('i'), { className: (j <= lvl ? 'f' : '') + (grow && j === lvl ? ' grow' : '') })));
+  return s;
+}
+document.querySelectorAll('[data-stairs]').forEach(el => el.replaceWith(stairs(+el.dataset.stairs)));   // the markup's level signs
+
 // The rail (from 1100px, CSS): where you are, each game's state today, a dot where something waits.
 // Folded to icons by the button or [, kept; in a game it folds by itself and opens again after.
 const RAIL_ON = { games: 'games', past: 'past', menu: 'menu', game: 'menu', tango: 'tango', xw: 'xw', xwplay: 'xw' };
@@ -48,8 +60,8 @@ function showRail() {
   document.body.classList.toggle('railmini', railMini() || ['game', 'tango', 'xwplay'].includes(view));
   // days as it is (not loadDays(): that would swap the object under a daily being played)
   const solved = (days?.date === dayKey() ? days.levels : []).filter(st => st?.solvedAt).length, t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt;
-  const games = xwGet('xwGames'), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0];
-  const xwText = key ? (games[key].done ? '✓' : `${xwWords(key).filter(w => xwSolved(w, games[key].fill)).length} od ${xwWords(key).length}`) : '';
+  const games = xwGames(), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0], p = key && xwProgress(key, games);
+  const xwText = p ? (p.done ? '✓' : `${p.n} od ${p.words.length}`) : '';
   const state = { menu: [solved === 3 ? '✓' : `${solved} od 3`, solved < 3], tango: [tDone ? '✓' : t?.date === dayKey() && t.elapsed ? 'u tijeku' : 'čeka', !tDone], xw: [xwText, false] };
   for (const b of $('rail').querySelectorAll('[data-v]')) {
     b.ariaCurrent = RAIL_ON[view] === b.dataset.v ? 'page' : null;
@@ -76,32 +88,34 @@ addEventListener('keydown', e => { if (e.key === '[' && !e.target.closest('input
 let todayAsk = 0;
 function showToday() {
   const li = (a, b, cls = '') => { const x = document.createElement('li'); x.append(...[a, b].map((t, i) => Object.assign(document.createElement('span'), { textContent: t, className: i ? cls : '' }))); return x; };
-  const dot = (el, color) => { el.firstChild.prepend(Object.assign(document.createElement('span'), { className: 'dot', style: `background: var(${color})` })); return el; };
+  // A row's sign: a sudoku level's stairs, or Tango's own picture (it has one daily, no levels)
+  const dot = (el, l) => { el.firstChild.prepend(l < 3 ? stairs(l) : Object.assign($('tileTango').firstChild.cloneNode(true), { classList: 'tmark' })); return el; };
   $('dDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
   const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt);
-  $('dSudoku').replaceChildren(...DAILY.map(([name], i) => dot(li(name, levelText(lv[i]), lv[i]?.solvedAt ? 'solved' : 'muted'), LEVELS[i][2])));
+  $('dSudoku').replaceChildren(...DAILY.map(([name], i) => dot(li(name, levelText(lv[i]), lv[i]?.solvedAt ? 'solved' : 'muted'), i)));
   Object.assign($('dSudokuGo'), next < 0 ? { textContent: 'Nova igra', onclick: () => go('menu') } : { textContent: `Igraj ${DAILY[next][0].toLowerCase()}`, onclick: () => openDaily(next) });
   const t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt, run = streak(Object.keys(tangoDone()));
   $('dTango').replaceChildren(li('Dnevni', tDone ? `Riješeno za ${clock(t.elapsed)} ✓` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Čeka', tDone ? 'solved' : 'muted'),
     ...run ? [li('Niz', daysWord(run) + ' zaredom')] : []);
   Object.assign($('dTangoGo'), tDone ? { textContent: 'Nova igra', onclick: () => tangoGame() } : { textContent: 'Igraj dnevni', onclick: () => openTango() });
-  const games = xwGet('xwGames'), keys = Object.keys(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics');
+  const games = xwGames(), keys = Object.keys(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics');
   $('dXw').replaceChildren(...keys.slice(0, 3).map(k => {
-    const w = xwWords(k), n = w.filter(x => xwSolved(x, games[k].fill)).length;
-    return li(topics[k].tema, games[k].done ? 'Riješeno ✓' : `${n} od ${w.length}`, games[k].done ? 'solved' : '');
+    const p = xwProgress(k, games), row = li(topics[k].tema, p.done ? `${XW_LV[p.lvl][0]} ✓` : `${p.n} od ${p.words.length}`, p.done ? 'solved' : '');
+    row.firstChild.prepend(stairs(p.lvl));
+    return row;
   }));
   if (!keys.length) $('dXw').append(li('Tema po izboru', 'Složi prvu', 'muted'));
-  const open = keys.find(k => !games[k].done);
+  const open = keys.find(k => !xwProgress(k, games).done);
   Object.assign($('dXwGo'), open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
   const recent = saved().slice(0, 3);
   $('dRecent').replaceChildren(...recent.length ? recent.map(historyItem) : [li('Još nema sudokua', '', 'muted')]);
   // The board: today's fastest per daily (sudoku's three, Tango), asked anew each time (4 small requests).
-  const ask = ++todayAsk, colors = ['--easy', '--medium', '--hard', '--hue'];
+  const ask = ++todayAsk;
   Promise.all([0, 1, 2, 3].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
     if (ask !== todayAsk) return;
     $('dRanks').replaceChildren(...res.map((b, l) => {
       const top = b?.rows[0], name = lvName(l)[0].toUpperCase() + lvName(l).slice(1);
-      return dot(li(top ? `${name} · ${top.children[1].textContent}` : name, !b ? 'Nije se učitalo' : top ? top.children[2].textContent : 'Još nitko', top ? 'time' : 'muted'), colors[l]);
+      return dot(li(top ? `${name} · ${top.children[1].textContent}` : name, !b ? 'Nije se učitalo' : top ? top.children[2].textContent : 'Još nitko', top ? 'time' : 'muted'), l);
     }));
   });
 }

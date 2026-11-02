@@ -458,7 +458,7 @@ function showMenu() {
   loadDays();
   $('homeDays').replaceChildren(...DAILY.map(([name], i) => {
     const s = document.createElement('span');
-    s.append(Object.assign(document.createElement('span'), { className: 'dot', style: `background: var(${LEVELS[i][2]})` }), name,
+    s.append(stairs(i), name,
       Object.assign(document.createElement('small'), { textContent: levelText(days.levels[i]) }));
     return s;
   }));
@@ -1001,7 +1001,7 @@ function solvedButtons() {
   $('solvedLevel').hidden = next === undefined;
   if (next !== undefined) {
     $('solvedLevel').dataset.lvl = next;
-    $('solvedLevel').firstChild.style.background = `var(${LEVELS[next][2]})`;
+    $('solvedLevel').firstChild.replaceWith(stairs(next));
     $('solvedLevel').lastChild.textContent = DAILY[next][0];
   }
   $('solvedShare').hidden = !task.daily;

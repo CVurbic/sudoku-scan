@@ -248,9 +248,37 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 #xwKb button:active { transform: none; background: var(--focus); }
 #xwKb button.w { max-width: 44px; background: var(--raised); font-size: 15px; }
 #xwKb button:last-child.w { max-width: 56px; }
-#xwDone { display: flex; flex-direction: column; gap: 10px; text-align: center; }
-#xwDone b { color: var(--positive); font-size: 20px; }
-#xwAgain { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+#xwDone { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 18px; border-radius: 16px; background: var(--surface); text-align: center; }
+#xwDone b { color: var(--positive); font-size: 22px; }
+#xwDone small { margin-top: -6px; color: var(--muted); font-size: 14px; }
+.xdst { display: flex; justify-content: center; }
+#xwNextLv { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+#xwAgain { border-color: transparent; background: var(--raised); font-weight: 600; }
+#xwClue #xwHint { width: auto; min-height: 34px; padding: 0 12px; border-radius: 99px; background: var(--surface); color: var(--hue); font-size: 14px; font-weight: 600; }
+#xwClue em, .xwlist em { display: block; margin-top: 4px; color: var(--hue); font-style: italic; }   /* the hint, under its clue */
+.xtop { display: flex; align-items: flex-start; justify-content: space-between; width: 100%; }
+/* The level: its stairs and a plain select to change it */
+#xwLvBox { position: relative; display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 0 26px 0 12px; min-height: 40px; border-radius: 99px; background: var(--raised); }
+#xwLv { appearance: none; border: 0; background: transparent; color: var(--text); font: 600 14px var(--font); cursor: pointer; }
+#xwLvBox::after { content: "▾"; position: absolute; right: 11px; color: var(--muted); font-size: 11px; pointer-events: none; }
+/* Teško, the grid full: how many letters are wrong */
+#xwCheck { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--negative); }
+#xwCheck > span { flex: 1 1 200px; }
+#xwCheck b { display: block; color: var(--negative); }
+#xwCheck small { color: var(--muted); font-size: 14px; }
+#xwCheck button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--raised); font-size: 14px; font-weight: 600; }
+#xwCheck #xwShow { background: var(--primary); color: var(--on-primary); }
+#xwHint2 { display: none; }   /* the hint button of the big screen (the phone has it in the clue bar) */
+/* Stairs: the sign of a level, 1, 2 or 3 bars in its colour (--c); the solved card fills the level bar once */
+.stairs { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; flex: none; }
+.stairs i { width: 5px; border-radius: 1px; background: var(--control); transform-origin: bottom; }
+.stairs i:nth-child(1) { height: 40%; } .stairs i:nth-child(2) { height: 70%; } .stairs i:nth-child(3) { height: 100%; }
+.stairs i.f { background: var(--c); }
+.stairs.big { height: 26px; gap: 4px; }
+.stairs.big i { width: 8px; border-radius: 2px; }
+.stairs i.grow { animation: grow 220ms cubic-bezier(.23, 1, .32, 1) 400ms both; }
+@keyframes grow { from { transform: scaleY(.35); background: var(--control); } }
+@media (prefers-reduced-motion: reduce) { .stairs i.grow { animation: none; } }
 
 /* Buttons: one filled primary per screen: Skeniraj in the menu, "Ovo je zadatak" before a task. */
 button, .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px;
@@ -527,7 +555,7 @@ canvas { max-width: 100%; }
   #today ul:not(.hlist) { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 15px; }
   #today li:not(:has(.hrow)) { display: flex; justify-content: space-between; gap: 8px; }
   #today li > span:first-child { display: flex; align-items: center; gap: 8px; }
-  #today .dot { width: 9px; height: 9px; }
+  #today .tmark { width: 16px; height: 16px; flex: none; }   /* Tango on the board: its picture, small */
   #today .muted { color: var(--muted); }
   #today .solved { color: var(--positive); }
   #today .time { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -556,7 +584,7 @@ canvas { max-width: 100%; }
   #xwplay { max-width: 1320px; padding-bottom: 24px; }
   #xwClue, #xwKb { display: none; }
   #xwBoard { display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr); gap: 32px; align-items: start; }
-  #xg { --cell: min(58px, calc((100dvh - 170px) / var(--r)), calc((100vw - var(--rail) - 560px) / var(--c))); width: calc(var(--cell) * var(--c)); }
+  #xg { --cell: min(58px, calc((100dvh - var(--xtop, 170px)) / var(--r)), calc((100vw - var(--rail) - 560px) / var(--c))); width: calc(var(--cell) * var(--c)); }
   #xg .l { font-size: calc(var(--cell) * .48); }
   #xg .l.two { font-size: calc(var(--cell) * .34); }
   #xg sup { left: 3px; top: 1px; font-size: max(9px, calc(var(--cell) * .19)); }
@@ -572,6 +600,9 @@ canvas { max-width: 100%; }
   .xwlist li.done span { text-decoration: line-through; text-decoration-color: var(--control); }
   #xwplay .controls { align-items: center; }
   #xwDone { width: min(100%, 420px); }
+  #xwplay:has(#xwCheck:not([hidden])) { --xtop: 250px; }   /* the count of wrong letters takes room above the grid */
+  #xwHint2:not([hidden]) { display: inline-flex; gap: 8px; min-height: 40px; padding: 0 16px; border: 0; border-radius: 99px; background: var(--area); color: var(--hue); font-weight: 600; }
+  #xwHint2 kbd { padding: 0 6px; border: 1px solid currentColor; border-radius: 4px; font: 600 12px var(--font); }
   #xwKeys { display: block; margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
   #xwKeys kbd { padding: 1px 6px; border: 1px solid var(--control); border-radius: 4px; font: 600 12px var(--font); }
 }
