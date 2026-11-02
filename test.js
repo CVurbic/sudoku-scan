@@ -422,7 +422,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   page.on('request', xwRoute);
   await page.click('#tileXw');
   await page.waitForFunction(() => xwPop.childElementCount === 2);
-  assert.strictEqual(await page.evaluate(() => xwPop.firstChild.textContent), 'Knjigovodstvo1.284 igrača', 'xw: everyone\'s topics, most played first');
+  assert.deepStrictEqual(await page.evaluate(() => [xwPop.firstChild.textContent, xwChips.childElementCount, xwChips.hidden]),
+    ['1Knjigovodstvo24 pojma1.284 igrača', 2, false], 'xw: everyone\'s topics ranked, quick picks');
   await page.type('#xwTopic', 'zab');
   assert.deepStrictEqual(await page.evaluate(() => [xwFound.textContent, xwGo.hidden]), ['Žabe31 pojam2 igrača', false], 'xw: the field finds a topic without č ć ž, offers a new one');
   await page.evaluate(() => { xwTopic.value = ''; });

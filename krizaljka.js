@@ -98,12 +98,9 @@ function showXw() {
   if (!xwAll) { xwAll = []; xwLoad(); }
   const games = xwGet('xwGames'), topics = xwGet('xwTopics');
   $('xwPopH').hidden = !xwAll.length;
-  $('xwPop').replaceChildren(...xwAll.slice(0, 10).map(t => {
-    const b = Object.assign(document.createElement('button'), { className: 'xcard', onclick: () => xwAsk(t.kljuc, t.tema) }), s = document.createElement('span');
-    s.append(Object.assign(document.createElement('b'), { textContent: t.tema }), xwPlayed(t, games));
-    b.append(s);
-    return b;
-  }));
+  $('xwPop').replaceChildren(...xwAll.slice(0, 10).map((t, i) => xwRow(t, games, i + 1)));
+  $('xwChips').replaceChildren(...xwAll.slice(0, matchMedia('(min-width: 1100px)').matches ? 6 : 4).map(t =>
+    Object.assign(document.createElement('button'), { type: 'button', textContent: t.tema, onclick: () => xwAsk(t.kljuc, t.tema) })));
   xwFind();
   $('xwMineH').hidden = !Object.keys(games).length;
   $('xwCards').replaceChildren(...Object.keys(games).sort((a, b) => games[b].at - games[a].at).map(key => {
@@ -124,6 +121,13 @@ function showXw() {
 }
 const xwPlayed = (t, games) => games[t.kljuc] ? Object.assign(document.createElement('small'), { textContent: 'Igrano ✓', className: 'solved' })
   : Object.assign(document.createElement('small'), { textContent: `${t.igrano.toLocaleString('hr')} ${xwN(t.igrano, 'igrač', 'igrača', 'igrača')}` });
+// A topic as a row (in the search, and in Popularno with its place n): title, terms, players or "Igrano ✓".
+function xwRow(t, games, n) {
+  const b = Object.assign(document.createElement('button'), { onclick: () => xwAsk(t.kljuc, t.tema) }), s = document.createElement('span');
+  s.append(Object.assign(document.createElement('b'), { textContent: t.tema }), Object.assign(document.createElement('small'), { textContent: `${t.broj} ${xwN(t.broj, 'pojam', 'pojma', 'pojmova')}` }));
+  b.append(...n ? [Object.assign(document.createElement('span'), { className: 'n', textContent: n })] : [], s, xwPlayed(t, games));
+  return b;
+}
 async function xwLoad() {
   try {
     const res = await fetch(XW_URL, { headers: { apikey: LB_KEY } });
@@ -137,12 +141,8 @@ function xwFind() {
   const raw = $('xwTopic').value.trim(), q = xwFold(raw), mine = xwGet('xwTopics'), games = xwGet('xwGames');
   const all = [...xwAll, ...Object.keys(mine).filter(k => !xwAll.some(t => t.kljuc === k)).map(k => ({ kljuc: k, tema: mine[k].tema, broj: mine[k].pojmovi.length, igrano: 1 }))];
   const same = all.find(t => xwFold(t.kljuc) === q || xwFold(t.tema) === q);
-  $('xwFound').replaceChildren(...(q ? all.filter(t => xwFold(t.kljuc + ' ' + t.tema).includes(q)) : []).slice(0, 5).map(t => {
-    const b = Object.assign(document.createElement('button'), { onclick: () => xwAsk(t.kljuc, t.tema) }), s = document.createElement('span');
-    s.append(Object.assign(document.createElement('b'), { textContent: t.tema }), Object.assign(document.createElement('small'), { textContent: `${t.broj} ${xwN(t.broj, 'pojam', 'pojma', 'pojmova')}` }));
-    b.append(s, xwPlayed(t, games));
-    return b;
-  }));
+  $('xwFound').replaceChildren(...(q ? all.filter(t => xwFold(t.kljuc + ' ' + t.tema).includes(q)) : []).slice(0, 5).map(t => xwRow(t, games)));
+  $('xwChips').hidden = !!q;   // the quick picks while nothing is typed, what was found after
   $('xwGo').hidden = raw.length < 2 || !!same;
   $('xwGo').querySelector('b').textContent = `Složi novu: „${raw}“`;
   return same;

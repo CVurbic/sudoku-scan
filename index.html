@@ -129,16 +129,20 @@
   </header>
   <h1 class="big">Križaljke</h1>
   <div id="xwPick">
-    <form id="xwForm">
-      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
-      <input id="xwTopic" maxlength="60" autocomplete="off" enterkeyhint="go" placeholder="Traži ili upiši temu" aria-label="Tema">
-    </form>
-    <div id="xwFound" class="xlist"></div>
-    <button id="xwGo" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span><b></b><small>Slaganje traje minutu-dvije</small></span></button>
-    <h2 id="xwPopH" hidden>Popularno</h2>
-    <div id="xwPop"></div>
-    <h2 id="xwMineH">Moje teme</h2>
-    <div id="xwCards"></div>
+    <div id="xwHero">
+      <label for="xwTopic">Što želiš naučiti?</label>
+      <form id="xwForm">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+        <input id="xwTopic" maxlength="60" autocomplete="off" enterkeyhint="go" placeholder="Npr. svemir, nogomet…">
+      </form>
+      <div id="xwChips"></div>
+      <div id="xwFound" class="xlist"></div>
+      <button id="xwGo" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span><b></b><small>Slaganje traje minutu-dvije</small></span></button>
+    </div>
+    <div id="xwCols">
+      <div><h2 id="xwMineH">Tvoje teme</h2><div id="xwCards"></div></div>
+      <div><h2 id="xwPopH" hidden>Popularno</h2><div id="xwPop" class="xlist"></div></div>
+    </div>
   </div>
   <div id="xwWait" hidden>
     <div class="weave" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="e"></i><i class="e"></i><i></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i><i></i><i></i><i></i><i></i><i class="e"></i><i></i><i class="e"></i><i class="e"></i><i></i><i></i><i></i><i></i><i class="e"></i><i></i></div>

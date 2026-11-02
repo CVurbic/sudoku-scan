@@ -179,7 +179,8 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
 h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 #xwPick { display: flex; flex-direction: column; gap: var(--gap); padding-bottom: 24px; }
 #xwPick h2 { margin: 4px 0 -4px; color: var(--muted); font-size: 14px; font-weight: 600; }
-#xwCards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+/* Your topics slide sideways on the phone (a small grid each, filled as far as solved); two columns on a big screen. */
+#xwCards { display: grid; grid-auto-flow: column; grid-auto-columns: 42%; gap: var(--gap); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
 .xcard { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 128px; padding: 14px;
   border: 0; border-radius: 14px; text-align: left; }
 .xcard b { display: block; font-size: 17px; font-weight: 700; line-height: 1.2; }
@@ -191,7 +192,15 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 .xmini i { aspect-ratio: 1; }
 .xmini i.e { background: var(--raised); }
 .xmini i.f { background: var(--hue); }
-#xwForm { display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 0 0 14px; border: 1.5px solid var(--box); border-radius: 10px; background: var(--surface); color: var(--muted); }
+#xwHero { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 16px; background: var(--surface); }
+#xwHero > label { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+#xwChips { display: flex; flex-wrap: wrap; gap: 8px; }
+#xwChips button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 99px; background: var(--raised); font-size: 14px; font-weight: 600; }
+#xwHero .xlist { background: transparent; border-radius: 0; }
+#xwHero .xlist button { padding-inline: 4px; }
+#xwCols, #xwCols > div { display: flex; flex-direction: column; gap: var(--gap); }
+#xwCols > div:has(> h2[hidden]) { display: none; }
+#xwForm { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 0 0 14px; border: 1.5px solid var(--box); border-radius: 12px; background: var(--ground); color: var(--muted); }
 #xwTopic { flex: 1; min-width: 0; height: 100%; padding: 0 14px 0 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 400 17px var(--font); }
 #xwForm:focus-within { outline: 2px solid var(--hue); outline-offset: 2px; }
 .xlist { display: flex; flex-direction: column; border-radius: 14px; background: var(--surface); overflow: hidden; }
@@ -203,8 +212,8 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 .xlist small.solved { color: var(--positive); font-weight: 600; }
 #xwGo { justify-content: flex-start; gap: 12px; min-height: 58px; padding: 8px 14px; border: 1.5px dashed var(--control); border-radius: 14px; background: transparent; color: var(--hue); text-align: left; }
 #xwGo small { display: block; }
-#xwPop { display: grid; grid-auto-flow: column; grid-auto-columns: 42%; gap: var(--gap); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
-#xwPop .xcard { min-height: 96px; }
+.xlist .n { width: 20px; flex: none; color: var(--muted); font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; }
+.xlist button > span:not(.n) { flex: 1; min-width: 0; }
 #xwWait { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding-bottom: 15vh; text-align: center; }
 #xwWait > b { font-size: 22px; letter-spacing: -0.01em; }
 #xwWait > p { margin: 0; color: var(--muted); }
@@ -469,6 +478,77 @@ canvas { max-width: 100%; }
   #dRecent { padding: 0; }
   #dRecent li { background: var(--ground); }
   #dRecent li:not(:has(.hrow)) { background: none; }
+}
+@media (min-width: 1100px) and (prefers-reduced-motion: reduce) { body, #rail { transition: none; } }
+
+/* From 1100px: the rail on the left (240px, folded 72px), Danas instead of the tiles, no tab bar.
+   Every screen is centred in what the rail leaves. */
+#rail, #today { display: none; }
+@media (min-width: 1100px) {
+  body { --rail: 240px; --col: min(600px, calc(100dvh - 56px), calc(100vw - var(--rail) - 480px)); padding-left: calc(var(--rail) + var(--gutter)); transition: padding-left .22s cubic-bezier(.23, 1, .32, 1); }
+  body.railmini { --rail: 72px; }
+  #rail { position: fixed; inset: 0 auto 0 0; z-index: 3; display: flex; flex-direction: column; gap: 2px; width: var(--rail); padding: 16px 12px;
+    overflow: hidden; border-right: 1px solid var(--line); background: var(--surface); transition: width .22s cubic-bezier(.23, 1, .32, 1); }
+  #rail > * { white-space: nowrap; }
+  .rbrand { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 0 12px 10px; font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  #railFold { width: 36px; min-height: 36px; margin-left: auto; padding: 0; border-color: transparent; background: transparent; color: var(--muted); }
+  #railFold:hover { background: var(--raised); color: var(--text); }
+  #rail [data-v] { position: relative; justify-content: flex-start; gap: 10px; min-height: 42px; padding: 0 10px; border: 0; border-radius: 8px;
+    background: transparent; color: var(--muted); font-size: 15px; font-weight: 600; }
+  #rail [data-v]:hover { background: var(--raised); }
+  #rail [data-v][aria-current] { background: var(--area); color: var(--text); }
+  #rail [data-v][aria-current] svg.i { color: var(--hue); }
+  #rail [data-v] > svg { width: 22px; height: 22px; flex: none; }
+  #rail small { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 500; }
+  #rail small.solved { color: var(--positive); }
+  #rail hr { width: 100%; margin: 8px 0; border: 0; border-top: 1px solid var(--line); }
+  body.railmini .rbrand { flex-direction: column; gap: 8px; padding: 0 0 10px; }
+  body.railmini .rbrand .t, body.railmini #rail .t, body.railmini #rail small { display: none; }
+  body.railmini #railFold { margin: 0; }
+  body.railmini #rail [data-v] { justify-content: center; padding: 0; }
+  body.railmini #rail .waits::after { content: ""; position: absolute; top: 8px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); }
+  #tabs { display: none; }
+  #toast { left: calc(50% + var(--rail) / 2 + (var(--col) + 48px + 340px) / 2 - 340px); }
+
+  /* Danas */
+  #games { position: relative; max-width: 1080px; padding: 8px 24px 40px; }
+  #games .bar { position: absolute; top: 8px; right: 24px; }
+  #games .bar .mark, #games .bar h1, .tiles { display: none; }
+  #today { display: flex; flex-direction: column; gap: 22px; padding-top: 28px; }
+  .dhead p { margin: 0; color: var(--muted); }
+  .dhead p::first-letter { text-transform: uppercase; }
+  .dhead h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.15; }
+  .dcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .dcard { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surface); }
+  .dtop { display: flex; align-items: center; gap: 12px; }
+  .dtop svg { width: 46px; height: 46px; padding: 9px; border-radius: 11px; background: var(--ground); }
+  .dtop b { font-size: 20px; letter-spacing: -0.01em; }
+  #today ul:not(.hlist) { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; font-size: 15px; }
+  #today li:not(:has(.hrow)) { display: flex; justify-content: space-between; gap: 8px; }
+  #today li > span:first-child { display: flex; align-items: center; gap: 8px; }
+  #today .dot { width: 9px; height: 9px; }
+  #today .muted { color: var(--muted); }
+  #today .solved { color: var(--positive); }
+  #today .time { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dcard .go { margin-top: auto; min-height: 46px; border: 0; border-radius: 10px; background: var(--primary); color: var(--on-primary); font-weight: 700; }
+  #dXwGo { background: var(--raised); color: var(--text); }
+  .drow { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; align-items: start; }
+  .dpanel { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 16px; background: var(--surface); }
+  .dpanel h2 { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+  #dRanks li { padding: 6px 0; border-top: 1px solid var(--line); }
+  #dRanks li:first-child { border-top: 0; }
+  #dRecent { padding: 0; }
+  #dRecent li { background: var(--ground); }
+  #dRecent li:not(:has(.hrow)) { background: none; }
+
+  /* Križaljke: the question on top, your topics and Popularno side by side */
+  #xw { max-width: 1080px; padding-bottom: 40px; }
+  #xwHero { padding: 28px; }
+  #xwHero > label { font-size: 26px; }
+  #xwForm { height: 60px; font-size: 19px; }
+  #xwCols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  #xwCols:has(> div:first-child > h2[hidden]) { grid-template-columns: 1fr; }   /* no topics of your own yet */
+  #xwCards { grid-auto-flow: row; grid-template-columns: 1fr 1fr; margin: 0; padding: 0; overflow: visible; }
 }
 @media (min-width: 1100px) and (prefers-reduced-motion: reduce) { body, #rail { transition: none; } }
 
