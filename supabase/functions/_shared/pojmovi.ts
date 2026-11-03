@@ -2,9 +2,9 @@
 // Then, in a second call (the first one already takes 70–90 s), the hints: trag2, the same answer said another, easier way.
 import Anthropic from "npm:@anthropic-ai/sdk";
 
-const CELL = /^(LJ|NJ|DŽ|[A-ZČĆŽŠĐ])$/;
+export const CELL = /^(LJ|NJ|DŽ|[A-ZČĆŽŠĐ])$/;
 // An empty clue, or one with the answer as a word or starting one (REP may stand in REPTIL; DINOSAUR may not in DINOSAURA)
-const tells = (clue: string, w: string) => !clue.trim() || clue.toUpperCase().split(/[^A-ZČĆŽŠĐ]+/).some((x) => x === w || (w.length > 3 && x.startsWith(w)));
+export const tells =(clue: string, w: string) => !clue.trim() || clue.toUpperCase().split(/[^A-ZČĆŽŠĐ]+/).some((x) => x === w || (w.length > 3 && x.startsWith(w)));
 const client = new Anthropic();   // ANTHROPIC_API_KEY from the function's secrets
 export const SYSTEM = `You write the word list for a Croatian crossword on a topic the user picks. Give about 40 terms, the ones someone who wants to know this topic should know, ordered from the easiest (known to most people) to the hardest: the game takes its easy level from the first half and its hard level from the second.
 
@@ -28,7 +28,7 @@ export const FORMAT = { type: "json_schema", schema: {
   },
 } } as const;
 
-export type Pojam = { slova: string[]; trag: string; trag2?: string };
+export type Pojam = { slova: string[]; trag: string; trag2?: string; rijeci?: number[] };   // rijeci: cells per word, when more than one
 
 // Returns the cleaned terms, or a message for the user in "greska" (status beside it).
 // Haiku 5.5 at high effort (Chris, 2. 11.: the fewest general words, a tenth of Sonnet's price): 55–70 s,

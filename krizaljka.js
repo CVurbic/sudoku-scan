@@ -68,13 +68,52 @@ function xwMake(terms, seed, W = 11, H = 13, tries = 600) {
 // xwTopics { key: { tema, pojmovi: [{ slova, trag, trag2? }] } }, xwGames { key: { lvl, at, l: [a game per level or null] } },
 // a game { seed, lay: [[term, row, col, dir]], rows, cols, fill, done, hints: [term], show, quiet }. ---
 const XW_URL = 'https://fgllmnemukhouwyebfop.supabase.co/functions/v1/krizaljka';
-const XW_KEYS = ['E R T Z U I O P Š Đ', 'A S D F G H J K L Č Ć Ž', 'LJ NJ DŽ C V B N M ⌫'];
+const XW_KEYS = ['Q W E R T Z U I O P Š Đ', 'A S D F G H J K L Č Ć Ž', 'LJ NJ DŽ Y X C V B N M ⌫'];   // Q W Y X for names kept as written
 const xwGet = k => { try { return JSON.parse(localStorage[k] || '{}'); } catch { return {}; } };
 const xwSet = (k, v) => { try { localStorage[k] = JSON.stringify(v); } catch {} };
 let xw = null, xwBusy = false;   // xw: the game on screen; xwBusy: a topic is being made
 let xwAll = null;   // everyone's topics from the server, most played first: [{ kljuc, tema, broj, igrano }]
 const xwFold = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');   // dino finds Dinosaurusi, zabe finds Žabe
 const xwN = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : n % 10 > 1 && n % 10 < 5 && (n % 100 < 12 || n % 100 > 14) ? few : many;
+
+// --- Dnevna "Na današnji dan": one a day, the same grid for everyone (the topic "dan:2026-12-25" at Srednje, seeded
+// by the date), with Savjet, no clock and no board: the result is how many hints it took. Its terms come from the server,
+// made days ahead; their hints the hour after. ---
+const XW_MJ = ['SIJEČANJ', 'VELJAČA', 'OŽUJAK', 'TRAVANJ', 'SVIBANJ', 'LIPANJ', 'SRPANJ', 'KOLOVOZ', 'RUJAN', 'LISTOPAD', 'STUDENI', 'PROSINAC'];
+const xwIsDay = key => key.startsWith('dan:');
+const xwDayKey = () => 'dan:' + dayKey();
+const xwOwn = games => Object.keys(games).filter(k => !xwIsDay(k));   // the topics you picked
+// The calendar sheet: the month on a red band, the day large, the weekday under it.
+function xwSheet(el, date) {
+  const d = new Date(date + 'T12:00');
+  el.replaceChildren(...[['m', XW_MJ[d.getMonth()]], ['d', d.getDate()], ['w', d.toLocaleDateString('hr', { weekday: 'long' })]]
+    .map(([className, textContent]) => Object.assign(document.createElement('span'), { className, textContent })));
+  return el;
+}
+let xwDayAsk = null;   // the day asked for: once a page, again after a failure
+async function xwDayLoad() {
+  const key = xwDayKey();
+  if (xwGet('xwTopics')[key] || xwDayAsk === key) return;
+  xwDayAsk = key;
+  try {
+    const res = await fetch(`${XW_URL}?dan=${key.slice(4)}`, { headers: { apikey: LB_KEY } }), data = await res.json();
+    if (!res.ok || !data.pojmovi) throw 0;
+    const topics = xwGet('xwTopics');
+    topics[key] = { tema: data.tema, uvod: data.uvod, sutra: data.sutra, pojmovi: data.pojmovi };
+    xwSet('xwTopics', topics);
+    if (view === 'xw') showXw(); else if (view === 'games') showGames();
+  } catch { xwDayAsk = null; }   // offline, or not made yet: no card
+}
+// Today's daily once its terms are here: { key, t: the topic, g: its game if begun }; else null (and asked for).
+function xwDay() {
+  const key = xwDayKey(), t = xwGet('xwTopics')[key];
+  if (!t) { xwDayLoad(); return null; }
+  return { key, t, g: xwGames()[key]?.l[1] };
+}
+const xwDayOpen = () => { const d = xwDay(); if (d) d.g ? xwOpen(d.key, 1) : xwNew(d.key, 1); };
+const xwHintsUsed = g => { const n = g.hints?.length || 0; return n ? `${n} ${xwN(n, 'savjet', 'savjeta', 'savjeta')}` : 'bez savjeta'; };
+const xwDayState = d => { const p = d.g && xwProgress(d.key); return p?.done ? `Riješeno · ${xwHintsUsed(d.g)} ✓` : p ? `U tijeku · ${p.n} od ${p.words.length}` : 'Čeka'; };
+const xwLen = w => w.rijeci ? w.rijeci.join(', ') : w.cells.length;   // (7), or (4, 3) for two words
 
 // Every topic's games; a game kept from before the levels is its Srednje.
 const xwGames = () => {
@@ -95,7 +134,7 @@ const xwLvText = p => [...p.solved.map((d, i) => d && i !== p.lvl ? XW_LV[i][0] 
 // A game's words with their cells and numbers (reading order of the first cells, one number per start).
 function xwWords(key, g) {
   const terms = xwGet('xwTopics')[key].pojmovi;
-  const words = g.lay.map(([i, r, c, dir]) => ({ i, cells: terms[i].slova, clue: terms[i].trag, hint: terms[i].trag2, dir,
+  const words = g.lay.map(([i, r, c, dir]) => ({ i, cells: terms[i].slova, clue: terms[i].trag, hint: terms[i].trag2, rijeci: terms[i].rijeci, dir,
     at: terms[i].slova.map((_, j) => (r + (dir === 'd' ? j : 0)) + ',' + (c + (dir === 'a' ? j : 0))) }));
   const starts = [...new Set(words.map(w => w.at[0]))].sort((a, b) => { const [ra, ca] = a.split(','), [rb, cb] = b.split(','); return ra - rb || ca - cb; });
   words.forEach(w => w.n = starts.indexOf(w.at[0]) + 1);
@@ -104,7 +143,9 @@ function xwWords(key, g) {
 const xwSolved = (w, fill) => w.at.every((k, j) => fill[k] === w.cells[j]);
 
 function xwTile() {
-  const games = xwGames(), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0];
+  const day = xwDay();
+  if (day && !day.g?.done) return Object.assign($('tileXw').lastChild, { textContent: day.g ? 'Dnevna u tijeku' : 'Dnevna čeka', className: '' });
+  const games = xwGames(), key = xwOwn(games).sort((a, b) => games[b].at - games[a].at)[0];
   if (!key) return Object.assign($('tileXw').lastChild, { textContent: 'Odaberi temu', className: '' });
   const p = xwProgress(key, games);
   Object.assign($('tileXw').lastChild, { className: p.done ? 'solved' : '',
@@ -117,14 +158,24 @@ function showXw() {
   $('xwPick').hidden = xwBusy;
   $('xwWait').hidden = !xwBusy;
   if (!xwAll) { xwAll = []; xwLoad(); }
-  const games = xwGames(), topics = xwGet('xwTopics');
+  const games = xwGames(), topics = xwGet('xwTopics'), day = xwDay(), own = xwOwn(games);
+  // The daily on top, as a calendar sheet: the date, the topic, its sentence, where it stands.
+  $('xwDaily').hidden = !day;
+  if (day) {
+    const [sheet, tx] = $('xwDaily').children, [, b, p, go] = tx.children;
+    xwSheet(sheet, day.key.slice(4));
+    b.textContent = day.t.tema;
+    p.textContent = day.t.uvod;
+    go.firstChild.textContent = day.g?.done ? 'Pogledaj' : day.g ? 'Nastavi' : 'Igraj';
+    Object.assign(go.lastChild, { textContent: xwDayState(day), className: day.g?.done ? 'solved' : '' });
+  }
   $('xwPopH').hidden = !xwAll.length;
   $('xwPop').replaceChildren(...xwAll.slice(0, 10).map((t, i) => xwRow(t, games, i + 1)));
   $('xwChips').replaceChildren(...xwAll.slice(0, matchMedia('(min-width: 1100px)').matches ? 6 : 4).map(t =>
     Object.assign(document.createElement('button'), { type: 'button', textContent: t.tema, onclick: () => xwAsk(t.kljuc, t.tema) })));
   xwFind();
-  $('xwMineH').hidden = !Object.keys(games).length;
-  $('xwCards').replaceChildren(...Object.keys(games).sort((a, b) => games[b].at - games[a].at).map(key => {
+  $('xwMineH').hidden = !own.length;
+  $('xwCards').replaceChildren(...own.sort((a, b) => games[b].at - games[a].at).map(key => {
     const p = xwProgress(key, games), { g, words } = p;
     const b = Object.assign(document.createElement('button'), { className: 'xcard', onclick: () => xwOpen(key) });
     const mini = Object.assign(document.createElement('div'), { className: 'xmini' }), on = new Set(words.flatMap(w => w.at));
@@ -161,7 +212,7 @@ async function xwLoad() {
 // What the field finds (your topics and everyone's), and "Složi novu" unless the topic is already there.
 function xwFind() {
   const raw = $('xwTopic').value.trim(), q = xwFold(raw), mine = xwGet('xwTopics'), games = xwGames();
-  const all = [...xwAll, ...Object.keys(mine).filter(k => !xwAll.some(t => t.kljuc === k)).map(k => ({ kljuc: k, tema: mine[k].tema, broj: mine[k].pojmovi.length, igrano: 1 }))];
+  const all = [...xwAll, ...Object.keys(mine).filter(k => !xwIsDay(k) && !xwAll.some(t => t.kljuc === k)).map(k => ({ kljuc: k, tema: mine[k].tema, broj: mine[k].pojmovi.length, igrano: 1 }))];
   const same = all.find(t => xwFold(t.kljuc) === q || xwFold(t.tema) === q);
   $('xwFound').replaceChildren(...(q ? all.filter(t => xwFold(t.kljuc + ' ' + t.tema).includes(q)) : []).slice(0, 5).map(t => xwRow(t, games)));
   $('xwChips').hidden = !!q;   // the quick picks while nothing is typed, what was found after
@@ -175,6 +226,7 @@ $('xwForm').onsubmit = e => { e.preventDefault(); const t = xwFind(); t ? xwAsk(
 $('xwGo').onclick = () => xwAsk($('xwTopic').value);
 $('xwHome').onclick = () => go('games');
 $('tileXw').onclick = () => go('xw');
+$('xwDaily').onclick = xwDayOpen;
 
 // A topic: from the device if it was made before, else from the server (someone's topic at once; a new one
 // by Claude, up to a minute). The server knows a topic by its key (what was typed first), so that is what goes.
@@ -203,9 +255,9 @@ async function xwAsk(raw, name) {
   }
 }
 
-// A new grid for a level of the topic (a new seed each time: other terms, other crossings).
+// A new grid for a level of the topic (a new seed each time: other terms, other crossings; the daily's from its date).
 function xwNew(key, lvl = xwGames()[key]?.lvl ?? 0) {
-  const all = xwGet('xwTopics')[key].pojmovi.map((p, i) => ({ cells: p.slova, i })), seed = Date.now() % 2147483647;
+  const all = xwGet('xwTopics')[key].pojmovi.map((p, i) => ({ cells: p.slova, i })), seed = xwIsDay(key) ? hash('xw#' + key.slice(4)) : Date.now() % 2147483647;
   const [, W, H] = XW_LV[lvl], res = xwMake(xwLvTerms(all, lvl), seed, W, H), games = xwGames();
   const t = games[key] ||= { lvl, at: 0, l: [null, null, null] };
   t.l[lvl] = { seed, lay: res.placed.map(p => [p.t.i, p.r, p.c, p.dir]), rows: res.rows, cols: res.cols, fill: {}, done: false, hints: [] };
@@ -240,11 +292,13 @@ async function xwHints(key) {
   if (xwHintAsk.has(key) || topics[key].pojmovi.every(p => 'trag2' in p)) return;
   xwHintAsk.add(key);
   try {
-    const res = await fetch(XW_URL, { method: 'POST', headers: { apikey: LB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ tema: key, savjeti: true }) });
-    const data = await res.json();
-    if (!res.ok || !data.savjeti) throw 0;
+    // the daily's are made on the server, so the day is just asked for again (none there yet: no Savjet till the next open)
+    const res = await (xwIsDay(key) ? fetch(`${XW_URL}?dan=${key.slice(4)}`, { headers: { apikey: LB_KEY } })
+      : fetch(XW_URL, { method: 'POST', headers: { apikey: LB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ tema: key, savjeti: true }) }));
+    const data = await res.json(), h = data.savjeti ?? (data.pojmovi?.every(p => 'trag2' in p) ? data.pojmovi.map(p => p.trag2) : null);
+    if (!res.ok || !h) throw 0;
     const now = xwGet('xwTopics');
-    now[key].pojmovi.forEach((p, i) => p.trag2 = data.savjeti[i] || '');
+    now[key].pojmovi.forEach((p, i) => p.trag2 = h[i] || '');
     xwSet('xwTopics', now);
     if (view === 'xwplay' && xw.key === key) { xw.words = xwWords(key, xw.g); xw.sel = xw.words.find(w => w.i === xw.sel.i && w.dir === xw.sel.dir); drawXw(); }
   } catch { xwHintAsk.delete(key); }   // asked again next time the topic opens
@@ -254,17 +308,20 @@ async function xwHints(key) {
 // wrong ("Pokaži gdje" marks them). Lagano and Srednje show a solved word bold and a full wrong word's letters red.
 const xwFull = (w, fill) => w.at.every(k => fill[k]);
 function drawXw() {
-  const { g, words, sel, lvl } = xw, hard = lvl === 2, cell = {}, solved = new Set(), bad = new Set();
+  const { g, words, sel, lvl } = xw, hard = lvl === 2, cell = {}, solved = new Set(), bad = new Set(), day = xwIsDay(xw.key);
+  const brk = { a: new Set(), d: new Set() };   // the last cell of a word inside a two-word answer: a dashed edge after it
   for (const w of words) {
     w.at.forEach((k, j) => cell[k] = w.cells[j]);
+    w.rijeci?.slice(0, -1).reduce((e, n) => (brk[w.dir].add(w.at[e + n - 1]), e + n), 0);
     if (hard) { if (g.show) w.at.forEach((k, j) => g.fill[k] && g.fill[k] !== w.cells[j] && bad.add(k)); }
     else if (xwSolved(w, g.fill)) w.at.forEach(k => solved.add(k));
     else if (xwFull(w, g.fill)) w.at.forEach((k, j) => g.fill[k] !== w.cells[j] && bad.add(k));   // a full word, wrong: show where
   }
   const n = words.filter(w => hard ? xwFull(w, g.fill) : xwSolved(w, g.fill)).length, full = words.every(w => xwFull(w, g.fill));
   const wrong = Object.keys(cell).filter(k => g.fill[k] !== cell[k]).length;
-  $('xwName').textContent = xwGet('xwTopics')[xw.key].tema;
+  $('xwName').textContent = (day ? 'Na današnji dan · ' : '') + xwGet('xwTopics')[xw.key].tema;
   $('xwSide').textContent = `${n} od ${words.length}` + (hard ? ' popunjeno' : '');
+  $('xwLvBox').hidden = day;   // the daily has one level
   $('xwLvSt').replaceChildren(stairs(lvl));
   $('xwLv').value = lvl;
   [...$('xwLv').options].forEach((o, i) => o.textContent = XW_LV[i][0] + (xwGames()[xw.key].l[i]?.done ? ' ✓' : ''));
@@ -275,12 +332,13 @@ function drawXw() {
   const hinted = new Set(g.hints || []);
   $('xwHint').hidden = $('xwHint2').hidden = hard || g.done || !sel.hint || hinted.has(sel.i);
   if (g.done) {
-    const st = Object.assign(document.createElement('span'), { className: 'xdst' });
-    st.append(stairs(lvl, true, true));
+    const st = Object.assign(document.createElement('span'), { className: day ? 'cal' : 'xdst' });
+    if (day) xwSheet(st, xw.key.slice(4)); else st.append(stairs(lvl, true, true));
     $('xwDoneSt').replaceChildren(st);
-    $('xwDoneT').textContent = `${XW_LV[lvl][0]} riješeno ✓`;
-    $('xwDoneS').textContent = `${words.length} ${xwN(words.length, 'pojam', 'pojma', 'pojmova')}` + (hinted.size ? ` · ${hinted.size} ${xwN(hinted.size, 'savjet', 'savjeta', 'savjeta')}` : '');
-    $('xwNextLv').hidden = lvl === 2;
+    $('xwDoneT').textContent = day ? 'Riješeno ✓' : `${XW_LV[lvl][0]} riješeno ✓`;
+    $('xwDoneS').textContent = `${words.length} ${xwN(words.length, 'pojam', 'pojma', 'pojmova')}` + (hinted.size || day ? ` · ${xwHintsUsed(g)}` : '');
+    $('xwAgain').hidden = day;
+    $('xwNextLv').hidden = lvl === 2 || day;
     if (lvl < 2) $('xwNextLv').textContent = `Sljedeće: ${XW_LV[lvl + 1][0]}`;
     $('xwAgain').textContent = `Ponovo ${XW_LV[lvl][0].toLowerCase()} (nova mreža)`;
   }
@@ -292,14 +350,15 @@ function drawXw() {
     const k = ((i / g.cols) | 0) + ',' + (i % g.cols), d = document.createElement('div');
     if (!cell[k]) return d;
     d.dataset.k = k;
-    d.className = 'l' + (g.done ? '' : sel.at.includes(k) ? (k === xw.k ? ' cur' : ' act') : '') + (solved.has(k) ? ' ok' : bad.has(k) ? ' bad' : '') + ((g.fill[k] || '').length > 1 ? ' two' : '');
+    d.className = 'l' + (g.done ? '' : sel.at.includes(k) ? (k === xw.k ? ' cur' : ' act') : '') + (solved.has(k) ? ' ok' : bad.has(k) ? ' bad' : '') + ((g.fill[k] || '').length > 1 ? ' two' : '')
+      + (brk.a.has(k) ? ' ba' : '') + (brk.d.has(k) ? ' bd' : '');
     d.textContent = g.fill[k] || '';
     if (nums[k]) d.prepend(Object.assign(document.createElement('sup'), { textContent: nums[k] }));
     return d;
   }));
   $('xwClue').hidden = $('xwKb').hidden = g.done;
   $('xwDone').hidden = !g.done;
-  $('xwClue').querySelector('p').replaceChildren(Object.assign(document.createElement('b'), { textContent: `${sel.n} ${sel.dir === 'a' ? '→' : '↓'} ` }), `${sel.clue} (${sel.cells.length})`,
+  $('xwClue').querySelector('p').replaceChildren(Object.assign(document.createElement('b'), { textContent: `${sel.n} ${sel.dir === 'a' ? '→' : '↓'} ` }), `${sel.clue} (${xwLen(sel)})`,
     ...hinted.has(sel.i) ? [Object.assign(document.createElement('em'), { textContent: sel.hint })] : []);
   // Every clue (shown from 1100px): the chosen one blue, the one crossing the cursor marked, solved ones struck through; a click goes to its word.
   const cross = g.done ? null : words.find(w => w !== sel && w.at.includes(xw.k));
@@ -307,7 +366,7 @@ function drawXw() {
     $(id).replaceChildren(...words.filter(w => w.dir === dir).map(w => {
       const li = document.createElement('li');
       li.className = !g.done && w === sel ? 'on' : w === cross ? 'cross' : !hard && xwSolved(w, g.fill) ? 'done' : '';
-      const s = Object.assign(document.createElement('span'), { textContent: `${w.clue} (${w.cells.length})` });
+      const s = Object.assign(document.createElement('span'), { textContent: `${w.clue} (${xwLen(w)})` });
       if (hinted.has(w.i)) s.append(Object.assign(document.createElement('em'), { textContent: w.hint }));
       li.append(Object.assign(document.createElement('b'), { textContent: w.n }), s);
       li.onclick = () => { if (g.done) return; xw.sel = w; xw.k = w.at.find(k => !g.fill[k]) || w.at[0]; drawXw(); };
@@ -337,7 +396,9 @@ function xwPut(ch) {
   g.fill[xw.k] = ch;
   xw.last = xw.k;
   g.quiet = false;   // a change: the count of wrong letters may speak again
+  const was = g.done;
   g.done = xw.words.every(w => xwSolved(w, g.fill));
+  if (g.done && !was && xwIsDay(xw.key)) setTimeout(xwDaySolved);   // after this draw: the card with the board
   if (over(sel, g.fill)) {   // word done: on to the next one still open
     const rest = xw.words.filter(w => !over(w, g.fill));
     if (rest.length) { xw.sel = rest.find(w => w.n > sel.n) || rest[0]; xw.k = xw.sel.at.find(k => !g.fill[k]) || xw.sel.at[0]; }
@@ -370,6 +431,34 @@ function xwHintUse() {
 $('xwHint').onclick = $('xwHint2').onclick = xwHintUse;
 $('xwQuiet').onclick = () => { xw.g.quiet = true; xwSave(); drawXw(); };
 $('xwShow').onclick = () => { xw.g.show = true; xwSave(); drawXw(); };
+
+// The daily solved: the shared card (card = 'xw'): how many hints, tomorrow's sheet and topic, Podijeli.
+function xwDaySolved() {
+  const g = xw.g, day = xw.key.slice(4), t = xwGet('xwTopics')[xw.key];
+  const next = dayKey(new Date(new Date(day + 'T12:00').getTime() + 864e5));
+  card = 'xw';
+  $('solved').className = 'xw';
+  $('solvedMenu').textContent = 'Križaljke';
+  $('diffSolved').hidden = $('solvedTechs').hidden = true;
+  $('solvedText').textContent = xwHintsUsed(g).replace(/^b/, 'B');   // under "Riješeno!": just how
+  $('lboard').hidden = true;
+  $('solvedTomorrow').hidden = !t.sutra;
+  if (t.sutra) { xwSheet($('solvedTomorrow').firstChild, next); $('solvedTomorrow').querySelector('b').textContent = `Sutra: ${t.sutra}`; }
+  xwButtons();
+  $('solved').showModal();
+}
+// Its buttons: back to Križaljke, and the result to share.
+function xwButtons() {
+  $('solvedClose').hidden = $('solvedNext').hidden = $('solvedLevel').hidden = true;
+  $('solvedShare').hidden = false;
+  $('solvedShare').classList.remove('quiet');
+  $('solvedShare').lastChild.textContent = 'Podijeli';
+  xwShare();
+}
+function xwShare() {
+  const day = new Date(xw.key.slice(4) + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' });
+  shareMsg = { url: location.origin + location.pathname, text: [`Na današnji dan · ${day}`, `✓ ${xwHintsUsed(xw.g)}`, 'Možeš li ti?'].join('\n') };
+}
 // Arrows: to the next letter cell that way, in the word running that way if there is one.
 function xwMove(dr, dc) {
   let [r, c] = xw.k.split(',').map(Number), k;

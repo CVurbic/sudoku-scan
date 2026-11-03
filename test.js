@@ -384,11 +384,12 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return [JSON.stringify(a) === JSON.stringify(tMake(`tango#2026-11-${d}`)), tSolve(a.giv, a.signs).length, g.join() === a.sol.join(), a.giv.filter(x => x >= 0).length >= 4].join();
   }).filter(r => r !== 'true,1,true,true')), [], 'tango: same board per date, one solution, Savjet finishes it');
   await page.click('#tileTango');
-  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Tango · dnevni', true], 'tango daily: solo');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Dinango · dnevni', true], 'tango daily: solo');
   await page.evaluate(() => T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3).forEach(k => tCells[k].click()));
   assert.ok(await page.$$eval('#tb .bad', x => x.length >= 3), 'tango: three alike are red');
   await page.click('#tClearBtn');
   await page.evaluate(() => tg.sol.forEach((v, k) => { if (tg.giv[k] < 0) { tCells[k].click(); if (v) tCells[k].click(); } }));
+  await page.waitForFunction(() => solved.open);   // after the wave
   assert.deepStrictEqual(await page.evaluate(() => [solved.open, /^Riješeno za \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedLevel.textContent, solvedShare.textContent, lbHead.textContent]),
     [true, true, 'Igre', 'Sudoku', 'Podijeli rezultat', 'Upiši se na današnju ljestvicu'], 'tango solved: the card');
   await page.click('#solvedMenu');
@@ -398,16 +399,19 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.click('#tabGames');
   await page.click('#tileTango');
   await page.click('#tangoNew');
-  assert.deepStrictEqual(await page.evaluate(() => [tangoName.textContent, tHintBtn.hidden]), ['Tango · Nova igra', false], 'tango game: with Savjet');
+  assert.deepStrictEqual(await page.evaluate(() => [tangoName.textContent, tHintBtn.hidden]), ['Dinango · Nova igra', false], 'tango game: with Savjet');
   await page.evaluate(() => { const k = tg.values.findIndex(v => v < 0); tCells[k].click(); if (tg.sol[k] === 0) tCells[k].click(); });
   await page.click('#tHintBtn');
   assert.strictEqual(await page.evaluate(() => tTip.title), 'Nešto ne štima', 'tango Savjet: a wrong cell first');
   await page.reload();
-  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent]), ['tango', 'Tango · Nova igra'], 'tango: a reload goes on');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent]), ['tango', 'Dinango · Nova igra'], 'tango: a reload goes on');
   assert.strictEqual(await page.evaluate(() => {
     for (let i = 0; i < 40 && !tg.solvedAt; i++) { tHintBtn.click(); if (tTip.v >= 0 && tTip.v !== tg.sol[tTip.k]) return 'wrong step'; tTipDo.click(); }
-    return [solved.open, solvedNext.hidden, solvedShare.hidden].join();
-  }), 'true,false,true', 'tango game: Savjet to the end, then Nova igra');
+    return [!!tg.solvedAt, tb.classList.contains('won')].join();
+  }), 'true,true', 'tango game: Savjet to the end, the wave');
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [solvedNext.hidden, solvedShare.hidden, getComputedStyle(solvedDino).display !== 'none', solvedFor.textContent, getComputedStyle(document.querySelector('#solved .tick')).display]),
+    [false, true, true, '♥ za U', 'none'], 'tango game: then the card, the little dino and U\'s line, Nova igra');
   await page.click('#solvedMenu');
   console.log('tango: Igre first, a board per date (unique, Savjet finishes it), solo daily, red rules, card, tile, Povijest, game with Savjet');
 
@@ -415,9 +419,15 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
   const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');
   await page.setRequestInterception(true);
+  // the real server may have answered before this (today's daily): forgotten, so the fake one below is asked
+  await page.evaluate(() => { const t = xwGet('xwTopics'); delete t[xwDayKey()]; xwSet('xwTopics', t); xwDayAsk = null; });
+  const DAY = ['TIHANOĆ', 'BOR', 'JASLICE', 'BADNJAK', 'KOLEDA', 'BETLEHEM', 'ANĐEO', 'MARIJA', 'JOSIP', 'ADVENT', 'PASTIRI', 'ZVIJEZDA', 'CHAPLIN'];
+  let dayAsks = 0;   // the daily's hints come on the second ask (made the hour after its terms)
   const xwRoute = r => !r.url().includes('/functions/v1/krizaljka') ? r.continue()
     : r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'apikey, content-type' },
-      body: r.method() === 'OPTIONS' ? '' : r.method() === 'GET' ? JSON.stringify([{ kljuc: 'knjigovodstvo', tema: 'Knjigovodstvo', broj: 24, igrano: 1284 }, { kljuc: 'žabe', tema: 'Žabe', broj: 31, igrano: 2 }])
+      body: r.method() === 'OPTIONS' ? '' : r.url().includes('?dan=') ? (dayAsks++, JSON.stringify({ tema: 'Božić', uvod: 'Badnjak, polnoćka i Tiha noć.', sutra: 'Sveti Stjepan',
+        pojmovi: DAY.map((w, i) => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Dnevni trag ' + i, ...dayAsks > 1 ? { trag2: 'Dnevni savjet ' + i } : {}, ...i ? {} : { rijeci: [4, 3] } })) }))
+        : r.method() === 'GET' ? JSON.stringify([{ kljuc: 'knjigovodstvo', tema: 'Knjigovodstvo', broj: 24, igrano: 1284 }, { kljuc: 'žabe', tema: 'Žabe', broj: 31, igrano: 2 }])
         : r.postData().includes('savjeti') ? JSON.stringify({ savjeti: XW.map(w => 'Savjet za ' + w.length) })
         : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
   page.on('request', xwRoute);
@@ -461,6 +471,28 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   }), [2, false, 'Ima 1 krivo slovo', 0, true, 1], 'xw Teško: the count once full, nothing marked until "Pokaži gdje", no Savjet');
   await page.click('#xwBack');
   assert.strictEqual(await page.evaluate(() => xwCards.firstChild.querySelectorAll('.stairs i.f').length), 3, 'xw: the card shows Teško as three stairs');
+  // Dnevna: a calendar sheet on top of Križaljke (not among your topics); Srednje, the same grid from the date on every
+  // device, no clock, no levels, Savjet once its hints are made; a two-word answer has a dashed edge and (4, 3); solved →
+  // the card with how many hints and tomorrow, no board.
+  await page.waitForFunction(() => !xwDaily.hidden);
+  assert.deepStrictEqual(await page.evaluate(() => [xwDaily.querySelector('.cal .d').textContent === String(new Date().getDate()), xwDaily.querySelector('b').textContent, xwCards.childElementCount]),
+    [true, 'Božić', 1], 'xw daily: the sheet on top, not among your topics');
+  assert.ok(await page.evaluate(() => xwGet('xwTopics')[xwDayKey()].pojmovi.every(p => !('trag2' in p))), 'xw daily: first loaded without hints');
+  await page.click('#xwDaily');
+  await page.waitForFunction(() => !xwHint.hidden);   // asked for again on opening: now with hints
+  assert.deepStrictEqual(await page.evaluate(() => { const a = JSON.stringify(xw.g.lay); xwNew(xw.key, 1); return [xw.lvl, xwLvBox.hidden, !!document.getElementById('xwTimer'), xwHint.hidden, xwName.textContent, JSON.stringify(xw.g.lay) === a]; }),
+    [1, true, false, false, 'Na današnji dan · Božić', true], 'xw daily: Srednje, the same grid again (seeded by the date), no clock, Savjet');
+  await page.evaluate(() => xwHint.click());
+  assert.deepStrictEqual(await page.evaluate(() => { const w = xw.words.find(w => w.rijeci); xw.sel = w; drawXw();
+    return [!!document.querySelector(`#xg [data-k="${w.at[3]}"]`).className.match(/ b[ad]\b/), document.querySelectorAll('#xg .ba, #xg .bd').length, xwClue.textContent.includes('(4, 3)'), xwKb.textContent.includes('QW')]; }),
+    [true, 1, true, true], 'xw daily: TIHA NOĆ has one dashed edge after TIHA and (4, 3); the keys have Q W');
+  await page.evaluate(() => { for (const w of xw.words) w.cells.forEach((ch, j) => { xw.sel = w; xw.k = w.at[j]; xwPut(ch); }); });
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [solvedText.textContent, solvedMenu.textContent, solvedTomorrow.querySelector('b').textContent,
+    getComputedStyle(solvedTomorrow).display !== 'none', solvedShare.hidden, lboard.hidden, shareMsg.text.split('\n')[1], getComputedStyle(solvedFor).display]),
+    ['1 savjet', 'Križaljke', 'Sutra: Sveti Stjepan', true, false, true, '✓ 1 savjet', 'none'], 'xw daily solved: the card with the hints, tomorrow, Podijeli, no board (no Dinango line)');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, xwDaily.querySelector('.xdgo small').textContent]), ['xw', 'Riješeno · 1 savjet ✓'], 'xw daily: Križaljke says it is solved');
   await page.click('#xwHome');
   assert.ok(await page.evaluate(() => tileXw.lastChild.textContent.startsWith('Knjigovodstvo · Teško ')), 'xw: the tile says the topic and its level');
   page.off('request', xwRoute);

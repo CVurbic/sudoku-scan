@@ -98,18 +98,27 @@ function showToday() {
   $('dTango').replaceChildren(li('Dnevni', tDone ? `Riješeno za ${clock(t.elapsed)} ✓` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Čeka', tDone ? 'solved' : 'muted'),
     ...run ? [li('Niz', daysWord(run) + ' zaredom')] : []);
   Object.assign($('dTangoGo'), tDone ? { textContent: 'Nova igra', onclick: () => tangoGame() } : { textContent: 'Igraj dnevni', onclick: () => openTango() });
-  const games = xwGames(), keys = Object.keys(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics');
-  $('dXw').replaceChildren(...keys.slice(0, 3).map(k => {
+  const games = xwGames(), keys = xwOwn(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics'), day = xwDay();
+  // The daily crossword on top: its sheet, topic and where it stands; then your topics (two beside it, else three).
+  $('dXwDay').hidden = !day;
+  if (day) {
+    xwSheet($('dXwDay').firstChild, day.key.slice(4));
+    $('dXwDay').querySelector('b').textContent = `Na današnji dan: ${day.t.tema}`;
+    Object.assign($('dXwDay').querySelector('small'), { textContent: day.g ? xwDayState(day) : day.t.uvod, className: day.g?.done ? 'solved' : '' });
+    $('dXwDay').onclick = xwDayOpen;
+  }
+  $('dXw').replaceChildren(...keys.slice(0, day ? 2 : 3).map(k => {
     const p = xwProgress(k, games), row = li(topics[k].tema, p.done ? `${XW_LV[p.lvl][0]} ✓` : `${p.n} od ${p.words.length}`, p.done ? 'solved' : '');
     row.firstChild.prepend(stairs(p.lvl));
     return row;
   }));
   if (!keys.length) $('dXw').append(li('Tema po izboru', 'Složi prvu', 'muted'));
   const open = keys.find(k => !xwProgress(k, games).done);
-  Object.assign($('dXwGo'), open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
+  Object.assign($('dXwGo'), day && !day.g?.done ? { textContent: day.g ? 'Nastavi dnevnu' : 'Igraj dnevnu', onclick: xwDayOpen }
+    : open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
   const recent = saved().slice(0, 3);
   $('dRecent').replaceChildren(...recent.length ? recent.map(historyItem) : [li('Još nema sudokua', '', 'muted')]);
-  // The board: today's fastest per daily (sudoku's three, Tango), asked anew each time (4 small requests).
+  // The board: today's fastest per daily (sudoku's three, Dinango), asked anew each time (4 small requests).
   const ask = ++todayAsk;
   Promise.all([0, 1, 2, 3].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
     if (ask !== todayAsk) return;
@@ -176,7 +185,7 @@ const lb = (q, o = {}) => fetch(LB + q, { ...o, headers: { apikey: LB_KEY, 'Acce
   'Content-Type': 'application/json', ...o.headers } });
 const lbName = () => { try { return localStorage.sudokuName || ''; } catch { return ''; } };
 // Level 3 is Tango's daily (one a day); the solved card's result is lbNow: { day, level, ms }.
-const lvName = l => l === 3 ? 'Tango' : DAILY[l][0].toLowerCase();
+const lvName = l => l === 3 ? 'Dinango' : DAILY[l][0].toLowerCase();
 let lbNow = null;
 function lbQueue(day, level, ms) {
   try {

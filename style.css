@@ -18,6 +18,9 @@
   --negative: #b3261e; --bad-bg: #fbdcd8; --beam: #fbeae8;
   --unsure-bg: #ffe6a0; --unsure-ink: #5f4200;
   --easy: #2f8a4c; --medium: #c99a06; --hard: #d9681c; --expert: #c2352b;   /* difficulty bands */
+  --board: #e4eedd; --cell: #ffffff; --given: #d3e3c8; --sign: #3d6b3f;   /* Dinango: the field, its eggs and dinos */
+  --dg: #5bb662; --dg2: #3f9a4b; --dgl: #b9e3ad; --egg: #fff1d9; --egg2: #dcc093; --eye: #2a2420; --cheek: #ff8da1;
+  --calendar: #c8352b;   /* the daily crossword's calendar sheet */
   --radius: 8px; --radius-control: 6px; --gap: 12px; --gutter: 16px;
   --font: "Schibsted Grotesk", system-ui, sans-serif;
 }
@@ -32,6 +35,8 @@
     --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
     --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
     --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
+    --board: #1c261c; --cell: #232822; --given: #2e3d2c; --sign: #a7d3a0; --egg2: #c9b48f;
+    --calendar: #d9493e;
   }
 }
 [hidden] { display: none !important; }
@@ -145,24 +150,26 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
 #grid input.bad, #grid input.wrong { background-color: var(--bad-bg); color: var(--negative); box-shadow: inset 0 -4px 0 var(--negative); }
 #grid input.hint { background-color: var(--hint-bg); color: var(--positive); font-weight: 700; }
 
-/* Tango: 6×6 cells, a tap turns one empty → square → circle → empty; = and × sit on the shared edge.
-   Printed cells grey as in the sudoku; a broken rule red with a bottom bar. No press animation: tapped all game long. */
+/* Dinango: 6×6 tiles on a green field, a tap turns one empty → egg → dino → empty; = and × sit in the gap.
+   Printed tiles a darker green; a broken rule red with a bottom bar. No press animation: tapped all game long.
+   Solved: one wave of hops across the board, top-left to bottom-right (once, so it may play). */
 #tango { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
-#tb { position: relative; display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); aspect-ratio: 1; width: 100%; flex: none;
-  border: 2px solid var(--box); border-radius: 4px; overflow: hidden; background: var(--surface); }
-#tb button { min-height: 0; padding: 0; border: 0; border-radius: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
-  background: transparent; transition: none; }
+#tb { display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); gap: 6px; aspect-ratio: 1; width: 100%; flex: none;
+  padding: 8px; border-radius: 18px; background: var(--board); }
+#tb button { min-height: 0; padding: 0; border: 0; border-radius: 10px; background: var(--cell); transition: none; }
 #tb button:active { transform: none; }
-#tb button:nth-child(6n) { border-right: 0; }
-#tb button:nth-child(n+31) { border-bottom: 0; }
-#tb button svg { width: 56%; height: 56%; }
-#tb .given { background: var(--printed); }
+#tb button svg { width: 90%; height: 90%; overflow: visible; }
+#tb.won button svg { animation: hop .56s cubic-bezier(.23, 1, .32, 1) both; animation-delay: calc(var(--d) * 55ms); transform-origin: 50% 90%; }
+@keyframes hop { 40% { transform: translateY(-16%) scale(1.06, .96); } }
+#tb .given { background: var(--given); }
 #tb .from { background: var(--area); }
 #tb .to { background: var(--focus); box-shadow: inset 0 0 0 3px var(--hue); }
 #tb .bad { background: var(--bad-bg); box-shadow: inset 0 -4px 0 var(--negative); }
-#tbSigns { position: absolute; inset: 0; pointer-events: none; }
-#tbSigns span { position: absolute; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin: -10px 0 0 -10px;
-  border-radius: 50%; background: var(--surface); font-size: 15px; font-weight: 700; line-height: 1; }
+#tbSigns { display: contents; }
+#tbSigns .h { justify-self: end; align-self: center; transform: translateX(calc(50% + 3px)); }
+#tbSigns .v { justify-self: center; align-self: end; transform: translateY(calc(50% + 3px)); }
+#tbSigns span { z-index: 1; pointer-events: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--sign);
+  border-radius: 50%; background: var(--board); font-size: 14px; font-weight: 700; line-height: 1; }
 #tbSigns span.bad { color: var(--negative); }
 .rules { margin: 0; color: var(--muted); font-size: 14px; }
 #tTip { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 8px 14px; border: 1px solid var(--control); border-radius: 14px; background: var(--surface); }
@@ -236,6 +243,10 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 #xg .cur { background: var(--focus); box-shadow: inset 0 0 0 2px var(--hue); }
 #xg .ok { color: var(--text); font-weight: 700; }
 #xg .bad { color: var(--negative); background: var(--bad-bg); }
+/* A two-word answer (TIHA NOĆ): a dashed edge after the first word's last cell, as newspapers do. */
+#xg .ba::after, #xg .bd::after { content: ""; position: absolute; z-index: 1; border: 0 dashed var(--box); }
+#xg .ba::after { top: 3px; bottom: 3px; right: -2px; border-right-width: 3px; }
+#xg .bd::after { left: 3px; right: 3px; bottom: -2px; border-bottom-width: 3px; }
 #xwplay .controls { gap: 10px; }
 .xwlist, #xwKeys { display: none; }   /* the clue lists and the keys line: big screens only */
 #xwClue { display: flex; align-items: center; gap: 4px; min-height: 64px; padding: 4px; border-radius: 12px; background: var(--area); }
@@ -251,6 +262,31 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 #xwDone { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 18px; border-radius: 16px; background: var(--surface); text-align: center; }
 #xwDone b { color: var(--positive); font-size: 22px; }
 #xwDone small { margin-top: -6px; color: var(--muted); font-size: 14px; }
+#xwDone .cal { align-self: center; }
+
+/* Dnevna križaljka's sign: a tear-off calendar sheet, the month on a red band, the day large, the weekday under it.
+   On top of Križaljke (the whole card opens it), on Danas, and small on the solved card for tomorrow. */
+.cal { flex: none; display: flex; flex-direction: column; width: 92px; border-radius: 12px; overflow: hidden; background: var(--ground); text-align: center; line-height: 1.1; }
+.cal .m { padding: 4px 0 3px; background: var(--calendar); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.cal .d { padding: 4px 0 0; color: var(--text); font-size: 46px; font-weight: 700; letter-spacing: -0.04em; }
+.cal .w { padding: 2px 0 8px; color: var(--muted); font-size: 12px; }
+#xwDaily { justify-content: flex-start; align-items: flex-start; gap: 16px; padding: 16px; border: 0; border-radius: 16px; background: var(--surface); text-align: left; }
+.xdt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.xdt > small { color: var(--muted); font-size: 13px; font-weight: 600; }
+.xdt > b { font-size: 21px; letter-spacing: -0.02em; line-height: 1.2; }
+.xdt > span:not(.xdgo) { color: var(--muted); font-size: 15px; font-weight: 400; }
+.xdgo { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.xdgo .go { display: inline-flex; align-items: center; min-height: 44px; padding: 0 24px; border-radius: 10px; background: var(--primary); color: var(--on-primary); font-weight: 700; }
+.xdgo small { color: var(--muted); font-size: 14px; font-weight: 400; }
+.xdgo small.solved, #dXwDay small.solved { color: var(--positive); }
+#dXwDay { justify-content: flex-start; align-items: flex-start; gap: 12px; min-height: 0; padding: 0; border: 0; background: transparent; text-align: left; }
+#dXwDay .cal { width: 60px; } #dXwDay .cal .d { font-size: 28px; } #dXwDay .cal .w { display: none; } #dXwDay .cal .m { font-size: 9px; }
+#dXwDay > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+#dXwDay small { color: var(--muted); font-size: 14px; font-weight: 400; }
+#solved:not(.xw) .forxw { display: none; }
+#solvedTomorrow { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px; border-radius: 12px; background: var(--ground); text-align: left; }
+#solvedTomorrow .cal { width: 60px; background: var(--surface); } #solvedTomorrow .cal .d { font-size: 26px; } #solvedTomorrow .cal .w { display: none; } #solvedTomorrow .cal .m { font-size: 9px; }
+#solvedTomorrow small { display: block; color: var(--muted); font-size: 14px; }
 .xdst { display: flex; justify-content: center; }
 #xwNextLv { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
 #xwAgain { border-color: transparent; background: var(--raised); font-weight: 600; }
@@ -440,6 +476,12 @@ canvas { max-width: 100%; }
   .ghead { grid-area: head; }
   .gbar { margin-top: -6px; }
   .controls { grid-area: controls; margin: 8px 0 0; padding: 0; gap: 16px; }
+  /* Dinango as the sudoku: the board left, the rest beside it. */
+  #tango { display: grid; max-width: none; justify-content: center; align-content: start; column-gap: 48px; padding: 24px 0 32px;
+    grid-template-columns: var(--col) 340px; grid-template-rows: repeat(4, auto) 1fr; }
+  #tb { grid-area: 1 / 1 / -1; align-self: start; }
+  #tango > :not(#tb) { grid-column: 2; }
+  #tango .controls { grid-area: auto / 2; }
   #pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }   /* like a calculator */
   #pad button { min-height: 64px; flex-direction: row; align-items: baseline; gap: 6px; background: var(--surface); font-size: 28px; }
   /* The toast in the right column: under Skeniraj in the menu; in the game at its foot, clear of the
@@ -670,6 +712,9 @@ canvas { max-width: 100%; }
 #dailyGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 @keyframes pop { from { opacity: 0; transform: scale(0.94); } }
 #solved .tick { width: 72px; height: 72px; fill: none; stroke: var(--positive); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+#solved:not(.tango) .fortango, #solved.tango .tick { display: none; }   /* Dinango: the little dino instead of the tick, a line for U */
+#solvedDino { width: 76px; height: 76px; overflow: visible; }
+#solved #solvedFor { margin: 14px 0 0; font-size: 13px; }
 #solved .tick path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .42s .14s ease-out forwards; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 #solved h2 { margin: 8px 0 4px; font-size: 26px; font-weight: 700; }
@@ -720,7 +765,7 @@ canvas { max-width: 100%; }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #dailyDlg[open], #about[open], #solved .tick path { animation: none; stroke-dashoffset: 0; }
+  #solved[open], #dailyDlg[open], #about[open], #solved .tick path, #tb.won button svg { animation: none; stroke-dashoffset: 0; }
   #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
   #more, #more[open], #live video, #live canvas { transform: none; }
   #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }

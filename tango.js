@@ -1,4 +1,4 @@
-// --- Tango: a 6×6 board of squares (0) and circles (1). Each row and column holds three of each, never three
+// --- Tango (on screen Dinango): a 6×6 board of eggs (0) and baby dinos (1). Each row and column holds three of each, never three
 // alike in a row; = joins two cells that are alike, × two that differ. One a day, the same for everyone
 // (made from the date, like the sudoku's), solo: only broken rules show. After it, Nova igra, with Savjet.
 // A board: { giv, sol, signs: [a, b, same], values: 36 × (-1 empty, 0, 1), elapsed, solvedAt, date (the daily's) }. ---
@@ -71,11 +71,26 @@ function tBad(g, signs) {
   return { cells, signs: bad };
 }
 
-const T_SYM = ['<rect x="3" y="3" width="18" height="18" rx="2.5" fill="var(--hue)"/>', '<circle cx="12" cy="12" r="9.5" fill="var(--hard)"/>'];
-const T_NAME = [['kvadrat', 'kvadrata', 'kvadrati'], ['krug', 'kruga', 'krugovi']];
+// The two pictures (48×48): an egg, and a baby dino just out of one. Shape and colour both differ.
+const tEye = (x, y) => `<circle cx="${x}" cy="${y}" r="3.3" fill="var(--eye)"/><circle cx="${x + 1.2}" cy="${y - 1.3}" r="1.2" fill="#fff"/>`;
+const tCheek = x => `<ellipse cx="${x}" cy="26.5" rx="3.2" ry="2" fill="var(--cheek)" opacity=".55"/>`;
+const T_SYM = [
+  `<ellipse cx="24" cy="26" rx="13.5" ry="17" fill="var(--egg)" stroke="var(--egg2)" stroke-width="1.6"/><ellipse cx="19" cy="19.5" rx="3.2" ry="2.5" fill="var(--dgl)"/>
+   <ellipse cx="29.5" cy="30" rx="3.6" ry="2.7" fill="var(--dgl)"/><circle cx="21" cy="35.5" r="1.9" fill="var(--dgl)"/><circle cx="30.5" cy="17.5" r="1.6" fill="var(--dgl)"/>`,
+  `<circle cx="25" cy="9.5" r="2.6" fill="var(--dg2)"/><circle cx="19" cy="11.5" r="2.2" fill="var(--dg2)"/><circle cx="31" cy="11.5" r="2.2" fill="var(--dg2)"/>
+   <path d="M11.5 32C10 19 16 10.5 25 10.5S39.5 19 37.5 32Z" fill="var(--dg)"/>${tEye(19.5, 21)}${tEye(30, 21)}${tCheek(15.5)}${tCheek(34)}
+   <path d="M22.5 26.5q2.2 1.6 4.4 0" fill="none" stroke="var(--eye)" stroke-width="1.4" stroke-linecap="round"/>
+   <path d="M10.5 30.5 15 26l4 4.5 4.5-4.5 4.5 4.5 4.5-4.5 4 4.5 1.5-1.5C39 39 33 45 25 45s-14.5-6-14.5-14.5Z" fill="var(--egg)" stroke="var(--egg2)" stroke-width="1.6" stroke-linejoin="round"/>`];
+const T_NAME = [['jaje', 'jaja', 'jaja'], ['dinić', 'dinića', 'dinići']];
+// The tile and its copies (rail, Danas; Povijest copies it later): four cells of the board. The solved card: the little one.
+const tTile = '<rect width="48" height="48" rx="8" fill="var(--board)"/>' + [[3, 3, 0], [25, 3, 1], [3, 25, 1], [25, 25, 0]]
+  .map(([x, y, v]) => `<rect x="${x}" y="${y}" width="20" height="20" rx="4" fill="var(--cell)"/><svg x="${x + 1}" y="${y + 1}" width="18" height="18" viewBox="0 0 48 48">${T_SYM[v]}</svg>`).join('');
+document.querySelectorAll('#tileTango > svg, [data-tile="tileTango"] > svg:first-child').forEach(s => s.innerHTML = tTile);
+$('solvedDino').innerHTML = T_SYM[1];
 const tCells = Array.from({ length: 36 }, (_, k) => {
   const b = document.createElement('button');
   b.onclick = () => tTap(k);
+  b.style.cssText = `grid-area: ${(k / 6 | 0) + 1} / ${k % 6 + 1}; --d: ${(k / 6 | 0) + k % 6}`;   // --d: its place in the wave when solved
   return $('tb').insertBefore(b, $('tbSigns'));
 });
 let tg = null, tUndo = [], tTip = null;   // the board on screen, its earlier values, the open Savjet ({ k, v, from, title, text, act })
@@ -83,7 +98,7 @@ const tLoad = key => { try { return JSON.parse(localStorage[key] || 'null'); } c
 const tSave = () => { try { localStorage[tg.date ? 'tangoDaily' : 'tangoGame'] = JSON.stringify(tg); } catch {} };
 const tangoDone = () => tLoad('tangoDone') || {};   // date → ms of each solved daily
 const tNew = p => ({ ...p, values: p.giv.slice(), elapsed: 0, solvedAt: null });
-const tOpen = which => { try { localStorage.tangoOn = which; } catch {} tUndo = []; tTip = null; go('tango'); };
+const tOpen = which => { try { localStorage.tangoOn = which; } catch {} tUndo = []; tTip = null; $('tb').classList.remove('won'); go('tango'); };
 // The Igre tile: today's daily, made on the day's first open.
 function openTango() {
   tg = tLoad('tangoDaily');
@@ -103,13 +118,13 @@ function drawTango() {
   const g = tg.values, bad = tBad(g, tg.signs), solo = !!tg.date, game = tLoad('tangoGame');
   tCells.forEach((b, k) => {
     b.className = [tg.giv[k] >= 0 && 'given', tTip?.from.includes(k) && 'from', tTip?.k === k && 'to', bad.cells.has(k) && 'bad'].filter(Boolean).join(' ');
-    b.innerHTML = g[k] < 0 ? '' : `<svg viewBox="0 0 24 24" aria-hidden="true">${T_SYM[g[k]]}</svg>`;
+    b.innerHTML = g[k] < 0 ? '' : `<svg viewBox="0 0 48 48" aria-hidden="true">${T_SYM[g[k]]}</svg>`;
     b.ariaLabel = `Red ${(k / 6 | 0) + 1}, stupac ${k % 6 + 1}: ${g[k] < 0 ? 'prazno' : T_NAME[g[k]][0]}`;
   });
   $('tbSigns').replaceChildren(...tg.signs.map(([a, z, same], i) => Object.assign(document.createElement('span'), {
-    textContent: same ? '=' : '×', className: bad.signs.has(i) ? 'bad' : '',
-    style: `left: ${(a % 6 + (z - a === 1 ? 1 : 0.5)) / 6 * 100}%; top: ${((a / 6 | 0) + (z - a === 1 ? 0.5 : 1)) / 6 * 100}%` })));
-  $('tangoName').textContent = solo ? 'Tango · dnevni' : 'Tango · Nova igra';
+    textContent: same ? '=' : '×', className: (z - a === 1 ? 'h' : 'v') + (bad.signs.has(i) ? ' bad' : ''),
+    style: `grid-area: ${(a / 6 | 0) + 1} / ${a % 6 + 1}` })));   // in a's cell, pushed onto the gap after it
+  $('tangoName').textContent = solo ? 'Dinango · dnevni' : 'Dinango · Nova igra';
   $('tangoSide').textContent = solo ? new Date(tg.date + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
   $('tangoTimer').textContent = clock(tg.elapsed);
   $('tHintBtn').hidden = solo;   // the daily is solo, as the sudoku's
@@ -120,7 +135,7 @@ function drawTango() {
   $('tTip').hidden = !tTip;
   if (tTip) { $('tTip').firstChild.textContent = tTip.title; $('tTip').children[1].textContent = tTip.text; $('tTipDo').textContent = tTip.act; }
 }
-// A tap: empty → square → circle → empty. Printed cells stay.
+// A tap: empty → egg → dino → empty. Printed cells stay.
 function tTap(k) {
   if (tg.giv[k] >= 0 || tg.solvedAt) return;
   tUndo.push(tg.values.slice());
@@ -150,18 +165,20 @@ function tWords(h, g) {
   return {
     '=': { title: 'Znak =', text: `Znak = kaže da su ova dva polja ista. Jedno je ${n[x][0]}, pa je i drugo ${n[x][0]}.` },
     '×': { title: 'Znak ×', text: `Znak × kaže da su ova dva polja različita. Jedno je ${n[x][0]}, pa je drugo ${n[1 - x][0]}.` },
-    par: { title: 'Par', text: `Dva ${n[x][1]} jedan do drugog. Treći zaredom ne smije biti ${n[x][0]}, pa ovdje ide ${n[1 - x][0]}.` },
+    par: { title: 'Par', text: `Dva ${n[x][1]} zaredom. Ni sljedeće polje ne smije biti ${n[x][0]}, pa ovdje ide ${n[1 - x][0]}.` },
     sendvič: { title: 'Sendvič', text: `${cap(n[x][0])}, prazno, ${n[x][0]}. Da je u sredini ${n[x][0]}, bila bi tri zaredom, pa ovdje ide ${n[1 - x][0]}.` },
     pun: { title: line === 'red' ? 'Pun red' : 'Pun stupac', text: `Ovaj ${line} već ima tri ${n[x][1]}, koliko smije. Ostala polja su ${n[1 - x][2]}.` },
     red: { title: 'Jedini način', text: `Kako god dovršiš ovaj ${line} (3 i 3, nikad tri ista zaredom, znakovi), ovdje uvijek ide ${n[h.v][0]}.` },
   }[h.rule];
 }
 
-// Solved: the shared card (card = 'tango'). The daily: time, days in a row, the board (level 3); a game: its time.
+// Solved: a wave over the board, then the shared card (card = 'tango': the little dino, a line for U). The daily: time, days in a row, the board (level 3); a game: its time.
 function tangoSolved() {
   tg.solvedAt = Date.now();
   tSave();
   card = 'tango';
+  $('tb').classList.add('won');
+  $('solved').className = 'tango';
   $('solvedMenu').textContent = 'Igre';
   $('diffSolved').hidden = $('solvedTechs').hidden = $('lboard').hidden = true;
   if (tg.date) {
@@ -174,7 +191,7 @@ function tangoSolved() {
     lbShow(lbNow.day, 3, lbNow.ms);
   } else $('solvedText').textContent = `Vrijeme: ${clock(tg.elapsed)}`;
   tangoButtons();
-  $('solved').showModal();
+  setTimeout(() => view === 'tango' && $('solved').showModal(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 900);
 }
 // The daily: Igre, and on to today's sudoku daily (its first level not solved), the result shared quietly;
 // with the sudokus done too, Podijeli is the main one. A game: Igre and the next one.
@@ -192,7 +209,7 @@ function tangoButtons() {
 // As prepShare: made before the tap, the place added once the board answers.
 async function tShare() {
   const name = lbName(), ms = tg.elapsed, day = tg.date, make = p => ({ url: location.origin + location.pathname,
-    text: [`Tango · ${new Date(day + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`, `${clock(ms)}${p?.all ? ` (${p.place}. od ${p.all})` : ''}`, 'Možeš li brže?'].join('\n') });
+    text: [`Dinango · ${new Date(day + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`, `${clock(ms)}${p?.all ? ` (${p.place}. od ${p.all})` : ''}`, 'Možeš li brže?'].join('\n') });
   shareMsg = make();
   if (!name || !await lbFlush()) return;
   shareMsg = make(await lbRows(day, 3, 0, { name, ms }).catch(() => null));

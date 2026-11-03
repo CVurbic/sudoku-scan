@@ -975,6 +975,7 @@ function checkSolved() {
   if (!task || celebrated === key || !inputs.every((x, i) => +x.value === task.solution[i])) return;
   celebrated = key;
   card = 'sudoku';
+  $('solved').className = '';   // no Dinango's or the crossword's extras
   $('solvedMenu').textContent = 'Izbornik';
   $('solvedLevel').firstChild.hidden = false;
   diffPill($('diffSolved'), saved().find(e => e.key === key)?.diff ?? difficulty(task.givens, task.solution));
@@ -1034,7 +1035,7 @@ let card = 'sudoku';
 $('solvedLevel').onclick = () => { $('solved').close(); if (card === 'tango') go('menu'); openDaily(+$('solvedLevel').dataset.lvl); };
 $('solvedClose').onclick = () => $('solved').close();
 $('solvedNext').onclick = () => card === 'tango' ? ($('solved').close(), tangoGame()) : newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
-$('solvedMenu').onclick = () => { $('solved').close(); go(card === 'tango' ? 'games' : 'menu'); };
+$('solvedMenu').onclick = () => { $('solved').close(); go({ tango: 'games', xw: 'xw' }[card] ?? 'menu'); };
 
 // Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn,
 // a finished board celebrated.
