@@ -7,8 +7,22 @@ const cut = (a, b) => { const i = src.indexOf(a); return src.slice(i, src.indexO
 const ctx = {};
 vm.createContext(ctx);
 vm.runInContext(cut('// --- Sudoku logic.', '// Digits 1-9') + cut('const DAILY =', 'const dayKey') +
-  ';this.m = { dailyTry, hint, reveal, BANDS, DAILY, NEW_TECH };', ctx);
-const { dailyTry, hint, reveal, BANDS, DAILY, NEW_TECH } = ctx.m;
+  ';this.m = { dailyTry, makeDaily, hint, reveal, BANDS, DAILY, NEW_TECH, HARD_TRIES };', ctx);
+const { dailyTry, makeDaily, hint, reveal, BANDS, DAILY, NEW_TECH, HARD_TRIES } = ctx.m;
+
+// node pool.js layouts > layouts.js: where each day's givens stand, per level (only the cells, no digits), for the
+// menu's boards; as many days as HARD_TRIES has. 81 bits as 16 base-36 characters, three levels a day. (~10 min)
+if (process.argv[2] === 'layouts') {
+  let out = '';
+  for (let day = 0; day < HARD_TRIES.length / 2; day++) {
+    const date = new Date(Date.parse(NEW_TECH) + day * 864e5).toISOString().slice(0, 10);
+    for (let lvl = 0; lvl < 3; lvl++)
+      out += BigInt('0b' + makeDaily(date, lvl).givens.map(d => +!!d).join('')).toString(36).padStart(16, '0');
+    process.stderr.write(date + '\n');
+  }
+  console.log(`// Made by pool.js (node pool.js layouts > layouts.js): per day from NEW_TECH, the givens' cells of the three dailies.\nconst DAILY_LAYOUTS = '${out}';`);
+  process.exit();
+}
 
 // How often the hardest technique was needed (as difficulty() counts it).
 function hardestCount({ givens, solution }) {

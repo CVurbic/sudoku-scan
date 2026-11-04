@@ -115,7 +115,8 @@ $('tangoBack').onclick = () => go('games');
 $('tangoNew').onclick = () => tangoGame();
 
 function drawTango() {
-  const g = tg.values, bad = tBad(g, tg.signs), solo = !!tg.date, game = tLoad('tangoGame');
+  // the cell being tapped through egg → dino: its broken rules wait for a pause (tQuiet); the rest show at once
+  const g = tg.values, bad = tBad(tQuiet === null ? g : g.map((v, i) => i === tQuiet ? -1 : v), tg.signs), solo = !!tg.date, game = tLoad('tangoGame');
   tCells.forEach((b, k) => {
     b.className = [tg.giv[k] >= 0 && 'given', tTip?.from.includes(k) && 'from', tTip?.k === k && 'to', bad.cells.has(k) && 'bad'].filter(Boolean).join(' ');
     b.innerHTML = g[k] < 0 ? '' : `<svg viewBox="0 0 48 48" aria-hidden="true">${T_SYM[g[k]]}</svg>`;
@@ -135,14 +136,19 @@ function drawTango() {
   $('tTip').hidden = !tTip;
   if (tTip) { $('tTip').firstChild.textContent = tTip.title; $('tTip').children[1].textContent = tTip.text; $('tTipDo').textContent = tTip.act; }
 }
-// A tap: empty → egg → dino → empty. Printed cells stay.
+// A tap: empty → egg → dino → empty. Printed cells stay. Red for that cell only after T_WAIT ms without a tap
+// (while choosing between egg and dino it is no mistake yet).
+let T_WAIT = 1500, tQuiet = null, tQuietT = 0;
 function tTap(k) {
   if (tg.giv[k] >= 0 || tg.solvedAt) return;
   tUndo.push(tg.values.slice());
   tg.values[k] = tg.values[k] === 1 ? -1 : tg.values[k] + 1;
-  tChanged();
+  clearTimeout(tQuietT);
+  tQuietT = setTimeout(() => { tQuiet = null; if (view === 'tango') drawTango(); }, T_WAIT);
+  tChanged(k);
 }
-function tChanged() {
+function tChanged(quiet = null) {   // undo, Obriši sve, Savjet: red at once
+  tQuiet = quiet;
   tTip = null;
   tSave();
   if (tg.values.every((v, i) => v === tg.sol[i])) tangoSolved();

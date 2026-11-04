@@ -214,20 +214,21 @@
   </header>
   <div id="home">
     <h1>Sudoku</h1>
-    <button id="homeResume" hidden><canvas></canvas><span class="hmeta"><b>Nastavi</b><small id="resumeText"></small></span></button>
-    <button id="homeDaily"><b>Dnevni sudoku</b><span id="homeDays"></span></button>
-    <div id="homeNew">
-      <b>Nova igra</b>
-      <small>Vježba: savjeti kad zapneš, bez kazne</small>
-      <div id="newLevels">
-        <button><span data-stairs="0"></span>Lagano</button>
-        <button><span data-stairs="1"></span>Srednje</button>
-        <button><span data-stairs="2"></span>Teško</button>
-      </div>
+    <button id="homeResume" class="key" hidden><canvas></canvas><span class="hmeta"><b>Nastavi</b><small id="resumeText"></small></span><span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></span></button>
+    <!-- Every level is a small board with its givens where they are: many on Lagano, few on Teško. -->
+    <div class="hsec">
+      <h3>Dnevni<small id="dailyWhen"></small><span id="dailyCount" class="tag"></span></h3>
+      <div id="homeDays" class="boards"></div>
+    </div>
+    <div class="hsec">
+      <h3>Nova igra<span class="tag"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg>sa savjetima</span></h3>
+      <div id="newLevels" class="boards"></div>
     </div>
     <h2 id="recentTitle">Nedavno</h2>
     <ul id="recent" class="hlist"></ul>
     <button id="historyAll"><span></span><span aria-hidden="true">›</span></button>
+  </div>
+  <div id="homeSide">
     <div id="ranksTop">
       <h2>Ljestvica</h2>
       <span id="ranksDay">
@@ -244,10 +245,11 @@
     <div class="links"><button id="manualBtn">Upiši ručno</button><button id="aboutBtn">O aplikaciji</button></div>
   </div>
   <div class="dock">
+    <b class="dtitle">Sudoku s papira</b>
     <p id="loading">Učitavam OpenCV…</p>
     <input type="file" id="file" accept="image/*" disabled>
-    <label for="file" class="btn">Iz galerije</label>
-    <button id="liveBtn" disabled>Skeniraj</button>
+    <label for="file" class="btn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.6"/><path d="M20 15l-5-5-9 10"/></svg>Iz galerije</label>
+    <button id="liveBtn" disabled><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Skeniraj</button>
   </div>
 </section>
 
@@ -291,6 +293,7 @@
 
 <script src="vendor/tf.min.js"></script>   <!-- TensorFlow.js 4.22.0 -->
 <script src="app.js"></script>
+<script src="layouts.js"></script>   <!-- the dailies' givens cells, for the menu (pool.js) -->
 <script src="sudoku.js"></script>
 <script src="scan.js"></script>
 <script src="tango.js"></script>

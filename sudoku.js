@@ -429,7 +429,7 @@ function historyItem(e) {
   const li = document.createElement('li'), open = document.createElement('button');
   const blanks = [...e.givens].filter(d => !+d).length, done = [...e.done].filter(d => +d).length;
   open.className = 'hrow';
-  open.append(miniGrid(e), Object.assign(document.createElement('span'), { className: 'hmeta' }));
+  open.append(miniGrid(e, done === blanks), Object.assign(document.createElement('span'), { className: 'hmeta' }));
   open.lastChild.append(Object.assign(document.createElement('b'), done === blanks ? { textContent: e.time ? `Riješeno za ${clock(e.time)} ✓` : 'Riješeno ✓', className: 'solved' } : { textContent: `${done} od ${blanks} polja` }),
     Object.assign(document.createElement('small'), { textContent: (e.daily ? `Dnevni ${DAILY[e.level]?.[0].toLowerCase() ?? ''} · ` : e.random ? 'Nova igra · ' : '') + new Date(e.last).toLocaleString('hr', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       + (e.diff === undefined ? '' : ` · ${diffLevel(e.diff)[1]}`) }));
@@ -456,11 +456,15 @@ function showHistory() {
 // The menu: the unfinished game on the board ("Nastavi"), today's dailies, the last two other sudokus.
 function showMenu() {
   loadDays();
-  $('homeDays').replaceChildren(...DAILY.map(([name], i) => {
-    const s = document.createElement('span');
-    s.append(stairs(i), name,
-      Object.assign(document.createElement('small'), { textContent: levelText(days.levels[i]) }));
-    return s;
+  $('dailyWhen').textContent = days.date.slice(8).replace(/^0/, '') + '. ' + +days.date.slice(5, 7) + '.';
+  $('dailyCount').textContent = `${days.levels.filter(st => st?.solvedAt).length} od 3`;
+  $('homeDays').replaceChildren(...DAILY.map((_, i) => {
+    const st = days.levels[i];
+    const b = boardKey(i, st ? miniGrid({ givens: st.givens, done: st.values }, st.solvedAt) : miniGrid({ givens: dayLayout(days.date, i) ?? sampleGrid(i) }),
+      st?.solvedAt ? `✓ ${clock(st.elapsed)}` : st?.elapsed ? 'u tijeku' : '');
+    b.classList.toggle('solved', !!st?.solvedAt);
+    b.onclick = () => openDaily(i);
+    return b;
   }));
   const key = task && celebrated !== task.solution.join('') ? task.solution.join('') : null;   // solved (or "Riješi sve"): nothing to go on with
   $('homeResume').hidden = !key;
@@ -479,7 +483,6 @@ function showMenu() {
   showRanks();
 }
 $('homeResume').onclick = () => task.daily === dayKey() ? openDaily(task.level) : go('game');   // today's daily: its card, the clock waits for it
-$('homeDaily').onclick = () => openDaily();
 $('manualBtn').onclick = () => { clearBoard(); go('game'); };
 $('aboutBtn').onclick = () => { $('aboutName').value = lbName(); $('about').showModal(); };
 $('aboutClose').onclick = () => $('about').close();
@@ -528,21 +531,42 @@ $('restartBtn').onclick = () => {
   markConflicts();
 };
 
-// The puzzle at a glance: printed digits as dark cells, the user's right digits in blue.
-function miniGrid(e) {
-  const c = document.createElement('canvas'), x = c.getContext('2d'), u = 8;
-  c.width = c.height = 9 * u + 2;
-  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-  for (let i = 0; i < 81; i++) {
-    if (!+e.givens[i] && !+e.done[i]) continue;
-    x.fillStyle = +e.givens[i] ? '#3a3a38' : '#1d5fbf';
-    x.fillRect(1 + i % 9 * u + 1, 1 + (i / 9 | 0) * u + 1, u - 2, u - 2);
-  }
-  x.strokeStyle = '#121212'; x.lineWidth = 1;
-  for (let j = 0; j <= 9; j += 3) {
-    x.beginPath(); x.moveTo(1 + j * u, 0); x.lineTo(1 + j * u, c.height); x.moveTo(0, 1 + j * u); x.lineTo(c.width, 1 + j * u); x.stroke();
-  }
-  return c;
+// The puzzle at a glance (an SVG, so sharp and in the theme's colours): printed digits as dark squares,
+// the user's in blue, green once solved.
+function miniGrid(e, solved) {
+  let s = '';
+  for (let i = 0; i < 81; i++) if (+e.givens[i] || +e.done?.[i])
+    s += `<rect class="${+e.givens[i] ? 'g' : 'u'}" x="${i % 9 * 10 + 2}" y="${(i / 9 | 0) * 10 + 2}" width="6" height="6" rx="1.5"/>`;
+  const t = document.createElement('template');
+  t.innerHTML = `<svg class="mb${solved ? ' full' : ''}" viewBox="-1 -1 92 92" aria-hidden="true"><rect class="bg" width="90" height="90"/>`
+    + '<path class="ln" d="M10 0V90M20 0V90M40 0V90M50 0V90M70 0V90M80 0V90M0 10H90M0 20H90M0 40H90M0 50H90M0 70H90M0 80H90"/>'
+    + s + '<path class="bx" d="M0 0H90V90H0zM30 0V90M60 0V90M0 30H90M0 60H90"/></svg>';
+  return t.content.firstChild;
+}
+// A level as a key: its board, its stairs and name, and a line under it (a daily's state).
+function boardKey(lvl, grid, note) {
+  const b = document.createElement('button'), nm = document.createElement('span');
+  b.className = 'key board';
+  nm.className = 'nm';
+  nm.append(stairs(lvl), Object.assign(document.createElement('b'), { textContent: DAILY[lvl][0] }));
+  b.append(grid, nm);
+  if (note !== undefined) b.append(Object.assign(document.createElement('small'), { textContent: note }));
+  return b;
+}
+// A daily's givens' cells (0/1) before it is made, for its board in the menu: worked out ahead by pool.js
+// (layouts.js), as making all three here takes up to 2 s on a phone. Only cells, no digits: no answers in it.
+// null past the list (it ends with HARD_TRIES) or without layouts.js.
+function dayLayout(date, lvl) {
+  const day = (Date.parse(date) - Date.parse(NEW_TECH)) / 864e5,
+    s = day >= 0 && typeof DAILY_LAYOUTS === 'string' ? DAILY_LAYOUTS.substr((day * 3 + lvl) * 16, 16) : '';
+  return s.length === 16 ? [...[...s].reduce((n, c) => n * 36n + BigInt(parseInt(c, 36)), 0n).toString(2).padStart(81, '0')].map(Number) : null;
+}
+// A level's look when there is no sudoku to show (Nova igra; a daily past the list): as many givens as the
+// level keeps, placed symmetrically.
+function sampleGrid(lvl, salt = '') {
+  const r = rng(hash('ploča#' + lvl + salt)), g = Array(81).fill(0);
+  while (g.filter(Boolean).length < DAILY[lvl][1]) { const i = r() * 81 | 0; g[i] = g[80 - i] = 1; }
+  return g;
 }
 
 // A sudoku from the history becomes the task again, with the user's right digits filled in.
@@ -1192,17 +1216,19 @@ function playDaily(lvl) {
 // ponytail: made on the tap (Teško up to ~3 s, the page waits); a Web Worker if that ever feels slow.
 // The pressed button (a level, or "Nova igra" on the solved card) says it is working meanwhile.
 async function newRandom(lvl, btn) {
-  const label = btn.lastChild.textContent, keys = [...$('newLevels').children, $('solvedNext')];
+  const t = btn.querySelector('b') || btn, label = t.textContent, keys = [...$('newLevels').children, $('solvedNext')];
   keys.forEach(b => b.disabled = true);
-  btn.lastChild.textContent = 'Pripremam…';
+  t.textContent = 'Pripremam…';
+  btn.ariaBusy = 'true';
   await new Promise(r => setTimeout(r, 30));   // let that show before the work
   const p = makeDaily('r' + Math.random(), lvl);
   keys.forEach(b => b.disabled = false);
-  btn.lastChild.textContent = label;
+  t.textContent = label;
+  btn.ariaBusy = null;
   $('solved').close();
   startGame(p, lvl);
 }
-[...$('newLevels').children].forEach((b, i) => b.onclick = () => newRandom(i, b));
+$('newLevels').replaceChildren(...DAILY.map((_, i) => { const b = boardKey(i, miniGrid({ givens: sampleGrid(i, 'nova') })); b.onclick = () => newRandom(i, b); return b; }));
 
 // A sudoku ({ givens, solution }) on the board as a game: with help and a clock (level: LEVELS index).
 function startGame(p, lvl) {

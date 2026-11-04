@@ -223,9 +223,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   const pooled = await page.evaluate(() => { const t = performance.now(), p = makeDaily('2027-03-14', 2);
     return { ms: performance.now() - t, unique: solve(p.givens).length === 1, diff: p.diff, days: HARD_TRIES.length / 2 }; });
   assert.ok(pooled.unique && pooled.diff >= 55 && pooled.diff < 80 && pooled.days >= 730 && pooled.ms < 2000, 'pooled Teško: ' + JSON.stringify(pooled));
+  // The menu's boards (layouts.js, pool.js): the givens' cells of what the generator makes, today and some day ahead; all days listed.
+  const layouts = await page.evaluate(() => [dayKey(), '2027-06-30', '2028-10-01'].flatMap(d => [0, 1, 2].map(l =>
+    dayLayout(d, l).join('') === makeDaily(d, l).givens.map(x => +!!x).join(''))).concat(DAILY_LAYOUTS.length === HARD_TRIES.length / 2 * 48, dayLayout('2030-01-01', 0) === null));
+  assert.ok(layouts.every(Boolean), 'daily layouts: ' + layouts);
   // The card first (rules, three levels, "Kreni"); the clock waits for it. Then solo: no help buttons, a
   // clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
-  await page.click('#homeDaily');
+  await page.click('#homeDays button');   // Lagano's board
   assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, dailyGo.textContent, !!task?.daily]), [true, 'Kreni', false], 'daily: card before the start');
   await page.click('#dailyLevels button');   // Lagano
   await page.click('#dailyGo');
@@ -385,8 +389,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   }).filter(r => r !== 'true,1,true,true')), [], 'tango: same board per date, one solution, Savjet finishes it');
   await page.click('#tileTango');
   assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Dinango · dnevni', true], 'tango daily: solo');
-  await page.evaluate(() => T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3).forEach(k => tCells[k].click()));
-  assert.ok(await page.$$eval('#tb .bad', x => x.length >= 3), 'tango: three alike are red');
+  const three = await page.evaluate(() => { const L = T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3); L.forEach(k => tCells[k].click()); return L; });
+  assert.strictEqual(await page.evaluate(k => tCells[k].classList.contains('bad'), three[2]), false, 'tango: the cell just tapped is not red yet');
+  await page.waitForFunction(L => L.every(k => tCells[k].classList.contains('bad')), { timeout: 3000 }, three);   // after T_WAIT: three alike are red
   await page.click('#tClearBtn');
   await page.evaluate(() => tg.sol.forEach((v, k) => { if (tg.giv[k] < 0) { tCells[k].click(); if (v) tCells[k].click(); } }));
   await page.waitForFunction(() => solved.open);   // after the wave
@@ -422,11 +427,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // the real server may have answered before this (today's daily): forgotten, so the fake one below is asked
   await page.evaluate(() => { const t = xwGet('xwTopics'); delete t[xwDayKey()]; xwSet('xwTopics', t); xwDayAsk = null; });
   const DAY = ['TIHANOĆ', 'BOR', 'JASLICE', 'BADNJAK', 'KOLEDA', 'BETLEHEM', 'ANĐEO', 'MARIJA', 'JOSIP', 'ADVENT', 'PASTIRI', 'ZVIJEZDA', 'CHAPLIN'];
+  // two-word answers: several, as the day's grid (seeded by the date) may leave any one of them out
+  const TWO = { TIHANOĆ: [4, 3], BETLEHEM: [4, 4], PASTIRI: [3, 4], ZVIJEZDA: [4, 4] };
   let dayAsks = 0;   // the daily's hints come on the second ask (made the hour after its terms)
   const xwRoute = r => !r.url().includes('/functions/v1/krizaljka') ? r.continue()
     : r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'apikey, content-type' },
       body: r.method() === 'OPTIONS' ? '' : r.url().includes('?dan=') ? (dayAsks++, JSON.stringify({ tema: 'Božić', uvod: 'Badnjak, polnoćka i Tiha noć.', sutra: 'Sveti Stjepan',
-        pojmovi: DAY.map((w, i) => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Dnevni trag ' + i, ...dayAsks > 1 ? { trag2: 'Dnevni savjet ' + i } : {}, ...i ? {} : { rijeci: [4, 3] } })) }))
+        pojmovi: DAY.map((w, i) => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Dnevni trag ' + i, ...dayAsks > 1 ? { trag2: 'Dnevni savjet ' + i } : {}, ...TWO[w] ? { rijeci: TWO[w] } : {} })) }))
         : r.method() === 'GET' ? JSON.stringify([{ kljuc: 'knjigovodstvo', tema: 'Knjigovodstvo', broj: 24, igrano: 1284 }, { kljuc: 'žabe', tema: 'Žabe', broj: 31, igrano: 2 }])
         : r.postData().includes('savjeti') ? JSON.stringify({ savjeti: XW.map(w => 'Savjet za ' + w.length) })
         : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
@@ -484,8 +491,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     [1, true, false, false, 'Na današnji dan · Božić', true], 'xw daily: Srednje, the same grid again (seeded by the date), no clock, Savjet');
   await page.evaluate(() => xwHint.click());
   assert.deepStrictEqual(await page.evaluate(() => { const w = xw.words.find(w => w.rijeci); xw.sel = w; drawXw();
-    return [!!document.querySelector(`#xg [data-k="${w.at[3]}"]`).className.match(/ b[ad]\b/), document.querySelectorAll('#xg .ba, #xg .bd').length, xwClue.textContent.includes('(4, 3)'), xwKb.textContent.includes('QW')]; }),
-    [true, 1, true, true], 'xw daily: TIHA NOĆ has one dashed edge after TIHA and (4, 3); the keys have Q W');
+    return [!!document.querySelector(`#xg [data-k="${w.at[w.rijeci[0] - 1]}"]`).className.match(/ b[ad]\b/),
+      document.querySelectorAll('#xg .ba, #xg .bd').length === xw.words.filter(w => w.rijeci).length, xwClue.textContent.includes(`(${w.rijeci.join(', ')})`), xwKb.textContent.includes('QW')]; }),
+    [true, true, true, true], 'xw daily: a two-word answer has one dashed edge after its first word and (4, 3) by its clue; the keys have Q W');
   await page.evaluate(() => { for (const w of xw.words) w.cells.forEach((ch, j) => { xw.sel = w; xw.k = w.at[j]; xwPut(ch); }); });
   await page.waitForFunction(() => solved.open);
   assert.deepStrictEqual(await page.evaluate(() => [solvedText.textContent, solvedMenu.textContent, solvedTomorrow.querySelector('b').textContent,
