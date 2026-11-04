@@ -62,9 +62,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.ok(await page.evaluate(() => !menu.hidden && /ne vodi/.test(msg.textContent)), 'broken link: menu + message');
   // A daily's link: that day, its card on the level (solo); another day, a game like any link.
   await page.goto(await page.evaluate(l => l + `&d=${dayKey()}.2`, link));
-  assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, pickLvl, location.search]), [true, 2, ''], 'shared daily today: its card');
+  assert.deepStrictEqual(await page.evaluate(() => [task?.daily === dayKey(), task?.level, paused, view, location.search]), [true, 2, true, 'game', ''], 'shared daily today: on the board, under the veil');
   await page.goto(link + '&d=2000-01-01.2');
-  assert.deepStrictEqual(await page.evaluate(() => [task.random, dailyDlg.open]), [true, false], 'shared daily of another day: a game');
+  assert.deepStrictEqual(await page.evaluate(() => [task.random, paused]), [true, false], 'shared daily of another day: a game');
   console.log('share: link to this sudoku, opens as a game elsewhere, ?s dropped, broken link says so');
   await open(null);
 
@@ -227,13 +227,14 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   const layouts = await page.evaluate(() => [dayKey(), '2027-06-30', '2028-10-01'].flatMap(d => [0, 1, 2].map(l =>
     dayLayout(d, l).join('') === makeDaily(d, l).givens.map(x => +!!x).join(''))).concat(DAILY_LAYOUTS.length === HARD_TRIES.length / 2 * 48, dayLayout('2030-01-01', 0) === null));
   assert.ok(layouts.every(Boolean), 'daily layouts: ' + layouts);
-  // The card first (rules, three levels, "Kreni"); the clock waits for it. Then solo: no help buttons, a
-  // clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
+  // A board in the menu: that daily on the board under the veil (no digits, ▶ Kreni); the clock waits for it.
+  // Then solo: no help buttons, a clashing digit shows red but is not judged, the clock runs, solving shows time + streak.
   await page.click('#homeDays button');   // Lagano's board
-  assert.deepStrictEqual(await page.evaluate(() => [dailyDlg.open, dailyGo.textContent, !!task?.daily]), [true, 'Kreni', false], 'daily: card before the start');
-  await page.click('#dailyLevels button');   // Lagano
-  await page.click('#dailyGo');
   await page.waitForFunction(() => task?.daily && !game.hidden);
+  await new Promise(r => setTimeout(r, 1200));
+  assert.deepStrictEqual(await page.evaluate(() => [task.level, paused, veil.hidden, veilGo.textContent, veilNote.textContent, getComputedStyle(inputs[task.givens.findIndex(Boolean)]).color, daily.elapsed]),
+    [0, true, false, 'Kreni', 'Sam, bez pomoći. Sat kreće s Kreni.', 'rgba(0, 0, 0, 0)', 0], 'daily: on the board under the veil, no digits, the clock waits');
+  await page.click('#veilGo');
   await page.evaluate(() => { NUDGE_MS = 1000; idle = 0; });
   assert.deepStrictEqual(await page.evaluate(() => ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn'].map(id => $(id).hidden)), [true, true, true, true], 'daily: no help');
   const clash = await page.evaluate(() => {   // an empty cell + a digit already in its row
@@ -245,12 +246,14 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await new Promise(r => setTimeout(r, 2200));
   assert.ok(await page.evaluate(() => daily.elapsed >= 1000 && nudge.hidden), 'daily: the clock runs, no stuck bubble');
   await page.click('#backBtn');
-  await page.click('#homeResume');   // Nastavi on today's daily: its card again; the clock stops while it is open, the level says "U tijeku"
-  const paused = await page.evaluate(() => daily.elapsed);
+  await page.click('#homeResume');   // Nastavi on today's daily: under the veil again ("Nastavi"); the clock stands
+  const stood = await page.evaluate(() => daily.elapsed);
   await new Promise(r => setTimeout(r, 2200));
-  assert.deepStrictEqual(await page.evaluate(() => [daily.elapsed, dailyGo.textContent, dailyLevels.children[0].querySelector('small').textContent.startsWith('U tijeku')]),
-    [paused, 'Nastavi', true], 'daily: paused behind its card');
-  await page.click('#dailyGo');
+  assert.deepStrictEqual(await page.evaluate(() => [daily.elapsed, paused, veilGo.textContent, pauseBtn.hidden]), [stood, true, 'Nastavi', false], 'daily: back under the veil, the clock stands');
+  await page.click('#veilGo');
+  await page.click('#pauseBtn');   // ‖ by the clock: the veil again
+  assert.deepStrictEqual(await page.evaluate(() => [paused, veilNote.textContent]), [true, 'Pauza. Sat stoji dok ne nastaviš.'], 'daily: ‖ pauses');
+  await page.click('#veilGo');
   // Ljestvica against a stand-in for Supabase (fetch replaced in the page: nothing reaches the real table):
   // six players faster than you, one unique row per device/day/level, offline on demand.
   await page.evaluate(() => {
@@ -317,17 +320,15 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(await ranks(), [false, 'Još nitko', '', '7', 'Na vrijeme 1 od 7 danaNajbolje 7.'], 'ranks: yesterday from the strip');
   assert.deepStrictEqual(await page.evaluate(() => [dayStrip.children.length, dayStrip.lastChild.firstChild.textContent, $('dayLate').hidden, dayStrip.lastChild.querySelector('.marks i').className]),
     [14, 'danas', false, 'f'], 'strip: two weeks, today last, yesterday says "naknadno", today Lagano solved');
-  // Today's daily typed in by hand: its card again, no task with help.
+  // Today's daily typed in by hand: it is the daily again (solved already: no veil), no task with help.
   const retyped = await page.evaluate(() => {
     clearBoard();
     days.levels[0].givens.forEach((d, i) => inputs[i].value = d || '');
     entryLabel();
     setTask.click();
-    const r = [task, dailyDlg.open, pickLvl];
-    dailyDlg.close();
-    return r;
+    return [task?.daily === dayKey(), task?.level, paused];
   });
-  assert.deepStrictEqual(retyped, [null, true, 0], 'daily typed in: its card, no task');
+  assert.deepStrictEqual(retyped, [true, 0, false], 'daily typed in: it is the daily (solved: no veil), no task with help');
   // Yesterday's daily, played now: its card says so; solved, the result is yours only (not sent, no
   // streak), the card says where you would have been, you as a ghost row; then on to today's.
   const late = await page.evaluate(async () => {
@@ -336,9 +337,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     const day = dayKey(d), sentBefore = lbDb.length;
     lbDb.push({ day, level: 0, name: 'Y', ms: 1, device: 'y' }, { day, level: 0, name: 'Z', ms: 9e8, device: 'z' });
     openDaily(0, day);
-    const said = !$('dailyLate').hidden;
-    dailyGo.click();
-    while (task?.daily !== day) await new Promise(r => setTimeout(r, 50));
+    const said = veilNote.textContent.startsWith('Naknadno');
+    veilGo.click();
     daily.elapsed = 5000;   // between Y (1 ms) and Z
     task.solution.forEach((v, i) => { if (!task.givens[i]) { sel = i; setCell(v); } });
     while (!lbList.children.length) await new Promise(r => setTimeout(r, 50));
@@ -351,7 +351,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(late, [true, true, true, 'Na vrijeme bio bi 2. od 3', 'p1:1,ghost:(2),p2:2', 2, true, true, true, 'Današnji', 'l', true],
     'yesterday\'s daily: yours only, "bio bi 2.", ghost row, on to today\'s; the strip marks it');
   await page.evaluate(() => { dayOn = dayKey(); days = readDay(); });
-  console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels; typed in again → its card`);
+  console.log(`daily: same puzzles per date, levels ${gen.diffs.join("/")}%, on the board under the veil + Kreni, solo, duplicates only, clock (stands under the veil, ‖ pauses), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels; typed in again → the daily`);
 
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
   const hard = await page.evaluate((puzzles, printed) => {

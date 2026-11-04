@@ -10,7 +10,7 @@ const inputs = Array.from({ length: 81 }, (_, k) => {
   i.onclick = () => pick(k);
   i.onkeydown = e => {
     const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1;
-    if (d < 0 || task?.givens[k]) return;
+    if (d < 0 || task?.givens[k] || paused) return;   // paused: the board is under the veil
     sel = k; setCell(d);
   };
   $('grid').append(i);
@@ -65,6 +65,7 @@ function light(k) {
 
 // Notes: the user's own small digits per cell (pad "Bilješke"); undo: the board before each change.
 let notes = Array.from({ length: 81 }, () => []), noting = false, undo = [];
+let paused = false;   // the board under the veil (pause): see pause()
 
 // Where the board's progress (values, notes, elapsed) is kept: today's daily in its day, any other task in itself.
 const state = () => task.daily ? daily : task;
@@ -142,6 +143,7 @@ function setKind() {
 
 // The game's controls for the task on the board (none: a sudoku being typed in or checked first).
 function showTask() {
+  pause(false);   // a board just put on is not under the veil (openDaily puts it up after)
   inputs.forEach((inp, i) => {
     const g = task?.givens[i];
     inp.classList.toggle('given', !!g);
@@ -155,6 +157,7 @@ function showTask() {
   $('undoBtn').hidden = $('padNotes').hidden = $('moreBtn').hidden = !task;
   $('padKind').hidden = $('setTask').hidden = !!task;
   $('timer').hidden = !task?.daily && !task?.random;
+  $('pauseBtn').hidden = $('timer').hidden || !!state().solvedAt;   // ‖: any game with a clock, till solved
   if (!$('timer').hidden) $('timer').textContent = clock(state().elapsed);
   if (task) diffPill($('diff'), saved().find(e => e.key === task.solution.join(''))?.diff ?? difficulty(task.givens, task.solution));
   else $('diff').hidden = true;
@@ -491,7 +494,11 @@ function showMenu() {
       st?.solvedAt ? `${lt ? '↺' : '✓'} ${clock(st.elapsed)}` : st?.elapsed ? 'u tijeku' : '');
     b.classList.toggle('solved', !!st?.solvedAt);
     b.classList.toggle('late', !!lt);
-    b.onclick = () => openDaily(i, dayOn);
+    b.onclick = async () => {   // made on the first tap (up to ~1 s): the board dims meanwhile
+      if (!st) { b.ariaBusy = 'true'; await new Promise(r => setTimeout(r, 30)); }
+      openDaily(i, dayOn);
+      b.ariaBusy = null;
+    };
     return b;
   }));
   const key = task && celebrated !== task.solution.join('') ? task.solution.join('') : null;   // solved (or "Riješi sve"): nothing to go on with
@@ -1025,6 +1032,7 @@ function checkSolved() {
   const key = task?.solution.join('');
   if (!task || celebrated === key || !inputs.every((x, i) => +x.value === task.solution[i])) return;
   celebrated = key;
+  $('pauseBtn').hidden = true;
   card = 'sudoku';
   $('solved').className = '';   // no Dinango's or the crossword's extras
   $('solvedMenu').textContent = 'Izbornik';
@@ -1191,49 +1199,44 @@ const saveDaily = () => { const all = dayStore(); all[days.date] = days.levels; 
 const dailyDone = () => { try { return JSON.parse(localStorage.sudokuDailyDone || '{}'); } catch { return {}; } };   // "date/level" → { ms }: on the day
 const dailyLate = () => { try { return JSON.parse(localStorage.sudokuDailyLate || '{}'); } catch { return {}; } };   // the same, solved on a later day: yours only
 
-// The card before a daily: the rules, the three levels with how far each got, "Kreni" (the clock waits for it).
-// An older day's: the same, its result yours only (no board, no streak).
-let pickLvl = 0;
+// A daily (lvl: its first level not solved when left out): straight onto the board, under the veil until
+// "Kreni" (the clock waits for it). An older day's: the same, its result yours only (no board, no streak).
+// ponytail: made on the tap the first time (Teško up to ~1 s on a phone; the menu's board dims meanwhile).
 function openDaily(lvl, date = dayKey()) {
   days = readDay(date);
-  pickLvl = lvl ?? Math.max(0, days.levels.findIndex(st => !st?.solvedAt));
-  $('dailyDate').textContent = new Date(date + 'T12:00').toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('dailyLate').hidden = date === dayKey();
-  showLevels();
-  $('dailyDlg').showModal();
+  lvl ??= Math.max(0, days.levels.findIndex(st => !st?.solvedAt));
+  if (!days.levels[lvl]) {
+    days.levels[lvl] = { ...makeDaily(date, lvl), values: '0'.repeat(81), elapsed: 0, solvedAt: null };
+    saveDaily();
+  }
+  playDaily(lvl);
+  go('game');
+  if (!daily.solvedAt) pause(true);
 }
-// Today's daily typed or scanned in (the same solution): its card, so it stays solo, never a task with help.
-// ponytail: only dailies opened on this device are known; a rotated or relabelled copy gets through.
+// The veil: the board unreadable (blurred, no digits) under one big button, Kreni or Nastavi; the clock
+// stands while it is up. A daily opens under it; ‖ by the clock puts it up in any game with a clock.
+
+function pause(on) {
+  paused = on;
+  $('game').classList.toggle('veiled', on);
+  $('veil').hidden = !on;
+  if (!on) return;
+  const fresh = task.daily && !daily.elapsed;
+  $('veilGo').lastChild.textContent = fresh ? 'Kreni' : 'Nastavi';
+  $('veilNote').textContent = task.daily && task.daily !== dayKey() ? 'Naknadno: rezultat je samo tvoj. Vidjet ćeš koje bi mjesto bio.'
+    : fresh ? 'Sam, bez pomoći. Sat kreće s Kreni.' : 'Pauza. Sat stoji dok ne nastaviš.';
+  $('veilGo').focus();
+}
+$('veilGo').onclick = () => pause(false);
+$('pauseBtn').onclick = () => pause(true);
+// Today's daily typed or scanned in (the same solution): onto the board as the daily, so it stays solo,
+// never a task with help. ponytail: only dailies opened on this device are known; a rotated or relabelled copy gets through.
 function toDaily(sol) {
   const lvl = readDay().levels.findIndex(st => st?.solution.join('') === sol.join(''));
   if (lvl >= 0) openDaily(lvl);
   return lvl >= 0;
 }
 const levelText = st => st?.solvedAt ? `Riješeno za ${clock(st.elapsed)} ✓` : st?.elapsed ? `U tijeku · ${clock(st.elapsed)}` : 'Nije počet';
-function showLevels() {
-  [...$('dailyLevels').children].forEach((b, i) => {
-    const st = days.levels[i];
-    b.ariaPressed = String(i === pickLvl);
-    b.querySelector('small').textContent = levelText(st);
-  });
-  const st = days.levels[pickLvl];
-  $('dailyGo').textContent = st?.solvedAt ? 'Pogledaj' : st?.elapsed ? 'Nastavi' : 'Kreni';
-}
-[...$('dailyLevels').children].forEach((b, i) => b.onclick = () => { pickLvl = i; showLevels(); });
-$('dailyCancel').onclick = () => $('dailyDlg').close();
-$('dailyGo').onclick = async () => {
-  if (!days.levels[pickLvl]) {
-    $('dailyGo').disabled = true;
-    $('dailyGo').textContent = 'Pripremam…';
-    await new Promise(r => setTimeout(r, 30));   // let that show before the work
-    days.levels[pickLvl] = { ...makeDaily(days.date, pickLvl), values: '0'.repeat(81), elapsed: 0, solvedAt: null };
-    saveDaily();
-    $('dailyGo').disabled = false;
-  }
-  $('dailyDlg').close();
-  playDaily(pickLvl);
-  go('game');
-};
 
 // Put one of today's dailies on the board.
 function playDaily(lvl) {

@@ -62,7 +62,24 @@ svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor;
 #backBtn, #menuBack, #tangoBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
 #menuBack { margin-left: -8px; }
 #timer, #tangoTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-#moreBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
+#moreBtn, #pauseBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
+/* The veil (pause): the board unreadable (blurred, the digits gone), one big ▶ over it, a line under it;
+   the controls asleep. Seen once per game: it may ease in. */
+#veil { position: absolute; top: 0; left: 0; z-index: 3; display: grid; place-items: center; width: 100%; aspect-ratio: 1;
+  animation: fade .2s ease-out; }
+#veilGo { flex-direction: column; gap: 10px; min-height: 0; padding: 0; border: 0; background: none; }
+#veilGo .ring { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+  box-shadow: 0 10px 30px rgb(0 0 0 / .25); }
+#veilGo svg { width: 40px; height: 40px; margin-left: 6px; fill: currentColor; }
+#veilGo b { padding: 4px 14px; border-radius: 999px; background: var(--surface); font-size: 17px; }
+#veilGo:focus-visible { outline: 0; }
+#veilGo:focus-visible .ring { outline: 3px solid var(--hue); outline-offset: 4px; }   /* the ring, not a box around button and label */
+#game.veiled #grid { filter: blur(10px); pointer-events: none; }
+#game.veiled #grid input { color: transparent; }   /* no digits under the blur */
+#game.veiled #cands { display: none; }
+#game.veiled .controls, #game.veiled #explainBox { opacity: .3; pointer-events: none; }
+#veilNote { margin: 12px 0 0; color: var(--muted); font-size: 14px; text-align: center; }
+#game:not(.veiled) #veilNote { display: none; }
 .gname { display: flex; align-items: baseline; justify-content: space-between; margin: -4px 0 0; }
 .gname b { font-weight: 600; }
 .gname span { color: var(--muted); font-size: 14px; }
@@ -718,21 +735,12 @@ canvas { max-width: 100%; }
 
 /* Cards (solved, the daily's start): float over the page, grow in. Solved is a rare moment, so it may
    celebrate a little: the tick draws itself. */
-#solved, #dailyDlg, #about { width: min(88vw, 380px); padding: 28px 24px 20px; border: 0; border-radius: 20px; background: var(--surface); color: var(--text);
+#solved, #about { width: min(88vw, 380px); padding: 28px 24px 20px; border: 0; border-radius: 20px; background: var(--surface); color: var(--text);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3); }
 #solved { text-align: center; }
-#solved::backdrop, #dailyDlg::backdrop, #about::backdrop { background: rgba(0, 0, 0, 0.45); }
-#solved[open], #dailyDlg[open], #about[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
-#dailyDlg h2 { margin: 0; font-size: 24px; font-weight: 700; }
-#dailyDate { margin: 2px 0 12px; color: var(--muted); }
-#dailyDlg p { margin: 0 0 16px; line-height: 1.5; }
-#dailyLevels { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-#dailyLevels button { justify-content: flex-start; gap: 12px; min-height: 56px; padding: 0 16px; border-radius: 14px; }
-#dailyLevels button[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+#solved::backdrop, #about::backdrop { background: rgba(0, 0, 0, 0.45); }
+#solved[open], #about[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-#dailyLevels small { margin-left: auto; color: var(--muted); font-size: 14px; }
-#dailyDlg .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--gap); }
-#dailyGo { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 @keyframes pop { from { opacity: 0; transform: scale(0.94); } }
 #solved .tick { width: 72px; height: 72px; fill: none; stroke: var(--positive); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 #solved:not(.tango) .fortango, #solved.tango .tick { display: none; }   /* Dinango: the little dino instead of the tick, a line for U */
@@ -815,14 +823,14 @@ canvas { max-width: 100%; }
 .marks i.f { background: var(--c); box-shadow: none; }
 .marks i.l { box-shadow: inset 0 0 0 1.5px var(--c); }
 .chip[aria-pressed="true"] .marks i:not(.f, .l) { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--on-primary) 45%, transparent); }
-#dayLate, #dailyLate { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--area); font-size: 14px; }
+#dayLate { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--area); font-size: 14px; }
 #dayLate svg { width: 18px; height: 18px; color: var(--hue); }
 .board.late small { color: var(--hue); }
 .hmeta b.solved { color: var(--positive); }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #dailyDlg[open], #about[open], #solved .tick path, #tb.won button svg { animation: none; stroke-dashoffset: 0; }
+  #solved[open], #about[open], #solved .tick path, #tb.won button svg { animation: none; stroke-dashoffset: 0; }
   #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
   #more, #more[open], #live video, #live canvas { transform: none; }
   #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }

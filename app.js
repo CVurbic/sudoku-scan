@@ -334,7 +334,7 @@ setInterval(() => {
     return $('tangoTimer').textContent = clock(tg.elapsed);
   }
   const st = task?.random ? task : task?.daily === days?.date && daily;   // a game or today's daily
-  if (!st || st.solvedAt || document.hidden || dt > 5000 || $('dailyDlg').open || view !== 'game') return;
+  if (!st || st.solvedAt || document.hidden || dt > 5000 || paused || view !== 'game') return;
   st.elapsed += dt;
   saveState();
   $('timer').textContent = clock(st.elapsed);

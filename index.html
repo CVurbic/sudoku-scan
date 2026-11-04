@@ -28,19 +28,6 @@
     </div>
   </div>
 </div>
-<dialog id="dailyDlg" aria-labelledby="dailyTitle">
-  <h2 id="dailyTitle">Dnevni sudoku</h2>
-  <p id="dailyDate"></p>
-  <p>Tri nova sudokua svaki dan. Rješavaš sam, bez pomoći: crveno su samo brojevi koji se ponavljaju.
-    Timer kreće kad stisneš Kreni i stoji dok si izvan aplikacije.</p>
-  <p id="dailyLate" class="late" hidden>Naknadno: sat ide kao i inače, rezultat je samo tvoj. Vidjet ćeš koje bi mjesto bio.</p>
-  <div id="dailyLevels">
-    <button><span data-stairs="0"></span><b>Lagano</b><small></small></button>
-    <button><span data-stairs="1"></span><b>Srednje</b><small></small></button>
-    <button><span data-stairs="2"></span><b>Teško</b><small></small></button>
-  </div>
-  <div class="row"><button id="dailyCancel">Odustani</button><button id="dailyGo">Kreni</button></div>
-</dialog>
 <dialog id="solved" aria-labelledby="solvedTitle">
   <svg class="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23"/><path d="M15 27l7 7 15-16"/></svg>
   <svg id="solvedDino" class="fortango" viewBox="0 0 48 48" aria-hidden="true"></svg>
@@ -262,6 +249,7 @@
     <div class="gbar">
       <button id="backBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Izbornik</button>
       <b id="timer" aria-label="Vrijeme">0:00</b>
+      <button id="pauseBtn" aria-label="Pauza" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg></button>
       <button id="moreBtn" aria-label="Više"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg></button>
     </div>
     <p class="gname"><b id="gameName"></b><span id="gameSide"></span></p>
@@ -269,6 +257,9 @@
   </div>
 <div id="board">
   <div id="grid"></div>
+  <!-- The veil (pause): over the board, unreadable under it; a daily opens with it up. -->
+  <div id="veil" hidden><button id="veilGo"><span class="ring"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l13 7.5-13 7.5z"/></svg></span><b>Kreni</b></button></div>
+  <p id="veilNote"></p>
   <section id="explainBox">
     <span class="tail"></span>
     <div class="ehead"><span>Drži za pogled ispod</span><button id="explainToggle">Sakrij</button></div>
