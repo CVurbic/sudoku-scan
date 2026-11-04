@@ -453,17 +453,45 @@ function showHistory() {
   $('historyEmpty').hidden = list.length > 0;
 }
 
-// The menu: the unfinished game on the board ("Nastavi"), today's dailies, the last two other sudokus.
+// The menu: the unfinished game on the board ("Nastavi"), the dailies of the day chosen in the strip
+// (dayOn: today, or one of the last two weeks), the last two other sudokus, that day's Ljestvica.
+let dayOn = null;   // set on the first menu (dayKey is defined further down)
+const STRIP = 14;
+// A day's three levels as small squares: filled solved on the day, outlined solved later.
+function dayMarks(date, done = dailyDone(), late = dailyLate()) {
+  const m = document.createElement('span');
+  m.className = 'marks';
+  m.append(...DAILY.map((_, l) => Object.assign(document.createElement('i'), { className: done[`${date}/${l}`] ? 'f' : late[`${date}/${l}`] ? 'l' : '' })));
+  return m;
+}
 function showMenu() {
-  loadDays();
-  $('dailyWhen').textContent = days.date.slice(8).replace(/^0/, '') + '. ' + +days.date.slice(5, 7) + '.';
-  $('dailyCount').textContent = `${days.levels.filter(st => st?.solvedAt).length} od 3`;
+  if (!dayOn || dayOn > dayKey()) dayOn = dayKey();
+  const shown = readDay(dayOn), done = dailyDone(), late = dailyLate(), strip = $('dayStrip');
+  strip.replaceChildren(...Array.from({ length: STRIP }, (_, k) => {
+    const d = new Date(), b = document.createElement('button');
+    d.setDate(d.getDate() - STRIP + 1 + k);
+    const date = dayKey(d);
+    b.className = 'key chip';
+    b.ariaPressed = String(date === dayOn);
+    b.ariaLabel = d.toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
+    b.append(Object.assign(document.createElement('small'), { textContent: k === STRIP - 1 ? 'danas' : d.toLocaleDateString('hr', { weekday: 'short' }) }),
+      Object.assign(document.createElement('b'), { textContent: d.getDate() }), dayMarks(date, done, late));
+    b.onclick = () => { dayOn = date; showMenu(); };
+    return b;
+  }));
+  requestAnimationFrame(() => {   // the chosen day in the middle (today, at the end, stays at the right edge)
+    const on = strip.querySelector('[aria-pressed="true"]');
+    if (on) strip.scrollLeft = on.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
+  });
+  $('dayLate').hidden = dayOn === dayKey();
+  $('dailyCount').textContent = `${shown.levels.filter(st => st?.solvedAt).length} od 3`;
   $('homeDays').replaceChildren(...DAILY.map((_, i) => {
-    const st = days.levels[i];
-    const b = boardKey(i, st ? miniGrid({ givens: st.givens, done: st.values }, st.solvedAt) : miniGrid({ givens: dayLayout(days.date, i) ?? sampleGrid(i) }),
-      st?.solvedAt ? `✓ ${clock(st.elapsed)}` : st?.elapsed ? 'u tijeku' : '');
+    const st = shown.levels[i], lt = st?.solvedAt && late[`${dayOn}/${i}`];
+    const b = boardKey(i, st ? miniGrid({ givens: st.givens, done: st.values }, st.solvedAt) : miniGrid({ givens: dayLayout(dayOn, i) ?? sampleGrid(i) }),
+      st?.solvedAt ? `${lt ? '↺' : '✓'} ${clock(st.elapsed)}` : st?.elapsed ? 'u tijeku' : '');
     b.classList.toggle('solved', !!st?.solvedAt);
-    b.onclick = () => openDaily(i);
+    b.classList.toggle('late', !!lt);
+    b.onclick = () => openDaily(i, dayOn);
     return b;
   }));
   const key = task && celebrated !== task.solution.join('') ? task.solution.join('') : null;   // solved (or "Riješi sve"): nothing to go on with
@@ -479,10 +507,9 @@ function showMenu() {
   $('recentTitle').hidden = !recent.length;
   $('historyAll').hidden = !list.length;
   $('historyAll').firstChild.textContent = `Sva povijest (${list.length})`;
-  ranksOff = 0;
   showRanks();
 }
-$('homeResume').onclick = () => task.daily === dayKey() ? openDaily(task.level) : go('game');   // today's daily: its card, the clock waits for it
+$('homeResume').onclick = () => task.daily ? openDaily(task.level, task.daily) : go('game');   // a daily: its card, the clock waits for it
 $('manualBtn').onclick = () => { clearBoard(); go('game'); };
 $('aboutBtn').onclick = () => { $('aboutName').value = lbName(); $('about').showModal(); };
 $('aboutClose').onclick = () => $('about').close();
@@ -571,7 +598,7 @@ function sampleGrid(lvl, salt = '') {
 
 // A sudoku from the history becomes the task again, with the user's right digits filled in.
 function openTask(e) {
-  if (e.daily === dayKey()) return openDaily(e.level ?? 0);   // today's stays solo; older dailies open as practice, with help
+  if (e.daily) return openDaily(e.level ?? 0, e.daily);   // a daily stays solo, an older day's too (its result yours only)
   const solved = [...e.givens].every((g, i) => +g || +e.done[i]);
   task = { givens: [...e.givens].map(Number), solution: [...e.key].map(Number) };
   if (e.random) Object.assign(task, { random: true, level: e.level, elapsed: e.time ?? 0 }, solved ? { solvedAt: e.last } : {});   // a game: its clock goes on
@@ -605,7 +632,7 @@ function clearBoard() {
 function loadSaved() {
   try { task = JSON.parse(localStorage.sudokuTask || 'null'); } catch { task = null; }
   idle = 0;
-  if (task?.daily === dayKey() && loadDays().levels[task.level]) return playDaily(task.level);
+  if (task?.daily && readDay(task.daily).levels[task.level]) { days = readDay(task.daily); return playDaily(task.level); }
   if (!task) return showTask();
   delete task.daily;
   restore(task);
@@ -1020,16 +1047,19 @@ function checkSolved() {
 // The card's buttons. A game: the next one. Today's daily: on to the next level not solved yet, and the
 // result to share (quietly while levels are left, as the main button once all three are done). A scan: close.
 function solvedButtons() {
-  const next = task.daily ? [1, 2].map(k => (task.level + k) % 3).find(i => !days.levels[i]?.solvedAt) : undefined;
+  // an older day's: on to today's (its first level not solved), to play on time; no sharing
+  const late = task.daily && task.daily !== dayKey(), today = late && readDay().levels.findIndex(st => !st?.solvedAt),
+    next = late ? (today < 0 ? undefined : today) : task.daily ? [1, 2].map(k => (task.level + k) % 3).find(i => !days.levels[i]?.solvedAt) : undefined;
   $('solvedClose').hidden = !!(task.random || task.daily);
   $('solvedNext').hidden = !task.random;
   $('solvedLevel').hidden = next === undefined;
   if (next !== undefined) {
-    $('solvedLevel').dataset.lvl = next;
+    Object.assign($('solvedLevel').dataset, { lvl: next, day: late ? dayKey() : task.daily });
     $('solvedLevel').firstChild.replaceWith(stairs(next));
-    $('solvedLevel').lastChild.textContent = DAILY[next][0];
+    $('solvedLevel').lastChild.textContent = late ? 'Današnji' : DAILY[next][0];   // late: the stairs say the level
   }
-  $('solvedShare').hidden = !task.daily;
+  $('solvedShare').hidden = !task.daily || late;
+  if (late) return;
   $('solvedShare').classList.toggle('quiet', next !== undefined);
   $('solvedShare').lastChild.textContent = next === undefined ? 'Podijeli' : 'Podijeli rezultat';
   if (task.daily) prepShare(next === undefined);
@@ -1056,7 +1086,7 @@ $('solvedShare').onclick = async () => {
 };
 // The card serves both games: card says whose result it shows (Tango's buttons: tangoButtons).
 let card = 'sudoku';
-$('solvedLevel').onclick = () => { $('solved').close(); if (card === 'tango') go('menu'); openDaily(+$('solvedLevel').dataset.lvl); };
+$('solvedLevel').onclick = () => { $('solved').close(); if (card === 'tango') go('menu'); openDaily(+$('solvedLevel').dataset.lvl, $('solvedLevel').dataset.day); };
 $('solvedClose').onclick = () => $('solved').close();
 $('solvedNext').onclick = () => card === 'tango' ? ($('solved').close(), tangoGame()) : newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
 $('solvedMenu').onclick = () => { $('solved').close(); go({ tango: 'games', xw: 'xw' }[card] ?? 'menu'); };
@@ -1144,30 +1174,38 @@ const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1
 const clock = ms => { const t = Math.floor(ms / 1000), h = t / 3600 | 0, m = t / 60 % 60 | 0, sec = String(t % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
 
-// days: today's { date, levels: 3 × ({ givens, solution, diff, values: 81 digits typed, elapsed: ms, solvedAt: ms | null } | null) };
-// daily: the one being played (one of days.levels).
+// A day's dailies: { date, levels: 3 × ({ givens, solution, diff, values: 81 digits typed, elapsed: ms, solvedAt: ms | null } | null) },
+// kept per date (sudokuDays), so an older day's goes on where it was left. days: the day being played
+// (set by openDaily / loadSaved only: the menu and the tiles read with readDay); daily: one of its levels.
+// ponytail: every day ever played stays (~1.5 KB a level); prune past the menu's strip if storage ever minds.
 let days = null, daily = null;
-function loadDays() {
-  try { days = JSON.parse(localStorage.sudokuDaily || 'null'); } catch { days = null; }
-  if (days?.date !== dayKey() || !days.levels) days = { date: dayKey(), levels: [null, null, null] };
-  return days;
+function dayStore() {
+  let all = {};
+  try { all = JSON.parse(localStorage.sudokuDays || '{}'); } catch {}
+  try { const old = JSON.parse(localStorage.sudokuDaily || 'null'); if (old?.levels && !all[old.date]) all[old.date] = old.levels; } catch {}   // the one-day save before 4. 11.
+  return all;
 }
-const saveDaily = () => { try { localStorage.sudokuDaily = JSON.stringify(days); } catch {} };
-const dailyDone = () => { try { return JSON.parse(localStorage.sudokuDailyDone || '{}'); } catch { return {}; } };   // "date/level" → { ms }
+const readDay = (date = dayKey()) => ({ date, levels: dayStore()[date] || [null, null, null] });
+const loadDays = () => readDay();   // today's (the tiles, Danas)
+const saveDaily = () => { const all = dayStore(); all[days.date] = days.levels; try { localStorage.sudokuDays = JSON.stringify(all); localStorage.removeItem('sudokuDaily'); } catch {} };
+const dailyDone = () => { try { return JSON.parse(localStorage.sudokuDailyDone || '{}'); } catch { return {}; } };   // "date/level" → { ms }: on the day
+const dailyLate = () => { try { return JSON.parse(localStorage.sudokuDailyLate || '{}'); } catch { return {}; } };   // the same, solved on a later day: yours only
 
 // The card before a daily: the rules, the three levels with how far each got, "Kreni" (the clock waits for it).
+// An older day's: the same, its result yours only (no board, no streak).
 let pickLvl = 0;
-function openDaily(lvl) {
-  loadDays();
+function openDaily(lvl, date = dayKey()) {
+  days = readDay(date);
   pickLvl = lvl ?? Math.max(0, days.levels.findIndex(st => !st?.solvedAt));
-  $('dailyDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('dailyDate').textContent = new Date(date + 'T12:00').toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('dailyLate').hidden = date === dayKey();
   showLevels();
   $('dailyDlg').showModal();
 }
 // Today's daily typed or scanned in (the same solution): its card, so it stays solo, never a task with help.
 // ponytail: only dailies opened on this device are known; a rotated or relabelled copy gets through.
 function toDaily(sol) {
-  const lvl = loadDays().levels.findIndex(st => st?.solution.join('') === sol.join(''));
+  const lvl = readDay().levels.findIndex(st => st?.solution.join('') === sol.join(''));
   if (lvl >= 0) openDaily(lvl);
   return lvl >= 0;
 }
@@ -1272,7 +1310,7 @@ function openShared() {
   const sols = g && g.length === 81 && g.filter(Boolean).length >= 17 ? solve(g) : [];
   if (sols.length !== 1) { go('menu'); say('Ovaj link ne vodi na ispravan sudoku.', Infinity); return true; }
   const key = sols[0].join(''), e = saved().find(x => x.key === key);
-  if (task?.solution.join('') === key) { go('game'); if (task.daily && !daily.solvedAt) openDaily(task.level); }
+  if (task?.solution.join('') === key) { go('game'); if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily); }
   else if (e) openTask(e);
   else startGame({ givens: g, solution: sols[0] }, LEVELS.indexOf(diffLevel(difficulty(g, sols[0]))));
   return true;
@@ -1283,10 +1321,20 @@ function openShared() {
 function dailySolved() {
   daily.solvedAt = Date.now();
   saveDaily();
+  remember(task.solution, task.givens, task.solution, { daily: days.date, level: task.level, time: daily.elapsed });
+  // An older day's: yours only (not sent, no streak); the card says where it would have been.
+  // ponytail: "older" is by the date it is solved on, so one begun at 23:55 and done at 0:05 counts as late.
+  if (days.date !== dayKey()) {
+    const late = dailyLate();
+    late[`${days.date}/${task.level}`] = { ms: daily.elapsed };
+    try { localStorage.sudokuDailyLate = JSON.stringify(late); } catch {}
+    lbNow = null;
+    lbLate(days.date, task.level, daily.elapsed);
+    return `Riješeno za ${clock(daily.elapsed)} · naknadno, samo tvoj rezultat`;
+  }
   const done = dailyDone();
   done[`${days.date}/${task.level}`] = { ms: daily.elapsed };
   try { localStorage.sudokuDailyDone = JSON.stringify(done); } catch {}
-  remember(task.solution, task.givens, task.solution, { daily: days.date, level: task.level, time: daily.elapsed });
   lbNow = { day: days.date, level: task.level, ms: daily.elapsed };
   if (lbName()) lbQueue(lbNow.day, lbNow.level, lbNow.ms);
   lbShow(lbNow.day, lbNow.level, lbNow.ms);

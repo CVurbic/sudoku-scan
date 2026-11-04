@@ -206,7 +206,7 @@ function tangoButtons() {
   $('solvedClose').hidden = true;
   $('solvedNext').hidden = !!tg.date;
   $('solvedLevel').hidden = next < 0;
-  if (next >= 0) { $('solvedLevel').dataset.lvl = next; $('solvedLevel').firstChild.hidden = true; $('solvedLevel').lastChild.textContent = 'Sudoku'; }
+  if (next >= 0) { Object.assign($('solvedLevel').dataset, { lvl: next, day: dayKey() }); $('solvedLevel').firstChild.hidden = true; $('solvedLevel').lastChild.textContent = 'Sudoku'; }
   $('solvedShare').hidden = !tg.date;
   $('solvedShare').classList.toggle('quiet', next >= 0);
   $('solvedShare').lastChild.textContent = next < 0 ? 'Podijeli' : 'Podijeli rezultat';

@@ -486,6 +486,7 @@ canvas { max-width: 100%; }
   #menu .bar { grid-area: bar; }
   #home { grid-area: home; }
   #homeSide { grid-area: side; margin-top: 12px; }
+  #menu #dayStrip { margin: 0 0 12px; padding: 2px 0 4px; }   /* in its column: no bleed to the screen edge */
   .dock { grid-area: dock; align-self: start; position: static; grid-template-columns: 1fr; margin: 0; padding: 18px; border: 0; border-radius: 14px; background: var(--surface); }
   .dock .dtitle { display: block; order: -2; font-size: 17px; }
   #liveBtn { order: -1; }
@@ -769,20 +770,54 @@ canvas { max-width: 100%; }
 .lblist li { --i: 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes fade { from { opacity: 0; } }
-/* Ljestvica in the menu, below Nedavno: a day (‹ ›, a week back) and all three levels at once, each its
-   top three and you. The menu is seen often: rows fade in only when they change, and on a new day the
-   old ones stay, dimmed, until the new ones are in. */
-#ranksTop { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 -10px; }   /* the 44 px day buttons, not the text, set its height */
-#homeSide #ranksTop h2 { margin: 0; }
-#ranksDay { display: flex; align-items: center; margin-right: -12px; font-size: 15px; font-weight: 600; }
-#ranksDay button { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
-#ranksDay button:disabled { background: transparent; color: var(--control); }
-#ranksDay svg { width: 18px; height: 18px; }
-#ranks { display: flex; flex-direction: column; gap: 16px; padding: 12px 14px; border-radius: 14px; background: var(--surface); transition: opacity .15s ease-out; }
+/* The podium in every list: a medal behind the place. Solved on a later day: you as an outlined row, "(3)". */
+.lblist li.p1 span:first-child, .lblist li.p2 span:first-child, .lblist li.p3 span:first-child { justify-self: end; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--c); color: #fff; font-size: 12px; font-weight: 700; }
+.p1 { --c: #c99a06; } .p2 { --c: #8d8f94; } .p3 { --c: #b06a3b; }
+.lblist li.ghost { box-shadow: inset 0 0 0 1.5px var(--hue); color: var(--hue); font-weight: 600; }
+.lblist li.ghost span:first-child { color: inherit; }
+
+/* Ljestvica in the menu: the strip's day, one level (a segmented switch), its top eight and you; under it
+   your places on the last 7 days. The menu is seen often: rows fade in only when they change, and on
+   another day or level the old ones stay, dimmed, until the new ones are in. */
+.rhead { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.rhead small { color: var(--muted); font-size: 14px; font-weight: 500; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px; border-radius: 12px; background: var(--raised); }
+.seg button { gap: 6px; min-height: 40px; padding: 0 4px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+#ranks, #week { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--surface); transition: opacity .15s ease-out; }
 #ranks[aria-busy="true"] { opacity: .5; }
-#ranks > div > b { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; font-size: 15px; font-weight: 600; }
-#ranks small { margin-left: auto; color: var(--muted); font-size: 14px; font-weight: 500; }
+#ranksCount { color: var(--muted); font-size: 14px; }
 #ranks li { animation: fade .15s ease-out; }
+#week h4 { display: flex; align-items: baseline; margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+#week h4 small { margin-left: auto; color: var(--muted); font-size: 13px; font-weight: 500; }
+#weekDays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+#weekDays span { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#weekDays small { color: var(--muted); font-size: 12px; font-weight: 600; }
+#weekDays span:last-child small { color: var(--text); }
+#weekDays b { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--raised); font-size: 14px; font-variant-numeric: tabular-nums; }
+#weekDays b.p1, #weekDays b.p2, #weekDays b.p3 { background: var(--c); color: #fff; }
+#weekDays b.none, #weekDays b.wait { background: none; box-shadow: inset 0 0 0 1.5px var(--control); color: var(--muted); }
+#weekDays b.late { background: none; box-shadow: inset 0 0 0 1.5px var(--hue); color: var(--hue); }
+#weekSum { display: flex; justify-content: space-between; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; }
+
+/* The day strip over the dailies: the last two weeks, today at the right; each day its three levels. */
+#dayStrip { position: relative; display: flex; gap: 8px; margin: 0 calc(-1 * var(--gutter)) 12px; padding: 2px var(--gutter) 4px; overflow-x: auto; scrollbar-width: none; }
+#dayStrip::-webkit-scrollbar { display: none; }
+.chip { flex: none; flex-direction: column; gap: 4px; width: 56px; min-height: 0; padding: 8px 0 9px; border-radius: 12px; }
+.chip small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.chip b { font-size: 18px; font-weight: 700; line-height: 1; }
+.chip[aria-pressed="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); box-shadow: none; }
+.chip[aria-pressed="true"] small { color: inherit; opacity: .75; }
+.marks { display: inline-flex; gap: 3px; }
+.marks i { width: 7px; height: 7px; border-radius: 2px; box-shadow: inset 0 0 0 1.5px var(--control); }
+.marks i:nth-child(1) { --c: var(--easy); } .marks i:nth-child(2) { --c: var(--medium); } .marks i:nth-child(3) { --c: var(--hard); }
+.marks i.f { background: var(--c); box-shadow: none; }
+.marks i.l { box-shadow: inset 0 0 0 1.5px var(--c); }
+.chip[aria-pressed="true"] .marks i:not(.f, .l) { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--on-primary) 45%, transparent); }
+#dayLate, #dailyLate { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--area); font-size: 14px; }
+#dayLate svg { width: 18px; height: 18px; color: var(--hue); }
+.board.late small { color: var(--hue); }
 .hmeta b.solved { color: var(--positive); }
 
 /* Reduced motion: nothing travels or grows; fades stay. */

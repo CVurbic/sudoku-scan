@@ -58,8 +58,8 @@ const RAIL_ON = { games: 'games', past: 'past', menu: 'menu', game: 'menu', tang
 const railMini = () => { try { return localStorage.railMini === '1'; } catch { return false; } };
 function showRail() {
   document.body.classList.toggle('railmini', railMini() || ['game', 'tango', 'xwplay'].includes(view));
-  // days as it is (not loadDays(): that would swap the object under a daily being played)
-  const solved = (days?.date === dayKey() ? days.levels : []).filter(st => st?.solvedAt).length, t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt;
+  // today's, read afresh (days is the day being played, maybe an older one)
+  const solved = readDay().levels.filter(st => st?.solvedAt).length, t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt;
   const games = xwGames(), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0], p = key && xwProgress(key, games);
   const xwText = p ? (p.done ? '✓' : `${p.n} od ${p.words.length}`) : '';
   const state = { menu: [solved === 3 ? '✓' : `${solved} od 3`, solved < 3], tango: [tDone ? '✓' : t?.date === dayKey() && t.elapsed ? 'u tijeku' : 'čeka', !tDone], xw: [xwText, false] };
@@ -207,7 +207,8 @@ async function lbFlush() {
   return true;
 }
 // A day and level's top n as list rows, your own (mine: { name, ms }) marked, or below them if you are
-// further down (equal times share a place). → { rows, all: players, place: yours }; rejects when it did not load.
+// further down (equal times share a place). mine.ghost: solved on a later day, not on the board: your row
+// where it would have been, "(3)", the others keeping theirs. → { rows, all: players, place: yours }; rejects when it did not load.
 async function lbRows(day, level, n, mine) {
   const where = `day=eq.${day}&level=eq.${level}`, ok = r => r.ok ? r : Promise.reject(),
     count = q => lb(`select=id&${q}`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).then(ok).then(r => +r.headers.get('content-range').split('/')[1]);
@@ -215,14 +216,28 @@ async function lbRows(day, level, n, mine) {
     mine ? count(`${where}&ms=lt.${mine.ms}`) : 0, count(where)]);
   const row = (place, r, cls = '') => {
     const li = document.createElement('li');
-    li.className = cls;
+    li.className = [cls, typeof place === 'number' && place <= 3 && 'p' + place].filter(Boolean).join(' ');   // the podium: medal colours
     li.append(...[place, r.name, clock(r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
     return li;
   };
-  const me = mine ? top.findIndex(r => r.name === mine.name && r.ms === mine.ms) : -1,
+  const ghost = mine?.ghost, me = mine && !ghost ? top.findIndex(r => r.name === mine.name && r.ms === mine.ms) : -1,
     rows = top.map((r, i) => row(top.findIndex(x => x.ms === r.ms) + 1, r, i === me ? 'me' : ''));
-  if (mine && me < 0 && all) rows.push(row(faster + 1, mine, 'me apart'));
+  if (ghost) rows.splice(Math.min(faster, rows.length), 0, row(`(${faster + 1})`, { name: mine.name + ' ↺', ms: mine.ms }, 'ghost' + (faster < n ? '' : ' apart')));
+  else if (mine && me < 0 && all) rows.push(row(faster + 1, mine, 'me apart'));
   return { rows, all, place: faster + 1 };
+}
+// An older day's daily solved on the card: not sent; where it would have stood that day.
+async function lbLate(day, level, ms) {
+  const head = t => $('lbHead').textContent = t;
+  $('lboard').hidden = false;
+  $('lbJoin').hidden = true;
+  $('lbList').replaceChildren();
+  head('Učitavam…');
+  let b;
+  try { b = await lbRows(day, level, 5, { name: lbName() || 'Ti', ms, ghost: true }); } catch { return head('Ljestvica se nije učitala.'); }
+  b.rows.forEach((li, i) => li.style.setProperty('--i', i));
+  head(b.all ? `Na vrijeme bio bi ${b.place}. od ${b.all + 1}` : 'Taj dan nitko nije igrao: bio bi prvi');
+  $('lbList').replaceChildren(...b.rows);
 }
 const players = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'igrač' : 'igrača'}`;
 // The solved card's panel: the name first if there is none; else the top five and you.
@@ -241,33 +256,56 @@ async function lbShow(day, level, ms) {
   $('lbList').replaceChildren(...b.rows);
 }
 
-// The menu's Ljestvica: a day (today, or up to a week back), each level's top three and you. Your row comes
-// from your own record of that day (ponytail: shown even if that time was solved before the name was
-// set, so never sent; a sent flag in the record if that ever confuses). Asked again on every menu
-// (ponytail: 9 small requests; a short cache if Supabase's free tier ever minds).
-let ranksOff = 0, ranksAsk = 0;
+// The menu's Ljestvica: the strip's day (dayOn), one level (remembered), its top eight and you; solved on a
+// later day, you as a ghost row where you would have been. Your row comes from your own record of that day
+// (ponytail: shown even if that time was solved before the name was set, so never sent; a sent flag in
+// the record if that ever confuses). Under it, your places on the last 7 days at that level, from one
+// request. Asked again on every menu (ponytail: 4 small requests; a short cache if Supabase's free tier ever minds).
+let rankLvl = 0, ranksAsk = 0;
+try { rankLvl = +localStorage.sudokuRankLvl || 0; } catch {}
 async function showRanks() {
-  const d = new Date();
-  d.setDate(d.getDate() - ranksOff);
-  const day = dayKey(d), ask = ++ranksAsk, done = dailyDone(), name = lbName();
-  $('ranksDate').textContent = ranksOff === 0 ? 'Danas' : ranksOff === 1 ? 'Jučer' : d.toLocaleDateString('hr', { weekday: 'short', day: 'numeric', month: 'numeric' });
-  $('ranksPrev').disabled = ranksOff === 6;
-  $('ranksNext').disabled = ranksOff === 0;
-  const res = await Promise.all(DAILY.map((_, lvl) => {
-    const mine = done[`${day}/${lvl}`];
-    return lbRows(day, lvl, 3, name && mine ? { name, ms: mine.ms } : null).catch(() => null);
-  }));
-  if (ask !== ranksAsk) return;   // another day was asked for meanwhile
+  const day = dayOn, lvl = rankLvl, ask = ++ranksAsk, name = lbName(), mine = dailyDone()[`${day}/${lvl}`], late = dailyLate()[`${day}/${lvl}`];
+  $('ranksDate').textContent = day === dayKey() ? 'danas' : `${new Date(day + 'T12:00').toLocaleDateString('hr', { weekday: 'short' })} ${+day.slice(8)}. ${+day.slice(5, 7)}.`;
+  [...$('ranksLv').children].forEach((b, i) => b.ariaPressed = String(i === lvl));
+  $('weekLv').textContent = DAILY[lvl][0];
+  const from = new Date();
+  from.setDate(from.getDate() - 6);
+  const [b, week] = await Promise.all([
+    lbRows(day, lvl, 8, late ? { name: name || 'Ti', ms: late.ms, ghost: true } : name && mine ? { name, ms: mine.ms } : null).catch(() => null),
+    lb(`select=day,ms&level=eq.${lvl}&day=gte.${dayKey(from)}`).then(r => r.ok ? r.json() : null).catch(() => null)]);
+  if (ask !== ranksAsk) return;   // another day or level was asked for meanwhile
   $('ranks').ariaBusy = 'false';
-  [...$('ranks').children].forEach((el, lvl) => {
-    const b = res[lvl], ol = el.querySelector('ol'), rows = b?.rows ?? [];
-    el.querySelector('small').textContent = !b ? 'Nije se učitalo' : b.all ? players(b.all) : 'Još nitko';
-    if (ol.innerHTML !== rows.map(li => li.outerHTML).join('')) ol.replaceChildren(...rows);   // the same rows stay put (no fade)
-  });
+  $('ranksCount').textContent = !b ? 'Nije se učitalo' : b.all ? players(b.all) : 'Još nitko';
+  const rows = b?.rows ?? [], ol = $('ranksList');
+  if (ol.innerHTML !== rows.map(li => li.outerHTML).join('')) ol.replaceChildren(...rows);   // the same rows stay put (no fade)
+  showWeek(week, lvl);
 }
-const stepRanks = by => { ranksOff += by; $('ranks').ariaBusy = 'true'; showRanks(); };   // the old rows stay, dimmed, until the new ones are in
-$('ranksPrev').onclick = () => stepRanks(1);
-$('ranksNext').onclick = () => stepRanks(-1);
+// Your place on each of the last 7 days: medal colours for the podium, "(3)" solved later (where you would
+// have been), "–" not played, "…" today's under way. Without the network: ✓ for the days you played.
+function showWeek(rows, lvl) {
+  const done = dailyDone(), late = dailyLate(), today = readDay().levels[lvl];
+  let on = 0, best = Infinity;
+  $('weekDays').replaceChildren(...Array.from({ length: 7 }, (_, k) => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6 + k);
+    const day = dayKey(d), mine = done[`${day}/${lvl}`], lt = late[`${day}/${lvl}`], x = mine || lt,
+      p = x && rows ? rows.filter(r => r.day === day && r.ms < x.ms).length + 1 : null, cell = document.createElement('span');
+    if (mine) { on++; if (p) best = Math.min(best, p); }
+    const wait = k === 6 && today?.elapsed && !today.solvedAt;
+    cell.append(Object.assign(document.createElement('small'), { textContent: k === 6 ? 'danas' : d.toLocaleDateString('hr', { weekday: 'short' }) }),
+      Object.assign(document.createElement('b'), { className: mine ? (p && p <= 3 ? 'p' + p : '') : lt ? 'late' : wait ? 'wait' : 'none',
+        textContent: mine ? p ?? '✓' : lt ? (p ? `(${p})` : '↺') : wait ? '…' : '–' }));
+    return cell;
+  }));
+  $('weekSum').firstChild.textContent = `Na vrijeme ${on} od 7 dana`;
+  $('weekSum').lastChild.textContent = best < Infinity ? `Najbolje ${best}.` : '';
+}
+[...$('ranksLv').children].forEach((b, i) => b.onclick = () => {
+  rankLvl = i;
+  try { localStorage.sudokuRankLvl = i; } catch {}
+  $('ranks').ariaBusy = 'true';   // the old rows stay, dimmed, until the new ones are in
+  showRanks();
+});
 $('lbJoin').onsubmit = e => {
   e.preventDefault();
   const name = $('lbName').value.trim();

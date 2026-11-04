@@ -33,6 +33,7 @@
   <p id="dailyDate"></p>
   <p>Tri nova sudokua svaki dan. Rješavaš sam, bez pomoći: crveno su samo brojevi koji se ponavljaju.
     Timer kreće kad stisneš Kreni i stoji dok si izvan aplikacije.</p>
+  <p id="dailyLate" class="late" hidden>Naknadno: sat ide kao i inače, rezultat je samo tvoj. Vidjet ćeš koje bi mjesto bio.</p>
   <div id="dailyLevels">
     <button><span data-stairs="0"></span><b>Lagano</b><small></small></button>
     <button><span data-stairs="1"></span><b>Srednje</b><small></small></button>
@@ -217,7 +218,10 @@
     <button id="homeResume" class="key" hidden><canvas></canvas><span class="hmeta"><b>Nastavi</b><small id="resumeText"></small></span><span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></span></button>
     <!-- Every level is a small board with its givens where they are: many on Lagano, few on Teško. -->
     <div class="hsec">
-      <h3>Dnevni<small id="dailyWhen"></small><span id="dailyCount" class="tag"></span></h3>
+      <h3>Dnevni<span id="dailyCount" class="tag"></span></h3>
+      <!-- The last two weeks, today on the right: a day's three boards and its Ljestvica. -->
+      <div id="dayStrip"></div>
+      <p id="dayLate" class="late" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7"/><path d="M4 4v4.7h4.7"/><path d="M12 8v4l3 2"/></svg>Naknadno: sat ide kao i inače, rezultat je samo tvoj. Vidjet ćeš koje bi mjesto bio.</p>
       <div id="homeDays" class="boards"></div>
     </div>
     <div class="hsec">
@@ -229,18 +233,18 @@
     <button id="historyAll"><span></span><span aria-hidden="true">›</span></button>
   </div>
   <div id="homeSide">
-    <div id="ranksTop">
-      <h2>Ljestvica</h2>
-      <span id="ranksDay">
-        <button id="ranksPrev" aria-label="Dan prije"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-        <span id="ranksDate" aria-live="polite">Danas</span>
-        <button id="ranksNext" aria-label="Dan poslije"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-      </span>
+    <!-- Ljestvica of the day chosen in the strip, one level at a time; under it your places of the last 7 days. -->
+    <h3 class="rhead">Ljestvica<small id="ranksDate" aria-live="polite"></small></h3>
+    <div id="ranksLv" class="seg">
+      <button><span data-stairs="0"></span>Lagano</button>
+      <button><span data-stairs="1"></span>Srednje</button>
+      <button><span data-stairs="2"></span>Teško</button>
     </div>
-    <div id="ranks">
-      <div><b><span data-stairs="0"></span>Lagano<small></small></b><ol class="lblist"></ol></div>
-      <div><b><span data-stairs="1"></span>Srednje<small></small></b><ol class="lblist"></ol></div>
-      <div><b><span data-stairs="2"></span>Teško<small></small></b><ol class="lblist"></ol></div>
+    <div id="ranks"><small id="ranksCount"></small><ol id="ranksList" class="lblist"></ol></div>
+    <div id="week">
+      <h4>Zadnjih 7 dana · tvoja mjesta<small id="weekLv"></small></h4>
+      <div id="weekDays"></div>
+      <p id="weekSum"><span></span><span></span></p>
     </div>
     <div class="links"><button id="manualBtn">Upiši ručno</button><button id="aboutBtn">O aplikaciji</button></div>
   </div>
@@ -308,7 +312,7 @@ try { wasIn = localStorage.sudokuView; } catch {}
 if (!openShared()) {   // a shared link wins
   if ((wasIn === 'game' || !wasIn) && task && celebrated !== task.solution.join('')) {
     go('game');
-    if (task.daily && !daily.solvedAt) openDaily(task.level);
+    if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily);
   } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango();
   else if (wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
   else go(['menu', 'past', 'xw'].includes(wasIn) ? wasIn : 'games');

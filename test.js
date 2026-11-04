@@ -261,9 +261,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
       if (lbOffline) throw new TypeError('Failed to fetch');
       const q = new URLSearchParams(url.slice(LB.length)), b = o.body && JSON.parse(o.body);
       if (o.method === 'POST') return rows.some(r => r.device === b.device && r.day === b.day && r.level === b.level) ? new Response('', { status: 409 }) : (rows.push(b), new Response(null, { status: 201 }));
-      const hit = rows.filter(r => r.day === q.get('day').slice(3) && r.level === +q.get('level').slice(3) && (!q.get('ms') || r.ms < +q.get('ms').slice(3)));
+      const dq = q.get('day'), hit = rows.filter(r => (dq.startsWith('gte.') ? r.day >= dq.slice(4) : r.day === dq.slice(3)) && r.level === +q.get('level').slice(3) && (!q.get('ms') || r.ms < +q.get('ms').slice(3)));
       if (o.method === 'HEAD') return new Response(null, { headers: { 'content-range': `*/${hit.length}` } });
-      return Response.json(hit.sort((x, y) => x.ms - y.ms).slice(0, +q.get('limit')).map(({ name, ms }) => ({ name, ms })));
+      return Response.json(hit.sort((x, y) => x.ms - y.ms).slice(0, q.get('limit') ? +q.get('limit') : undefined).map(({ day, name, ms }) => ({ day, name, ms })));
     };
   });
   await page.evaluate(() => task.solution.forEach((d, i) => { if (!task.givens[i]) { sel = i; setCell(d); } }));
@@ -276,7 +276,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.waitForFunction(() => lbList.children.length);
   const board = await page.evaluate(() => [lbJoin.hidden, lbHead.textContent, [...lbList.children].map(li => li.className + ':' + [...li.children].map(s => s.textContent).join('|'))]);
   assert.deepStrictEqual(board.slice(0, 2), [true, 'Danas, lagano · 7 igrača'], 'board: head');
-  assert.deepStrictEqual(board[2].slice(0, 4), [':1|P0|0:00', ':2|P1|0:00', ':2|P2|0:00', ':4|P3|0:00'], 'board: top, shared place');
+  assert.deepStrictEqual(board[2].slice(0, 4), ['p1:1|P0|0:00', 'p2:2|P1|0:00', 'p2:2|P2|0:00', ':4|P3|0:00'], 'board: top, shared place, medals');
   assert.ok(/^me apart:7\|Chris\|\d+:\d\d$/.test(board[2][5]), 'board: your row ' + board[2][5]);
   // The queue: kept offline, sent when back; a second send of the same (409) is done with too.
   const queue = await page.evaluate(async () => {
@@ -304,14 +304,19 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(allDone.slice(0, 3), [true, '', 'Podijeli'], 'all three done: Podijeli first');
   assert.ok(/^Lagano .+,Srednje 1:01 \(\d+\. od \d+\),Teško 2:05$/.test(allDone[3].join()) && allDone[4], 'all three done: ' + allDone[3].join(' | '));
   await page.click('#solvedMenu');
-  // The menu's Ljestvica: all three levels, top three + you (marked where your own record says so); a day back; a week at most.
+  // The menu's Ljestvica: the strip's day, one level: top eight + you (marked where your own record says so),
+  // medals on the podium; another level; yesterday from the strip. Under it, your places on the last 7 days.
   const ranks = () => page.evaluate(async () => { await showRanks();
-    return [ranksDate.textContent, ...[...ranks.children].map(el => el.querySelector('small').textContent + '=' + [...el.querySelectorAll('li')].map(li => li.className + ':' + li.children[1].textContent).join(','))]; });
-  assert.deepStrictEqual(await ranks(), ['Danas', '7 igrača=:P0,:P1,:P2,me apart:Chris', '1 igrač=:Chris', 'Još nitko='], 'ranks: today');
-  await page.evaluate(() => ranksPrev.click());
-  assert.deepStrictEqual(await ranks(), ['Jučer', 'Još nitko=', 'Još nitko=', 'Još nitko='], 'ranks: yesterday');
-  await page.evaluate(() => { for (let i = 0; i < 6; i++) ranksPrev.click(); });
-  assert.deepStrictEqual(await page.evaluate(() => [ranksPrev.disabled, ranksNext.disabled]), [true, false], 'ranks: a week back at most');
+    return [ranksDate.textContent === 'danas', ranksCount.textContent, [...ranksList.children].map(li => li.className + ':' + li.children[1].textContent).join(','),
+      weekDays.lastChild.lastChild.textContent, weekSum.textContent]; });
+  await page.evaluate(() => { dayOn = dayKey(); rankLvl = 0; });
+  assert.deepStrictEqual(await ranks(), [true, '7 igrača', 'p1:P0,p2:P1,p2:P2,:P3,:P4,:P5,me:Chris', '7', 'Na vrijeme 1 od 7 danaNajbolje 7.'], 'ranks: today, Lagano');
+  await page.evaluate(() => ranksLv.children[1].click());
+  assert.deepStrictEqual(await ranks(), [true, '1 igrač', 'p1:Chris', '–', 'Na vrijeme 0 od 7 dana'], 'ranks: Srednje');
+  await page.evaluate(() => { ranksLv.children[0].click(); dayStrip.children[STRIP - 2].click(); });
+  assert.deepStrictEqual(await ranks(), [false, 'Još nitko', '', '7', 'Na vrijeme 1 od 7 danaNajbolje 7.'], 'ranks: yesterday from the strip');
+  assert.deepStrictEqual(await page.evaluate(() => [dayStrip.children.length, dayStrip.lastChild.firstChild.textContent, $('dayLate').hidden, dayStrip.lastChild.querySelector('.marks i').className]),
+    [14, 'danas', false, 'f'], 'strip: two weeks, today last, yesterday says "naknadno", today Lagano solved');
   // Today's daily typed in by hand: its card again, no task with help.
   const retyped = await page.evaluate(() => {
     clearBoard();
@@ -323,6 +328,29 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return r;
   });
   assert.deepStrictEqual(retyped, [null, true, 0], 'daily typed in: its card, no task');
+  // Yesterday's daily, played now: its card says so; solved, the result is yours only (not sent, no
+  // streak), the card says where you would have been, you as a ghost row; then on to today's.
+  const late = await page.evaluate(async () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const day = dayKey(d), sentBefore = lbDb.length;
+    lbDb.push({ day, level: 0, name: 'Y', ms: 1, device: 'y' }, { day, level: 0, name: 'Z', ms: 9e8, device: 'z' });
+    openDaily(0, day);
+    const said = !$('dailyLate').hidden;
+    dailyGo.click();
+    while (task?.daily !== day) await new Promise(r => setTimeout(r, 50));
+    daily.elapsed = 5000;   // between Y (1 ms) and Z
+    task.solution.forEach((v, i) => { if (!task.givens[i]) { sel = i; setCell(v); } });
+    while (!lbList.children.length) await new Promise(r => setTimeout(r, 50));
+    const r = [said, solved.open, /^Riješeno za \d+:\d\d · naknadno, samo tvoj rezultat$/.test(solvedText.textContent), lbHead.textContent,
+      [...lbList.children].map(li => li.className + ':' + li.firstChild.textContent).join(','), lbDb.length - sentBefore, !!dailyLate()[`${day}/0`], !dailyDone()[`${day}/0`],
+      solvedShare.hidden, solvedLevel.textContent];
+    solvedMenu.click();
+    return r.concat(dayStrip.children[STRIP - 2].querySelector('.marks i').className, homeDays.firstChild.lastChild.textContent.startsWith('↺'));
+  });
+  assert.deepStrictEqual(late, [true, true, true, 'Na vrijeme bio bi 2. od 3', 'p1:1,ghost:(2),p2:2', 2, true, true, true, 'Današnji', 'l', true],
+    'yesterday\'s daily: yours only, "bio bi 2.", ghost row, on to today\'s; the strip marks it');
+  await page.evaluate(() => { dayOn = dayKey(); days = readDay(); });
   console.log(`daily: same puzzles per date, levels ${gen.diffs.join('/')}%, card + Kreni, solo, duplicates only, clock (paused behind the card), "${card[1]}"; board: name once, top five + you, offline queue; menu Ljestvica: days, levels; typed in again → its card`);
 
   // 1b. Harder puzzles: hint() steps (incl. Pointing / Naked Pair) must always give the solution digit.
