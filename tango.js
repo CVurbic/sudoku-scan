@@ -210,13 +210,5 @@ function tangoButtons() {
   $('solvedShare').hidden = !tg.date;
   $('solvedShare').classList.toggle('quiet', next >= 0);
   $('solvedShare').lastChild.textContent = next < 0 ? 'Podijeli' : 'Podijeli rezultat';
-  if (tg.date) tShare();
-}
-// As prepShare: made before the tap, the place added once the board answers.
-async function tShare() {
-  const name = lbName(), ms = tg.elapsed, day = tg.date, make = p => ({ url: location.origin + location.pathname,
-    text: [`Dinango · ${new Date(day + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`, `${clock(ms)}${p?.all ? ` (${p.place}. od ${p.all})` : ''}`, 'Možeš li brže?'].join('\n') });
-  shareMsg = make();
-  if (!name || !await lbFlush()) return;
-  shareMsg = make(await lbRows(day, 3, 0, { name, ms }).catch(() => null));
+  if (tg.date) dailyShare('Dinango', tg.date, 3, tg.elapsed);
 }

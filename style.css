@@ -21,11 +21,29 @@
   --board: #e4eedd; --cell: #ffffff; --given: #d3e3c8; --sign: #3d6b3f;   /* Dinango: the field, its eggs and dinos */
   --dg: #5bb662; --dg2: #3f9a4b; --dgl: #b9e3ad; --egg: #fff1d9; --egg2: #dcc093; --eye: #2a2420; --cheek: #ff8da1;
   --calendar: #c8352b;   /* the daily crossword's calendar sheet */
+  --n1: #1d5fbf; --n2: #0f8b8d; --n3: #2f8a4c; --n4: #c99a06; --n5: #d9681c; --n6: #c2352b; --n7: #b5487d;   /* Nit: a colour per thread, 1→2 … 7→8 */
   --radius: 8px; --radius-control: 6px; --gap: 12px; --gutter: 16px;
   --font: "Schibsted Grotesk", system-ui, sans-serif;
 }
+/* Dark: by the phone (Auto), or chosen with the theme button (data-theme on <html>, kept in localStorage.theme).
+   The same tokens twice, because a media query can't be or-ed with a selector: keep the two blocks equal. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark;
+  --ground: #111110; --surface: #1b1b1a; --raised: #282826; --control: #3d3d3a;
+  --text: #f0efec; --muted: #a9a8a3; --pencil: #c4c7cc;
+  --line: #353533; --box: #d9d8d4; --printed: #33332f;
+  --primary: #f0efec; --on-primary: #121212;
+  --hue: #7fa8f0; --area: #1a2638; --focus: #284572; --peer: #2c2c2a; --same: #23395c;
+  --positive: #6fcf8f; --hint-bg: #173a23;
+  --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
+  --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
+  --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
+  --board: #1c261c; --cell: #232822; --given: #2e3d2c; --sign: #a7d3a0; --egg2: #c9b48f;
+  --calendar: #d9493e;
+  --n1: #7fa8f0; --n2: #4fc1c3; --n3: #5cc47e; --n4: #e8bf3a; --n5: #f08a45; --n6: #ff6f61; --n7: #e98bb8;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ground: #111110; --surface: #1b1b1a; --raised: #282826; --control: #3d3d3a;
     --text: #f0efec; --muted: #a9a8a3; --pencil: #c4c7cc;
     --line: #353533; --box: #d9d8d4; --printed: #33332f;
@@ -37,6 +55,7 @@
     --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
     --board: #1c261c; --cell: #232822; --given: #2e3d2c; --sign: #a7d3a0; --egg2: #c9b48f;
     --calendar: #d9493e;
+    --n1: #7fa8f0; --n2: #4fc1c3; --n3: #5cc47e; --n4: #e8bf3a; --n5: #f08a45; --n6: #ff6f61; --n7: #e98bb8;
   }
 }
 [hidden] { display: none !important; }
@@ -54,14 +73,25 @@ body { margin: 0 auto; max-width: 520px; min-height: 100dvh; display: flex; flex
 .mark { width: 22px; height: 22px; flex: none; color: var(--text); }
 #installBtn { gap: 6px; margin: 0 -8px 0 auto; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 #installBtn svg { width: 20px; height: 20px; }
+/* The theme button: Igre's bar on the phone, the foot of the rail on the computer. One tap = Auto → Svijetla → Tamna. */
+#themeBar { width: 44px; min-height: 44px; margin: 0 -10px 0 auto; padding: 0; border-color: transparent; border-radius: 50%; background: transparent; color: var(--text); }
+#installBtn:not([hidden]) + #themeBar { margin-left: 0; }
+#themeRail { display: none; }
+@media (min-width: 1100px) {
+  #themeBar { display: none; }
+  #rail #themeRail { display: flex; margin-top: auto; justify-content: flex-start; gap: 10px; min-height: 42px; padding: 0 10px; border: 0; border-radius: 8px;
+    background: transparent; color: var(--muted); font-size: 15px; font-weight: 600; }
+  #themeRail:hover { background: var(--raised); }
+  body.railmini #rail #themeRail { justify-content: center; padding: 0; }
+}
 svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 /* The game's top bar: back to the menu, the clock, ⋯. */
 .ghead { display: flex; flex-direction: column; gap: var(--gap); }
 .gbar { display: flex; align-items: center; height: 56px; margin: 0 -8px; }
-#backBtn, #menuBack, #tangoBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+#backBtn, #menuBack, #tangoBack, #nitBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
 #menuBack { margin-left: -8px; }
-#timer, #tangoTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+#timer, #tangoTimer, #nitTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 #moreBtn, #pauseBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
 /* The veil (pause): the board unreadable (blurred, the digits gone), one big ▶ over it, a line under it;
    the controls asleep. Seen once per game: it may ease in. */
@@ -206,12 +236,30 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
   border-radius: 50%; background: var(--board); font-size: 14px; font-weight: 700; line-height: 1; }
 #tbSigns span.bad { color: var(--negative); }
 .rules { margin: 0; color: var(--muted); font-size: 14px; }
-#tTip { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 8px 14px; border: 1px solid var(--control); border-radius: 14px; background: var(--surface); }
-#tTip p { margin: 0 6px 0 0; font-size: 15px; }
-#tTip div { display: flex; justify-content: flex-end; gap: 4px; }
-#tTip button { min-height: 40px; padding: 0 14px; font-size: 15px; }
-#tTip .quiet { border-color: transparent; background: transparent; color: var(--muted); }
-#tangoNew { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+#tTip, #nTip { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 8px 14px; border: 1px solid var(--control); border-radius: 14px; background: var(--surface); }
+#tTip p, #nTip p { margin: 0 6px 0 0; font-size: 15px; }
+#tTip div, #nTip div { display: flex; justify-content: flex-end; gap: 4px; }
+#tTip button, #nTip button { min-height: 40px; padding: 0 14px; font-size: 15px; }
+#tTip .quiet, #nTip .quiet { border-color: transparent; background: transparent; color: var(--muted); }
+#tangoNew, #nitNew { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+
+/* Nit: one SVG board, drawn anew on every step. White cells on the line colour, a thread per colour,
+   the cells under it tinted with it; knots are rings in the colour of the thread that leaves them.
+   Solved: the knots pop in order, 1 to the last (once, so it may play). */
+#nit { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
+#nb { display: block; width: 100%; height: auto; aspect-ratio: 1; flex: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+#nb text, #tileNit text { font: 700 21px var(--font); font-variant-numeric: tabular-nums; fill: var(--text); }
+.nbg { fill: var(--line); }
+.nc { fill: var(--surface); }
+.nc.on { fill: color-mix(in srgb, var(--c) 20%, var(--surface)); }
+.nw { fill: var(--text); }
+.nk circle { fill: var(--surface); stroke-width: 4; }
+.nring { fill: none; stroke-width: 5; animation: nring 1.4s ease-in-out infinite; }   /* Savjet: the cell it means */
+@keyframes nring { 50% { opacity: .4; } }
+#nb.won .nk { transform-box: fill-box; transform-origin: center; animation: knot .42s cubic-bezier(.23, 1, .32, 1) both; animation-delay: calc(var(--d) * 70ms + 120ms); }
+@keyframes knot { 40% { transform: scale(1.18); } }
+#nb:focus { outline: none; }
+#nb:focus-visible { outline: 3px solid var(--hue); outline-offset: 4px; border-radius: 20px; }   /* arrows lead the thread */
 
 /* Križaljke: topics as cards (a small picture of the grid), the form, ideas; the wait while a topic is made.
    The game: white cells with numbers, the clue in a bar, own keyboard (Č Ć Ž Š Đ, LJ NJ DŽ as one key). */
@@ -316,7 +364,7 @@ h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0
 #dXwDay { justify-content: flex-start; align-items: flex-start; gap: 12px; min-height: 0; padding: 0; border: 0; background: transparent; text-align: left; }
 #dXwDay .cal { width: 60px; } #dXwDay .cal .d { font-size: 28px; } #dXwDay .cal .w { display: none; } #dXwDay .cal .m { font-size: 9px; }
 #dXwDay > span:last-child { display: flex; flex-direction: column; gap: 2px; }
-#dXwDay small { color: var(--muted); font-size: 14px; font-weight: 400; }
+#dXwDay small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; color: var(--muted); font-size: 14px; font-weight: 400; }   /* four cards in a row: the day's intro in 3 lines */
 #solved:not(.xw) .forxw { display: none; }
 #solvedTomorrow { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px; border-radius: 12px; background: var(--ground); text-align: left; }
 #solvedTomorrow .cal { width: 60px; background: var(--surface); } #solvedTomorrow .cal .d { font-size: 26px; } #solvedTomorrow .cal .w { display: none; } #solvedTomorrow .cal .m { font-size: 9px; }
@@ -365,12 +413,12 @@ button:disabled, #file:disabled + label[for="file"].btn { background: var(--rais
 /* Under the thumb: tools (icon over label; Savjet the only one in colour), then the digits with how many are left.
    The gap between the board and them on a tall phone is on purpose. */
 .controls { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
-#tools, #ttools { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; container-type: inline-size; }
-#tools button, #ttools button { flex-direction: column; gap: 4px; min-height: 60px; padding: 0 2px; border: 0; border-radius: 10px; background: transparent;
+#tools, #ttools, #ntools { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; container-type: inline-size; }
+#tools button, #ttools button, #ntools button { flex-direction: column; gap: 4px; min-height: 60px; padding: 0 2px; border: 0; border-radius: 10px; background: transparent;
   color: var(--muted); font-size: 13px; line-height: 1.25; }
-#tools button:disabled, #ttools button:disabled { background: transparent; opacity: 0.45; }
+#tools button:disabled, #ttools button:disabled, #ntools button:disabled { background: transparent; opacity: 0.45; }
 #tools #padNotes[aria-pressed="true"] { background: var(--raised); color: var(--text); }
-#tools #hintBtn, #tHintBtn { color: var(--hue); font-weight: 600; }
+#tools #hintBtn, #tHintBtn, #nHintBtn { color: var(--hue); font-weight: 600; }
 #hintBtn > span { display: flex; align-items: center; gap: 5px; }
 .lv { display: none; gap: 3px; }
 .lv i { width: 5px; height: 5px; border-radius: 50%; background: var(--control); }
@@ -507,7 +555,7 @@ canvas { max-width: 100%; }
   .dock { grid-area: dock; align-self: start; position: static; grid-template-columns: 1fr; margin: 0; padding: 18px; border: 0; border-radius: 14px; background: var(--surface); }
   .dock .dtitle { display: block; order: -2; font-size: 17px; }
   #liveBtn { order: -1; }
-  #games, #past, #tango, #xw, #xwplay { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
+  #games, #past, #tango, #nit, #xw, #xwplay { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
   #tabs { width: 520px; margin: auto auto 0; border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0; }
   /* The last row takes the board's spare height, so the controls keep their own (no stretched keys). */
   #game { grid-template-rows: auto auto 1fr; padding-top: 24px;
@@ -522,6 +570,11 @@ canvas { max-width: 100%; }
   #tb { grid-area: 1 / 1 / -1; align-self: start; }
   #tango > :not(#tb) { grid-column: 2; }
   #tango .controls { grid-area: auto / 2; }
+  #nit { display: grid; max-width: none; justify-content: center; align-content: start; column-gap: 48px; padding: 24px 0 32px;
+    grid-template-columns: var(--col) 340px; grid-template-rows: repeat(3, auto) 1fr; }
+  #nb { grid-area: 1 / 1 / -1; align-self: start; }
+  #nit > :not(#nb) { grid-column: 2; }
+  #nit .controls { grid-area: auto / 2; }
   #pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }   /* like a calculator */
   #pad button { min-height: 64px; flex-direction: row; align-items: baseline; gap: 6px; background: var(--surface); font-size: 28px; }
   /* The toast in the right column: under Skeniraj in the menu; in the game at its foot, clear of the
@@ -567,7 +620,7 @@ canvas { max-width: 100%; }
   .dhead p { margin: 0; color: var(--muted); }
   .dhead p::first-letter { text-transform: uppercase; }
   .dhead h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.15; }
-  .dcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .dcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
   .dcard { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surface); }
   .dtop { display: flex; align-items: center; gap: 12px; }
   .dtop svg { width: 46px; height: 46px; padding: 9px; border-radius: 11px; background: var(--ground); }
@@ -629,7 +682,7 @@ canvas { max-width: 100%; }
   .dhead p { margin: 0; color: var(--muted); }
   .dhead p::first-letter { text-transform: uppercase; }
   .dhead h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.15; }
-  .dcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .dcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
   .dcard { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surface); }
   .dtop { display: flex; align-items: center; gap: 12px; }
   .dtop svg { width: 46px; height: 46px; padding: 9px; border-radius: 11px; background: var(--ground); }
@@ -830,7 +883,7 @@ canvas { max-width: 100%; }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #about[open], #solved .tick path, #tb.won button svg { animation: none; stroke-dashoffset: 0; }
+  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring { animation: none; stroke-dashoffset: 0; }
   #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
   #more, #more[open], #live video, #live canvas { transform: none; }
   #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }

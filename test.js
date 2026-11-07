@@ -48,6 +48,26 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await ios.close();
   console.log('install: button on the offer, Chrome prompt, then gone; iPhone instructions');
 
+  // 0a. Theme: Igre's button goes Auto → Svijetla → Tamna → Auto; the choice is kept over a reload, its colours win
+  //     over the phone's (headless is light: Tamna must turn the ground dark), Auto gives the phone's back.
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);   // a light phone, whatever this machine is
+  const theme = () => page.evaluate(() => [document.documentElement.dataset.theme || '', localStorage.theme || '', getComputedStyle(document.body).backgroundColor, themeBar.title]);
+  assert.deepStrictEqual(await theme(), ['', '', 'rgb(244, 243, 241)', 'Tema: Auto'], 'theme: Auto at first');
+  await page.click('#themeBar');
+  assert.deepStrictEqual(await theme(), ['light', 'light', 'rgb(244, 243, 241)', 'Tema: Svijetla'], 'theme: Svijetla');
+  await page.click('#themeBar');
+  await page.reload();
+  assert.deepStrictEqual(await theme(), ['dark', 'dark', 'rgb(17, 17, 16)', 'Tema: Tamna'], 'theme: Tamna, kept over a reload');
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
+  await page.click('#themeBar');
+  assert.deepStrictEqual(await theme(), ['', '', 'rgb(17, 17, 16)', 'Tema: Auto'], 'theme: Auto follows the phone (dark)');
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+  await page.click('#themeBar');
+  assert.deepStrictEqual(await theme(), ['light', 'light', 'rgb(244, 243, 241)', 'Tema: Svijetla'], 'theme: Svijetla over the phone');
+  await page.click('#themeBar'); await page.click('#themeBar');   // back to Auto for the rest
+  await page.emulateMediaFeatures([]);
+  console.log('theme: Auto → Svijetla → Tamna, kept, wins over the phone');
+
   // 0b. Share: ⋯ → Podijeli gives a link (?s=) to this very sudoku; opened elsewhere (no history) it is a
   //     game with help; the address drops ?s; a broken link says so.
   await page.evaluate(() => { localStorage.sudokuTask = JSON.stringify({ givens: [...'070500106001040000005701000102000030304912605050000201000109400000030500503006090'].map(Number), solution: solve([...'070500106001040000005701000102000030304912605050000201000109400000030500503006090'].map(Number))[0] }); localStorage.sudokuView = 'game'; });
@@ -415,6 +435,14 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     for (let h; (h = tHint(g, a.signs)); ) { if (h.v !== a.sol[h.k]) return 'wrong step'; g[h.k] = h.v; }
     return [JSON.stringify(a) === JSON.stringify(tMake(`tango#2026-11-${d}`)), tSolve(a.giv, a.signs).length, g.join() === a.sol.join(), a.giv.filter(x => x >= 0).length >= 4].join();
   }).filter(r => r !== 'true,1,true,true')), [], 'tango: same board per date, one solution, Savjet finishes it');
+  // Nit: one board per date; the path goes over all 36 cells, one step at a time; the knots and walls leave
+  // it one way only (that very path), 7-12 knots, the first and last at the ends, made in well under a second.
+  assert.deepStrictEqual(await page.evaluate(() => [...Array(20)].map((_, d) => {
+    const t = performance.now(), a = nMake(`nit#2026-11-${d}`), ms = performance.now() - t, s = nSolve(a.knots, a.walls);
+    return [JSON.stringify(a) === JSON.stringify(nMake(`nit#2026-11-${d}`)), new Set(a.path).size === 36 && a.path.every((k, i) => !i || nNear(a.path[i - 1]).includes(k)),
+      s.length === 1 && s[0].join() === a.path.join(), a.knots.length >= 7 && a.knots.length <= 12 && a.knots[0] === a.path[0] && a.knots.at(-1) === a.path[35], ms < 500].join();
+  }).filter(r => r !== 'true,true,true,true,true')), [], 'nit: same board per date, a full path, one solution, 7-12 knots, fast');
+  console.log('nit: a board per date, the path over every cell, one way only');
   await page.click('#tileTango');
   assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Dinango · dnevni', true], 'tango daily: solo');
   const three = await page.evaluate(() => { const L = T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3); L.forEach(k => tCells[k].click()); return L; });
@@ -447,6 +475,68 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     [false, true, true, '♥ za U', 'none'], 'tango game: then the card, the little dino and U\'s line, Nova igra');
   await page.click('#solvedMenu');
   console.log('tango: Igre first, a board per date (unique, Savjet finishes it), solo daily, red rules, card, tile, Povijest, game with Savjet');
+
+  // 1d2. Nit: the tile opens today's board, the thread starts on 1. A drag (the mouse as a finger, cells skipped
+  //      by a fast move walked one by one) draws it; a knot out of turn stops it; dragging back over it takes it
+  //      back; Poništi undoes a drag; the whole path solves it → the knots pop, the card, the tile says ✓.
+  await page.click('#tabGames');
+  await page.click('#tileNit');
+  assert.deepStrictEqual(await page.evaluate(() => [view, nitName.textContent, ng.date === dayKey(), ng.line.length]), ['nit', 'Nit · dnevni', true, 1], 'nit: the daily on 1');
+  const nCell = k => page.evaluate(k => { const r = nb.getBoundingClientRect(), u = r.width / 380; return [r.left + (40 + k % 6 * 60) * u, r.top + (40 + (k / 6 | 0) * 60) * u]; }, k);
+  const nDrag = async (cells, steps = 3) => {
+    let [x, y] = await nCell(cells[0]);
+    await page.mouse.move(x, y); await page.mouse.down();
+    for (const k of cells.slice(1)) { [x, y] = await nCell(k); await page.mouse.move(x, y, { steps }); }
+    await page.mouse.up();
+  };
+  const nPath = await page.evaluate(() => ng.path), nLine = () => page.evaluate(() => ng.line.join());
+  await nDrag([nPath[0], nPath[5]], 1);   // one jump: walked cell by cell where the way is free
+  const jumped = await page.evaluate(() => ng.line.length);
+  await nDrag([nPath[0]]);   // back to 1
+  await nDrag(nPath.slice(0, 12));
+  assert.strictEqual(await nLine(), nPath.slice(0, 12).join(), 'nit: the drag draws the thread');
+  const outOfTurn = await page.evaluate(() => { const k = ng.knots.at(-1); return nNear(ng.line.at(-1)).includes(k) ? null : (nTo(k), ng.line.at(-1) === k); });
+  assert.notStrictEqual(outOfTurn, true, 'nit: the last knot out of turn stops the thread');
+  await nDrag([nPath[11], nPath[10], nPath[9]]);
+  assert.strictEqual(await nLine(), nPath.slice(0, 10).join(), 'nit: back over the thread takes it back');
+  await page.click('#nUndoBtn');
+  assert.strictEqual(await nLine(), nPath.slice(0, 12).join(), 'nit: Poništi undoes the last drag');
+  await nDrag(nPath.slice(11));
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [!!ng.solvedAt, nb.classList.contains('won'), /^Riješeno za \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedNext.hidden, ntools.hidden,
+    solvedShare.hidden, solvedShare.textContent, lboard.hidden, lbHead.textContent, lbNow.level, shareMsg.text.split('\n')[0].startsWith('Nit · ')]),
+    [true, true, true, 'Igre', true, true, false, 'Podijeli', false, 'Upiši se na današnju ljestvicu', 4, true], 'nit solved: knots pop, the card with Ljestvica (level 4) and Podijeli');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tileNit.lastChild.className, /^✓ \d+:\d\d · 1 dan$/.test(tileNit.lastChild.textContent)]), ['games', 'solved', true], 'nit: the tile says solved');
+  await page.click('#tabPast');
+  assert.deepStrictEqual(await page.evaluate(() => [nitPast.children.length, nitPastTitle.hidden, tangoPast.children.length]), [1, false, 1], 'nit: in Povijest, beside Dinango');
+  await page.click('#tabGames');
+  // Savjet (a game only): the next cell, Stavi draws it; a thread off the solution → back to its last right cell; to the end.
+  // (nTip is the open tip; the box is $('nTip'))
+  assert.strictEqual(await page.evaluate(() => { openNit(); return nHintBtn.hidden; }), true, 'nit daily: no Savjet');
+  await page.click('#nitNew');
+  assert.deepStrictEqual(await page.evaluate(() => {
+    nHintBtn.click();
+    const r = [nitName.textContent, nTip.title, nTip.k === ng.path[1], !!nb.querySelector('.nring'), $('nTip').hidden];
+    nTipDo.click();
+    return [...r, ng.line.join() === ng.path.slice(0, 2).join(), $('nTip').hidden];
+  }), ['Nit · Nova igra', 'Sljedeći korak', true, true, false, true, true], 'nit Savjet: the next cell, Stavi');
+  assert.strictEqual(await page.evaluate(() => {
+    for (let i = 1; i < 30; i++) for (const j of nNear(ng.path[i])) {
+      ng.line = ng.path.slice(0, i + 1);
+      if (j === ng.path[i + 1] || ng.line.includes(j) || !nTo(j)) continue;
+      nChanged(); nHintBtn.click();
+      const r = [nTip.title, nTip.k === ng.path[i]];
+      nTipDo.click();
+      return [...r, ng.line.join() === ng.path.slice(0, i + 1).join()].join();
+    }
+    return 'no wrong step found';
+  }), 'Nit je skrenula,true,true', 'nit Savjet: off the solution → Vrati');
+  assert.strictEqual(await page.evaluate(() => { for (let i = 0; i < 40 && !ng.solvedAt; i++) { nHintBtn.click(); nTipDo.click(); } return !!ng.solvedAt; }), true, 'nit Savjet: to the end');
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [solvedNext.hidden, solvedShare.hidden, lboard.hidden]), [false, true, true], 'nit game: the card without a board, Nova igra');
+  await page.click('#solvedMenu');
+  console.log(`nit: the tile opens the daily, drag (a jump walked: ${jumped} cells), knots in turn, back, Poništi, solved → card (Ljestvica, Podijeli), tile, Povijest, Savjet in a game`);
 
   // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
@@ -538,8 +628,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
-  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo')]),
-    ['flex', 'none', 3, true], 'rail: shown, no tab bar, Danas with the dailies and the crossword');
+  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo'), /^DnevniRiješeno za \d+:\d\d ✓$/.test(dNit.firstChild.textContent), dNitGo.textContent, getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length]),
+    ['flex', 'none', 3, true, true, 'Nova igra', 4], 'rail: shown, no tab bar, Danas with the dailies, the crossword and Nit (four in a row)');
   await page.evaluate(() => rail.querySelector('[data-v="tango"]').click());   // not by position: the rail is still animating its width
   assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
   await page.evaluate(() => rail.querySelector('[data-v="games"]').click());

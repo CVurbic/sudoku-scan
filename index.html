@@ -10,6 +10,7 @@
 <link rel="icon" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
+<script>try { if (localStorage.theme) document.documentElement.dataset.theme = localStorage.theme; } catch {}</script>   <!-- before the first paint: no flash of the other theme -->
 </head>
 <body>
 <div id="toast" role="status"><p id="msg"></p><button id="msgAct" hidden></button><button id="msgClose" aria-label="Zatvori"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -84,8 +85,10 @@
   <button data-v="menu" data-tile="tileSudoku" title="Sudoku"><span class="t">Sudoku</span><small></small></button>
   <button data-v="tango" data-tile="tileTango" title="Dinango"><span class="t">Dinango</span><small></small></button>
   <button data-v="xw" data-tile="tileXw" title="Križaljke"><span class="t">Križaljke</span><small></small></button>
+  <button data-v="nit" data-tile="tileNit" title="Nit"><span class="t">Nit</span><small></small></button>
   <hr>
   <button data-v="past" title="Povijest"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="t">Povijest</span></button>
+  <button id="themeRail" class="theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="t">Tema</span><small></small></button>
 </nav>
 
 <section id="games" hidden>
@@ -93,11 +96,13 @@
     <svg class="mark" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg>
     <h1>Igre</h1>
     <button id="installBtn" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Instaliraj</button>
+    <button id="themeBar" class="theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
   </header>
   <div class="tiles">
     <button id="tileSudoku" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.67 1v20M14.33 1v20M1 7.67h20M1 14.33h20" stroke="currentColor" stroke-width="1.2"/><rect x="8.27" y="8.27" width="5.46" height="5.46" fill="var(--hue)"/></svg><b>Sudoku</b><small></small></button>
     <button id="tileTango" class="tile"><svg viewBox="0 0 48 48" aria-hidden="true"></svg><b>Dinango</b><small></small></button>
     <button id="tileXw" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M2 3h6v6H2zM8 3h6v6H8zM14 3h6v6h-6zM8 9h6v6H8zM8 15h6v6H8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="9.6" y="10.6" width="2.8" height="2.8" fill="var(--hue)"/></svg><b>Križaljke</b><small></small></button>
+    <button id="tileNit" class="tile"><svg viewBox="-10 -10 380 380" aria-hidden="true"></svg><b>Nit</b><small></small></button>
   </div>
   <!-- Danas: Igre on a big screen (with the rail), the tiles as cards with today's state, the board and the last sudokus. -->
   <div id="today">
@@ -106,6 +111,7 @@
       <div class="dcard"><div class="dtop" data-tile="tileSudoku"><b>Sudoku</b></div><ul id="dSudoku"></ul><button id="dSudokuGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tileTango"><b>Dinango</b></div><ul id="dTango"></ul><button id="dTangoGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><button id="dXwDay" hidden><span class="cal"></span><span><b></b><small></small></span></button><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
+      <div class="dcard"><div class="dtop" data-tile="tileNit"><b>Nit</b></div><ul id="dNit"></ul><button id="dNitGo" class="go"></button></div>
     </div>
     <div class="drow">
       <div class="dpanel"><h2>Ljestvica · danas</h2><ul id="dRanks"></ul></div>
@@ -172,6 +178,8 @@
   <header class="bar"><h1>Povijest</h1></header>
   <h2 id="tangoPastTitle">Dinango</h2>
   <ul id="tangoPast" class="hlist"></ul>
+  <h2 id="nitPastTitle">Nit</h2>
+  <ul id="nitPast" class="hlist"></ul>
   <h2>Sudoku</h2>
   <ul id="historyList" class="hlist"></ul>
   <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
@@ -193,6 +201,25 @@
       <button id="tHintBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg>Savjet</button>
     </div>
     <button id="tangoNew" hidden>Nova igra</button>
+  </div>
+</section>
+
+<section id="nit" hidden>
+  <div class="gbar">
+    <button id="nitBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Igre</button>
+    <b id="nitTimer" aria-label="Vrijeme">0:00</b>
+  </div>
+  <p class="gname"><b id="nitName"></b><span id="nitSide"></span></p>
+  <svg id="nb" viewBox="-10 -10 380 380" role="img" aria-label="Ploča 6 × 6: vuci nit od 1"></svg>
+  <div id="nTip" hidden><b></b><p></p><div><button class="quiet">Zatvori</button><button id="nTipDo"></button></div></div>
+  <p class="rules">Poveži brojeve redom i prođi kroz svako polje točno jednom · kroz zid se ne može.</p>
+  <div class="controls">
+    <div id="ntools">
+      <button id="nUndoBtn" disabled><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>Poništi</button>
+      <button id="nClearBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20H9L4 15l9-9 7 7-6 6"/><path d="M9 11l6 6"/></svg>Obriši sve</button>
+      <button id="nHintBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg>Savjet</button>
+    </div>
+    <button id="nitNew" hidden>Nova igra</button>
   </div>
 </section>
 
@@ -292,6 +319,7 @@
 <script src="sudoku.js"></script>
 <script src="scan.js"></script>
 <script src="tango.js"></script>
+<script src="nit.js"></script>
 <script src="krizaljka.js"></script>
 <script>
 // The saved game, now that everything it needs exists, as it was left. Back where the user was: the
@@ -305,6 +333,7 @@ if (!openShared()) {   // a shared link wins
     go('game');
     if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily);
   } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango();
+  else if (wasIn === 'nit') localStorage.nitOn === 'game' ? nitGame() : openNit();
   else if (wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
   else go(['menu', 'past', 'xw'].includes(wasIn) ? wasIn : 'games');
 }
