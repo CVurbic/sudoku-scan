@@ -186,14 +186,13 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
   border: 2px solid var(--box); border-radius: 4px; overflow: hidden; background: var(--surface); container-type: inline-size; }
 #grid input { appearance: none; width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
-  background-color: var(--surface); color: var(--pencil); caret-color: var(--hue); text-align: center;
+  background-color: var(--surface); color: var(--pencil); caret-color: transparent; text-align: center;
   font-family: var(--font); font-weight: 400; line-height: 1.5; font-size: clamp(18px, 6vw, 32px); font-size: 6.4cqi;
   text-decoration-thickness: 2px; text-underline-offset: 0.14em; outline: none; }   /* no transition: picking and lighting happen hundreds of times */
 #grid input:nth-child(9n) { border-right: 0; }
 #grid input:nth-child(n+73) { border-bottom: 0; }
 #grid input:nth-child(9n+3), #grid input:nth-child(9n+6) { border-right: 2px solid var(--box); }
 #grid input:nth-child(n+19):nth-child(-n+27), #grid input:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--box); }
-#grid input:focus { outline: 3px solid var(--hue); outline-offset: -3px; }
 #grid input { cursor: pointer; }
 #grid input.sel { outline: 3px solid var(--hue); outline-offset: -3px; }   /* picked for the pad */
 
@@ -541,6 +540,21 @@ canvas { max-width: 100%; }
 #pad button[aria-pressed="true"] { background: var(--hue); color: var(--on-primary); }   /* armed: goes into each empty cell tapped */
 #pad button[aria-pressed="true"]::after { color: inherit; }
 #pad .erase { display: none; }   /* the game has Obriši among the tools */
+
+/* What each key does: beside the board, only where there is a keyboard to speak of. */
+#keys { display: none; padding: 16px 18px 18px; border-radius: 14px; background: var(--surface); }
+@media (min-width: 880px) and (hover: hover) and (pointer: fine) { #keys { display: block; } }
+#keys h2 { margin: 0 0 12px; font-size: 17px; line-height: 1.2; }
+#keys dl { display: grid; grid-template-columns: auto 1fr; gap: 9px 16px; align-items: center; margin: 0; }
+#keys dl div { display: contents; }
+#keys dt { display: flex; gap: 4px; }
+#keys dd { margin: 0; font-size: 15px; line-height: 1.25; }
+#keys kbd { display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 7px; border: 1px solid var(--control); border-radius: 6px;
+  box-shadow: inset 0 -2px 0 var(--raised); font: 500 13px/1 var(--font); }
+#keys kbd .i { width: 13px; height: 13px; stroke-width: 2.5; }
+#keys kbd.up .i { transform: rotate(90deg); }
+#keys kbd.right .i { transform: rotate(180deg); }
+#keys kbd.down .i { transform: rotate(-90deg); }
 
 @media (min-width: 880px) {
   :root { --col: min(600px, calc(100dvh - 56px), calc(100vw - 440px)); }   /* the board's (and the cards') column; 48px gap, then 340px; fits 880px */

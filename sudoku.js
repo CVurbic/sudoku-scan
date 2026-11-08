@@ -3,16 +3,11 @@
 // (pool.js reads the logic and the daily generator from this file).
 
 // Cells are typed into with the number pad (as in the live camera), not the phone keyboard; on a
-// computer the keys 1-9 and Backspace work too.
+// computer the keyboard works too (the keydown under arm()).
 const inputs = Array.from({ length: 81 }, (_, k) => {
   const i = document.createElement('input');
-  i.readOnly = true; i.inputMode = 'none';
+  i.readOnly = true; i.inputMode = 'none'; i.tabIndex = -1;   // the arrows walk the board: Tab skips its 81 cells
   i.onclick = () => pick(k);
-  i.onkeydown = e => {
-    const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1;
-    if (d < 0 || task?.givens[k] || paused) return;   // paused: the board is under the veil
-    sel = k; setCell(d);
-  };
   $('grid').append(i);
   return i;
 });
@@ -37,8 +32,13 @@ function pick(k) {
   const tapped = k;
   if (task?.givens[k]) k = null;
   sel = k === sel ? null : k;
+  showSel(sel ?? (task?.givens[tapped] ? tapped : null));   // a printed digit can't be picked, but shows where its digit is
+}
+
+// The picked cell's ring, and what is lit around `seen`.
+function showSel(seen) {
   inputs.forEach((x, i) => x.classList.toggle('sel', i === sel));
-  light(sel ?? (task?.givens[tapped] ? tapped : null));   // a printed digit can't be picked, but shows where its digit is
+  light(seen);
   $('padKind').disabled = sel === null || !inputs[sel].value;   // before a task only
   $('padKind').lastChild.textContent = sel !== null && inputs[sel].classList.contains('entry') ? 'Ovo je tiskani broj' : 'Ovo je moj broj (rukom)';
 }
@@ -54,8 +54,46 @@ function arm(d) {
 }
 addEventListener('keydown', e => e.key === 'Escape' && armed && arm(0));
 
+// The cursor on cell k, printed ones too (the keyboard only: a tap on a printed cell must leave the pad free to arm).
+// Focus goes along, so a screen reader reads the cell.
+function place(k) {
+  sel = k;
+  showSel(k);
+  inputs[k].focus({ preventScroll: true });
+}
+function moveSel(dr, dc) {
+  const from = sel ?? lit;
+  if (armed) arm(0);
+  if (from === null) return place(0);   // the first arrow only shows the cursor
+  place(((from / 9 | 0) + dr + 9) % 9 * 9 + (from % 9 + dc + 9) % 9);   // over the edge: the other side
+}
+// A computer keyboard: arrows, 1-9, Backspace/Delete/0, N for notes, Ctrl+Z, Esc. The cursor stays on the cell after a digit.
+addEventListener('keydown', e => {
+  if (view !== 'game' || paused || live || document.querySelector('dialog[open]')) return;
+  const cmd = e.ctrlKey || e.metaKey;
+  if (cmd && e.key.toLowerCase() === 'z' && !e.altKey) {
+    if (!task) return;
+    e.preventDefault();
+    const u = undo.at(-1);
+    $('undoBtn').click();
+    return u && place(u.k);
+  }
+  if (cmd || e.altKey) return;
+  const arrow = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] }[e.key];
+  if (arrow) { e.preventDefault(); return moveSel(...arrow); }
+  if (e.repeat) return;   // a held key is one digit, one toggle
+  if (e.key === 'Escape') return pick(null);
+  if (e.key.toLowerCase() === 'n') return task && $('padNotes').click();
+  const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1, k = sel;
+  if (d < 0 || k === null) return;
+  setCell(d);
+  place(k);
+});
+
 // The tapped cell's row, column and box, and every cell holding its digit (null: none).
+let lit = null;   // where the arrows go on from when no cell is picked
 function light(k) {
+  lit = k;
   const v = k === null ? '' : inputs[k].value;
   inputs.forEach((x, i) => {
     x.classList.toggle('peer', k !== null && PEERS[k].includes(i));
@@ -102,7 +140,7 @@ $('undoBtn').onclick = () => {
 // instead, and the pad stays for the next one.
 function setCell(d) {
   const k = sel, i = inputs[k];
-  if (k === null) return;   // a digit with no cell picked does nothing
+  if (k === null || task?.givens[k]) return;   // a digit with no cell picked, or the cursor on a printed one, does nothing
   idle = 0;
   if (d && tipOn) { tipOn = false; say(''); }   // the first digit puts the first games' tip away
   undo.push({ k, v: i.value, notes: notes.slice() });   // notes are replaced, never changed in place
@@ -154,7 +192,7 @@ function showTask() {
   const solo = !task || !!task.daily;   // the daily is solo
   for (const id of ['hintBtn', 'solveBtn', 'candsBtn', 'explainBtn']) $(id).hidden = solo;
   $('paperBtn').hidden = solo || !!task.random;   // a scanned sudoku's paper
-  $('undoBtn').hidden = $('padNotes').hidden = $('moreBtn').hidden = !task;
+  $('undoBtn').hidden = $('padNotes').hidden = $('moreBtn').hidden = $('keysNotes').hidden = $('keysUndo').hidden = !task;
   $('padKind').hidden = $('setTask').hidden = !!task;
   $('timer').hidden = !task?.daily && !task?.random;
   $('pauseBtn').hidden = $('timer').hidden || !!state().solvedAt;   // ‖: any game with a clock, till solved

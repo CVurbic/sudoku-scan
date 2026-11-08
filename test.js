@@ -48,6 +48,47 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await ios.close();
   console.log('install: button on the offer, Chrome prompt, then gone; iPhone instructions');
 
+  // 0-keys. A computer keyboard: the cursor steps onto printed cells, wraps over the edge, stays after a digit;
+  //         nothing happens under the veil, behind a dialog or off the board.
+  await page.evaluate(g => { clearBoard(); const d = [...g].map(Number); task = { givens: d, solution: solve(d)[0] }; showTask(); go('game'); }, PRINTED);
+  const sel_ = () => page.evaluate('sel'), press = k => page.keyboard.press(k);
+  await press('ArrowRight');
+  assert.strictEqual(await sel_(), 0, 'keys: the first arrow shows the cursor');
+  await press('ArrowRight');
+  assert.strictEqual(await sel_(), 1, 'keys: stops on a printed cell');
+  await press('9');
+  assert.deepStrictEqual([(await grid())[1], await sel_()], ['7', 1], 'keys: a printed cell stays as it is');
+  await press('ArrowLeft');
+  const first = String(await page.evaluate('task.solution[0]'));
+  await press(first);
+  assert.deepStrictEqual([(await grid())[0], await sel_(), (await cls('ok')).includes(0)], [first, 0, true], 'keys: digit in, cursor stays');
+  await page.keyboard.down('Control'); await press('z'); await page.keyboard.up('Control');
+  assert.deepStrictEqual([(await grid())[0], await sel_()], ['0', 0], 'keys: Ctrl+Z, cursor stays');
+  await press('ArrowLeft');
+  assert.strictEqual(await sel_(), 8, 'keys: over the left edge');
+  await press('ArrowUp');
+  assert.strictEqual(await sel_(), 80, 'keys: over the top edge');
+  await press('n'); await press('1'); await press('n');
+  assert.deepStrictEqual(await page.evaluate('[noting, notes[80], sel]'), [false, [1], 80], 'keys: N, a note, N');
+  await press('Backspace');
+  await press('Escape');
+  assert.strictEqual(await sel_(), null, 'keys: Esc');
+  await page.evaluate(() => pause(true));
+  await press('ArrowRight');
+  assert.strictEqual(await sel_(), null, 'keys: nothing under the veil');
+  await page.evaluate(() => { pause(false); $('more').showModal(); });
+  await press('ArrowRight');
+  assert.strictEqual(await sel_(), null, 'keys: nothing behind a dialog');
+  await page.evaluate(() => { $('more').close(); go('menu'); });
+  await press('ArrowRight');
+  assert.strictEqual(await sel_(), null, 'keys: nothing off the board');
+  await page.evaluate(() => { clearBoard(); go('game'); });
+  await page.setViewport({ width: 1280, height: 800 });
+  assert.deepStrictEqual(await page.evaluate(() => [keysNotes.hidden, keysUndo.hidden, getComputedStyle(keys).display]), [true, true, 'block'], 'keys: the sheet, without notes and undo before a task');
+  await page.setViewport({ width: 800, height: 600 });
+  console.log('keys: arrows, digits, notes, Ctrl+Z, Esc; not under the veil, a dialog or off the board');
+  await open(null);
+
   // 0a. Theme: Igre's button goes Auto → Svijetla → Tamna → Auto; the choice is kept over a reload, its colours win
   //     over the phone's (headless is light: Tamna must turn the ground dark), Auto gives the phone's back.
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);   // a light phone, whatever this machine is
