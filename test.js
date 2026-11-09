@@ -58,6 +58,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await sel_(), 1, 'keys: stops on a printed cell');
   await press('9');
   assert.deepStrictEqual([(await grid())[1], await sel_()], ['7', 1], 'keys: a printed cell stays as it is');
+  const lit9 = () => page.evaluate(() => [armed, padKeys[8].ariaPressed, inputs.every(x => x.classList.contains('same') === (x.value === '9'))]);
+  assert.deepStrictEqual(await lit9(), [9, 'true', true], 'keys: a digit on a full cell presses the pad key, all of it lit');
+  await press('ArrowRight');
+  assert.deepStrictEqual(await lit9(), [9, 'true', true], 'keys: still lit while walking');
+  await press('ArrowLeft');
+  await press('9');
+  assert.deepStrictEqual(await page.evaluate(() => [armed, sel, padKeys[8].ariaPressed]), [0, 1, 'false'], 'keys: the same digit again lets go, the cursor stays');
   await press('ArrowLeft');
   const first = String(await page.evaluate('task.solution[0]'));
   await press(first);

@@ -27,7 +27,7 @@ function pick(k) {
   if (armed && k !== null && !inputs[k].value && !task?.givens[k]) {
     sel = k;
     setCell(armed);
-    return arm(padKeys[armed - 1].classList.contains('spent') ? 0 : armed);   // all nine placed: put away
+    return arm(spent(armed) ? 0 : armed);   // all nine placed: put away
   }
   const tapped = k;
   if (task?.givens[k]) k = null;
@@ -50,7 +50,6 @@ function arm(d) {
   armed = d;
   padKeys.forEach((b, j) => b.ariaPressed = String(j + 1 === d));
   pick(null);
-  inputs.forEach(x => x.classList.toggle('same', !!d && x.value === String(d)));
 }
 addEventListener('keydown', e => e.key === 'Escape' && armed && arm(0));
 
@@ -63,7 +62,6 @@ function place(k) {
 }
 function moveSel(dr, dc) {
   const from = sel ?? lit;
-  if (armed) arm(0);
   if (from === null) return place(0);   // the first arrow only shows the cursor
   place(((from / 9 | 0) + dr + 9) % 9 * 9 + (from % 9 + dc + 9) % 9);   // over the edge: the other side
 }
@@ -86,15 +84,20 @@ addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 'n') return task && $('padNotes').click();
   const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1, k = sel;
   if (d < 0 || k === null) return;
-  setCell(d);
+  if (d && task && inputs[k].value) arm(d === armed || spent(d) ? 0 : d);   // a full cell: the key only presses the pad's key
+  else {
+    setCell(d);
+    if (armed && spent(armed)) arm(0);
+  }
   place(k);
 });
+const spent = d => padKeys[d - 1].classList.contains('spent');
 
-// The tapped cell's row, column and box, and every cell holding its digit (null: none).
+// The tapped cell's row, column and box, and every cell holding its digit (null: none); with a digit armed, that digit.
 let lit = null;   // where the arrows go on from when no cell is picked
 function light(k) {
   lit = k;
-  const v = k === null ? '' : inputs[k].value;
+  const v = armed ? String(armed) : k === null ? '' : inputs[k].value;
   inputs.forEach((x, i) => {
     x.classList.toggle('peer', k !== null && PEERS[k].includes(i));
     x.classList.toggle('same', !!v && x.value === v);
@@ -1044,7 +1047,7 @@ const padKeys = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => {
   const b = document.createElement('button');
   b.textContent = d || '⌫';
   if (!d) { b.ariaLabel = 'Prazno'; b.className = 'erase'; }
-  b.onclick = () => live ? fixCell(d) : sel === null && d ? arm(d === armed ? 0 : d) : setCell(d);
+  b.onclick = () => live ? fixCell(d) : d && (sel === null || d === armed) ? arm(d === armed ? 0 : d) : setCell(d);
   return $('pad').appendChild(b);
 });
 $('eraseBtn').onclick = () => setCell(0);
