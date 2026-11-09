@@ -75,8 +75,35 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await sel_(), 8, 'keys: over the left edge');
   await press('ArrowUp');
   assert.strictEqual(await sel_(), 80, 'keys: over the top edge');
-  await press('n'); await press('1'); await press('n');
-  assert.deepStrictEqual(await page.evaluate('[noting, notes[80], sel]'), [false, [1], 80], 'keys: N, a note, N');
+  await press('Space');
+  assert.strictEqual(await page.evaluate('noting'), true, 'keys: Space tapped, notes on');
+  await press('1'); await press('Space');
+  assert.deepStrictEqual(await page.evaluate('[noting, notes[80], sel]'), [false, [1], 80], 'keys: a note, Space tapped, notes off');
+  await page.keyboard.down('Space'); await press('2');
+  assert.deepStrictEqual(await page.evaluate('[noting, notes[80]]'), [true, [1, 2]], 'keys: a note with Space held');
+  await page.keyboard.up('Space');
+  assert.strictEqual(await page.evaluate('noting'), false, 'keys: a quick Space with a digit in it is a hold, not a tap');
+  const holdSpace = async () => { await page.keyboard.down('Space'); await new Promise(r => setTimeout(r, 300)); const on = await page.evaluate('noting'); await page.keyboard.up('Space'); return [on, await page.evaluate('noting')]; };
+  assert.deepStrictEqual(await holdSpace(), [true, false], 'keys: held, notes on only while down');
+  await press('Space');
+  assert.deepStrictEqual(await holdSpace(), [true, true], 'keys: held with notes on, they stay on');
+  await press('Space');
+  await page.click('#padNotes');   // on, by mouse: the button keeps the focus
+  await press('Space');
+  assert.strictEqual(await page.evaluate('noting'), false, 'keys: Space after a click is the notes key, not a second press of that button');
+  await page.focus('#padNotes');   // reached by keyboard: Space presses it, once
+  await press('Space');
+  assert.strictEqual(await page.evaluate('[noting, noteKey]').then(([n, s]) => n && s === null), true, 'keys: Space on a button tabbed to presses it');
+  await page.click('#padNotes');
+  await press('n'); await press('Shift');
+  assert.strictEqual(await page.evaluate('noting'), false, 'keys: N and Shift do nothing now');
+  await press('Numpad0');
+  assert.strictEqual(await page.evaluate('noting'), true, 'keys: numpad 0 tapped, notes on');
+  await press('Numpad0');
+  await page.keyboard.down('Numpad0'); await press('3');
+  assert.deepStrictEqual(await page.evaluate('[noting, notes[80]]'), [true, [1, 2, 3]], 'keys: a note with numpad 0 held');
+  await page.keyboard.up('Numpad0');
+  assert.strictEqual(await page.evaluate('noting'), false, 'keys: numpad 0 let go, notes off');
   await press('Backspace');
   await press('Escape');
   assert.strictEqual(await sel_(), null, 'keys: Esc');

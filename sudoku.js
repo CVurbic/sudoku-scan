@@ -65,8 +65,23 @@ function moveSel(dr, dc) {
   if (from === null) return place(0);   // the first arrow only shows the cursor
   place(((from / 9 | 0) + dr + 9) % 9 * 9 + (from % 9 + dc + 9) % 9);   // over the edge: the other side
 }
-// A computer keyboard: arrows, 1-9, Backspace/Delete/0, N for notes, Ctrl+Z, Esc. The cursor stays on the cell after a digit.
+// Space, or 0 on the numpad (under the thumb of a hand on the digits): a quick tap switches notes on or off;
+// held, they are on only while it is down.
+// Not Shift: with NumLock on, Windows turns Shift + a numpad digit into an arrow. Not Ctrl: Ctrl + a digit switches browser tabs.
+const isNoteKey = e => e.code === 'Space' || e.code === 'Numpad0';
+let noteKey = null;   // while down: { was: notes before it, at: when, used: another key meanwhile (so not a tap) }
+const setNoting = on => noting !== on && $('padNotes').click();
+function noteKeyUp() {
+  if (!noteKey) return;
+  const { was, at, used } = noteKey;
+  noteKey = null;
+  setNoting(!used && performance.now() - at < 250 ? !was : was);
+}
+addEventListener('keyup', e => isNoteKey(e) && noteKeyUp());
+addEventListener('blur', noteKeyUp);   // let go in another window: no keyup here
+// A computer keyboard: arrows, 1-9, Backspace/Delete/0, Space or numpad 0 for notes, Ctrl+Z, Esc. The cursor stays on the cell after a digit.
 addEventListener('keydown', e => {
+  if (noteKey && !isNoteKey(e)) noteKey.used = true;
   if (view !== 'game' || paused || live || document.querySelector('dialog[open]')) return;
   const cmd = e.ctrlKey || e.metaKey;
   if (cmd && e.key.toLowerCase() === 'z' && !e.altKey) {
@@ -79,9 +94,14 @@ addEventListener('keydown', e => {
   if (cmd || e.altKey) return;
   const arrow = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] }[e.key];
   if (arrow) { e.preventDefault(); return moveSel(...arrow); }
+  if (task && isNoteKey(e)) {   // before a task numpad 0 still empties a cell
+    if (e.code === 'Space' && e.target.matches('button:focus-visible')) return;   // Tabbed onto a button: Space presses it
+    e.preventDefault();   // no scrolling, and no second press of a key just clicked (repeats too)
+    if (!e.repeat) { noteKey = { was: noting, at: performance.now() }; setNoting(true); }
+    return;
+  }
   if (e.repeat) return;   // a held key is one digit, one toggle
   if (e.key === 'Escape') return pick(null);
-  if (e.key.toLowerCase() === 'n') return task && $('padNotes').click();
   const d = /^[1-9]$/.test(e.key) ? +e.key : /^(Backspace|Delete|0)$/.test(e.key) ? 0 : -1, k = sel;
   if (d < 0 || k === null) return;
   if (d && task && inputs[k].value) arm(d === armed || spent(d) ? 0 : d);   // a full cell: the key only presses the pad's key
