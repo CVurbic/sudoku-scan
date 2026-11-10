@@ -278,21 +278,104 @@ async function dailyShare(game, day, level, ms) {
   shareMsg = make(await lbRows(day, level, 0, { name, ms }).catch(() => null));
 }
 const players = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'igrač' : 'igrača'}`;
-// The solved card's panel: the name first if there is none; else the top five and you.
+// The solved card's panel: the name first if there is none; else the climb (runClimb), then the top five and you.
+let climbAsk = 0;
 async function lbShow(day, level, ms) {
-  const name = lbName(), head = t => $('lbHead').textContent = t;
+  const name = lbName(), head = t => $('lbHead').textContent = t, ask = ++climbAsk;
   $('lboard').hidden = false;
   $('lbJoin').hidden = !!name;
+  $('lbClimb').hidden = true;
+  delete $('lboard').dataset.climb;
   $('lbList').replaceChildren();
   if (!name) return head('Upiši se na današnju ljestvicu');
   head('Učitavam…');
   if (!await lbFlush()) return head('Bez mreže: rezultat se šalje kad se vratiš.');
-  let b;
-  try { b = await lbRows(day, level, 5, { name, ms }); } catch { return head('Ljestvica se nije učitala.'); }
+  let b, times;
+  try {
+    [b, times] = await Promise.all([lbRows(day, level, 5, { name, ms }),
+      lb(`select=name,ms&day=eq.${day}&level=eq.${level}&order=ms&limit=1000`).then(r => r.ok ? r.json() : Promise.reject())]);
+  } catch { return head('Ljestvica se nije učitala.'); }
+  if (ask !== climbAsk) return;   // named again, or another card meanwhile
   b.rows.forEach((li, i) => li.style.setProperty('--i', i));   // one after another
   head(`Danas, ${lvName(level)} · ${players(b.all)}`);
-  $('lbList').replaceChildren(...b.rows);
+  const mine = times.findIndex(r => r.name === name && r.ms === ms);   // your own row is in (sent above): the others without it
+  runClimb(times.filter((_, i) => i !== mine), ms, ask, () => $('lbList').replaceChildren(...b.rows));
 }
+// The climb. others: [{ name, ms }] today at this level, without you. Few (under 20 with you): a dot each, the
+// name of the one just passed, the place; more: a histogram and the percent slower than you. Waits for the card
+// to be open (Dinango and Nit open it later); a tap on the line, reduced motion, nobody to pass or the card
+// closed: straight to the end. then(): the top five, once it has landed.
+function runClimb(others, ms, ask, then) {
+  const W = 320, Y = 52, n = others.length, few = n + 1 < 20, all = [...others.map(o => o.ms), ms].sort((a, b) => a - b);
+  // the slow end: the slowest (few) or the 95th percentile, so one left open overnight does not squash the rest
+  let lo = all[0], hi = Math.max(ms, few ? all.at(-1) : all[Math.floor(.95 * (all.length - 1))]);
+  const pad = (hi - lo) * .08 || 5000; lo -= pad; hi += pad;
+  const x = s => 14 + (Math.min(hi, Math.max(lo, s)) - lo) / (hi - lo) * (W - 28);
+  const faster = others.filter(o => o.ms < ms).length, place = faster + 1;
+  let marks = '';
+  if (few) marks = others.map((o, i) => `<circle class="cdot" cx="${x(o.ms)}" cy="${Y}" r="8" style="transition-delay:0s,0s,${i * 50}ms"/>`).join('');
+  else {
+    const B = 24, w = (hi - lo) / B, bins = Array(B).fill(0), bw = (W - 28) / B;
+    others.forEach(o => bins[Math.max(0, Math.min(B - 1, (o.ms - lo) / w | 0))]++);
+    const mx = Math.max(...bins);
+    marks = bins.map((c, i) => c ? `<rect class="cbar" data-ms="${lo + (i + .5) * w}" x="${14 + i * bw + 1}" y="${Y - c / mx * 32}" width="${bw - 2}" height="${c / mx * 32}" rx="1.5" style="transition-delay:0s,0s,${i * 16}ms"/>` : '').join('');
+  }
+  $('lbPlot').innerHTML = `<line class="cax" x1="0" x2="${W}" y1="${Y}" y2="${Y}"/>${marks}
+    <g id="lbCur"><line class="cmk" x1="0" x2="0" y1="16" y2="${Y}"/><circle class="cme" cx="0" cy="${Y}" r="${few ? 10 : 7}"/><text class="cyou" x="0" y="11">ti</text></g>
+    <text class="ctk" x="0" y="82">brže</text><text class="ctk" x="${W}" y="82" text-anchor="end">sporije</text>`;
+  const items = [...$('lbPlot').querySelectorAll('.cdot, .cbar')].map((el, i) => ({ el, ms: few ? others[i].ms : +el.dataset.ms, name: few ? others[i].name : '' }));
+  const live = $('lbLive'), cur = $('lbCur'), bump = (el, s, d) => el.animate([{ transform: 'scale(1)' }, { transform: `scale(${s})` }, { transform: 'scale(1)' }], { duration: d, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+  const set = (s, p, sub) => {
+    $('lbClock').textContent = clock(s);
+    cur.setAttribute('transform', `translate(${x(s)} 0)`);
+    $('lbPlace').textContent = few ? p + '.' : Math.round(100 * others.filter(o => o.ms > s).length / n) + '%';
+    $('lbLine').textContent = few ? `od ${n + 1} danas` : 'igrača sporije';
+    if (sub !== undefined) $('lbSub').textContent = sub;
+  };
+  const end = () => {
+    if (ask !== climbAsk) return;
+    items.forEach(i => { i.el.classList.toggle('beaten', i.ms > ms); i.el.classList.toggle('ahead', i.ms < ms); });
+    set(ms, place, !n ? 'Prvi danas' : few ? (n - faster ? `Iza tebe: ${players(n - faster)}` : 'Riješeno, i to se broji') : `${players(n + 1)} danas`);
+    $('lbPlace').className = few && place <= 3 ? 'p' + place : '';
+    $('lbLine').textContent = few ? `${place}. od ${n + 1} danas` : 'igrača sporije';   // the percent is in the circle
+    live.ariaHidden = null;
+    if (!reduced()) bump($('lbPlace'), 1.25, 300);
+    $('lboard').dataset.climb = 'done';
+    then();
+  };
+  $('lbClimb').hidden = false;
+  $('lbClimb').classList.remove('show');
+  $('lbPlace').className = '';
+  live.ariaHidden = 'true';   // the count on its way is noise to a screen reader; the place, once landed
+  set(hi, others.filter(o => o.ms < hi).length + 1, few ? '' : `${players(n + 1)} danas`);
+  let skip = reduced() || place === n + 1;   // nobody slower: nothing to pass
+  $('lbPlot').onclick = () => skip = true;
+  const start = () => {
+    if (ask !== climbAsk) return;
+    if (!$('solved').open) return setTimeout(start, 100);
+    $('lbClimb').classList.add('show');   // everyone in, grey: nobody knows yet
+    if (skip) return end();
+    setTimeout(() => {
+      const t0 = performance.now(), DUR = 2000;
+      let shown = 0;
+      const frame = now => {
+        if (ask !== climbAsk) return;
+        if (skip || !$('solved').open) return end();
+        const k = Math.min(1, (now - t0) / DUR), s = hi + (ms - hi) * (1 - Math.pow(1 - k, 4));   // ease-out quart: slow near the end
+        const p = others.filter(o => o.ms < s).length + 1;
+        let sub;
+        items.forEach(i => { if (i.ms > s && !i.el.classList.contains('beaten')) { i.el.classList.add('beaten'); if (few) { sub = 'Iza tebe: ' + i.name; bump(i.el, 1.35, 280); } } });
+        set(s, p, sub);
+        if (few && shown && p !== shown) bump($('lbPlace'), 1.15, 220);
+        shown = p;
+        if (k < 1) requestAnimationFrame(frame); else setTimeout(end, 350);   // a beat of stillness, then the landing
+      };
+      requestAnimationFrame(frame);
+    }, 450);
+  };
+  start();
+}
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // The menu's Ljestvica: the strip's day (dayOn), one level (remembered), its top eight and you; solved on a
 // later day, you as a ghost row where you would have been. Your row comes from your own record of that day

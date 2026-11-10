@@ -835,6 +835,30 @@ canvas { max-width: 100%; }
 .field { width: 100%; min-width: 0; min-height: 48px; padding: 0 12px; border: 1px solid var(--control); border-radius: var(--radius-control);
   background: var(--surface); color: var(--text); font: 400 16px/1.2 var(--font); }   /* 16px: no zoom on iPhone */
 #aboutName { margin-bottom: 8px; }
+/* The climb (today's daily, named): everyone's time today on a line, faster left, grey till you pass. The clock
+   runs down from the slow end and carries you ("ti") left; each one overtaken turns green and bumps, the place
+   counts down beside it; it slows near the end, then the place lands (a medal on the podium) and the top five rise in. */
+#lbClimb { margin-bottom: 10px; }
+#lbPlot { display: block; width: 100%; height: auto; overflow: visible; cursor: pointer; }
+#lbPlot .cax { stroke: var(--line); stroke-width: 1.5; }
+#lbPlot .ctk { fill: var(--muted); font: 600 11px var(--font); }
+#lbPlot .cdot, #lbPlot .cbar { fill: var(--raised); stroke: var(--control); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center;
+  transition: fill .2s ease, stroke .2s ease, opacity .3s cubic-bezier(0.23, 1, 0.32, 1); }
+#lbPlot .cbar { stroke: none; fill: var(--control); transform-origin: bottom; }
+#lbClimb.show .cdot { opacity: 1; } #lbClimb.show .cbar { opacity: .5; }
+#lbPlot .ahead { fill: var(--muted); stroke: var(--muted); } #lbClimb.show .cbar.ahead { opacity: .7; }
+#lbPlot .beaten { fill: var(--positive); stroke: var(--positive); } #lbClimb.show .cbar.beaten { opacity: .8; }
+#lbPlot .cme { fill: var(--hue); stroke: var(--ground); stroke-width: 3; }
+#lbPlot .cmk { stroke: var(--hue); stroke-width: 2; }
+#lbPlot .cyou { fill: var(--hue); font: 700 13px var(--font); text-anchor: middle; }
+#lbLive { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 8px 12px 8px 8px; border-radius: 12px; background: var(--area); }
+#lbPlace { display: grid; place-items: center; min-width: 48px; height: 48px; padding: 0 6px; flex: none; border-radius: 24px; background: var(--surface);
+  font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; transition: background-color .3s ease, color .3s ease; }
+#lbPlace.p1, #lbPlace.p2, #lbPlace.p3 { background: var(--c); color: #fff; }
+#lbLive > span:nth-child(2) { flex: 1; min-width: 0; }
+#lbLine { display: block; font-variant-numeric: tabular-nums; }
+#lbSub { display: block; overflow: hidden; color: var(--muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+#lbClock { font-size: 24px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .lblist { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
 .lblist li { display: grid; grid-template-columns: 3ch 1fr auto; gap: 10px; margin: 0 -8px; padding: 4px 8px; border-radius: 6px;
   animation: rise .2s cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i) * 40ms) backwards; }

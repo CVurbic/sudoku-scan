@@ -365,6 +365,9 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(board.slice(0, 2), [true, 'Danas, lagano · 7 igrača'], 'board: head');
   assert.deepStrictEqual(board[2].slice(0, 4), ['p1:1|P0|0:00', 'p2:2|P1|0:00', 'p2:2|P2|0:00', ':4|P3|0:00'], 'board: top, shared place, medals');
   assert.ok(/^me apart:7\|Chris\|\d+:\d\d$/.test(board[2][5]), 'board: your row ' + board[2][5]);
+  // The climb before it: all six faster, nobody to pass → landed at once, everyone dark, the place as the board's.
+  assert.deepStrictEqual(await page.evaluate(() => [lboard.dataset.climb, lbClimb.hidden, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbPlot.querySelectorAll('.cdot.ahead').length, lbLive.ariaHidden]),
+    ['done', false, '7.', '7. od 7 danas', 'Riješeno, i to se broji', 6, null], 'climb: nobody slower, straight to the place');
   // The queue: kept offline, sent when back; a second send of the same (409) is done with too.
   const queue = await page.evaluate(async () => {
     lbOffline = true; lbQueue(dayKey(), 1, 90000);
@@ -390,6 +393,20 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   });
   assert.deepStrictEqual(allDone.slice(0, 3), [true, '', 'Podijeli'], 'all three done: Podijeli first');
   assert.ok(/^Lagano .+,Srednje 1:01 \(\d+\. od \d+\),Teško 2:05$/.test(allDone[3].join()) && allDone[4], 'all three done: ' + allDone[3].join(' | '));
+  // The climb with someone to pass (Teško: 3 faster, 2 slower): under way, a tap on the line lands it at once.
+  const climb = await page.evaluate(async () => {
+    const wait = f => new Promise(r => { const t = () => f() ? r() : setTimeout(t, 20); t(); });
+    lbDb.push(...[1000, 2000, 3000, 9e6, 8e6].map((ms, i) => ({ day: dayKey(), level: 2, name: 'Q' + i, ms, device: 'q' + i })));
+    lbShow(dayKey(), 2, 5000);
+    await wait(() => !lbClimb.hidden);
+    const mid = [lboard.dataset.climb, lbLive.ariaHidden];
+    lbPlot.dispatchEvent(new MouseEvent('click'));   // an svg has no .click()
+    await wait(() => lboard.dataset.climb === 'done');
+    const r = [...mid, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbClock.textContent, lbPlot.querySelectorAll('.cdot.beaten').length, lbPlot.querySelectorAll('.cdot.ahead').length, lbList.children.length];
+    lbDb.splice(lbDb.findIndex(x => x.level === 2), 5);
+    return r;
+  });
+  assert.deepStrictEqual(climb, [null, 'true', '4.', '4. od 6 danas', 'Iza tebe: 2 igrača', '0:05', 2, 3, 6], 'climb: tapped, landed on the board\'s place');
   await page.click('#solvedMenu');
   // The menu's Ljestvica: the strip's day, one level: top eight + you (marked where your own record says so),
   // medals on the podium; another level; yesterday from the strip. Under it, your places on the last 7 days.
