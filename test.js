@@ -690,6 +690,80 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.evaluate(() => go('games'));
   console.log('minolovac: a board per date and level, the tile opens the daily, right click / held finger flags, chord, a mine +30 s, reload, solved → card (level 5), tile, Povijest, Nova igra');
 
+  // 1d4. Pasijans: a deal per seed (52 different cards, 1–7 in the columns, 24 in the stock); the rules; the solver
+  //      picks each day's deal (one it solves) fast; stuck spotted; the board's number (cards first, then time).
+  //      The tile opens today's: no undo, a tap on the stock turns a card, a tap sends a card to its place, a drag
+  //      drops it on a column; Završi ends it (cards counted); a reload goes on. Nova igra: undo, Savjet, the rest
+  //      going up by itself, the card.
+  assert.deepStrictEqual(await page.evaluate(() => {
+    const C = n => P_RANK.indexOf(n.slice(0, -1)) + 13 * 'SHDC'.indexOf(n.slice(-1)), out = [];
+    const a = pDeal('pas#x'), b = pDeal('pas#x'), all = [...a.cols.flat(), ...a.stock];
+    out.push(JSON.stringify(a) === JSON.stringify(b), new Set(all).size === 52, a.cols.map(c => c.length).join(''), a.stock.length);
+    out.push(pFits(C('9D'), [C('10S')]), pFits(C('9H'), [C('10D')]), pFits(C('9S'), [C('JD')]), pFits(C('KH'), []), pFits(C('QH'), []));
+    const g = { cols: [[C('5C'), C('KS')], [C('QH')], [], [], [], [], []], down: [1, 0, 0, 0, 0, 0, 0], found: [0, 0, 0, 0], stock: [], waste: [C('AS')] };
+    out.push(pDo(g, { f: 'w', t: 'f' }), g.found[0], pDo(g, { f: 1, j: 0, t: 0 }), g.cols[0].length, pDo(g, { f: 0, j: 1, t: 2 }), g.down[0], g.cols[0].join() === String(C('5C')), pDo(g, { f: 2, j: 0, t: 3 }));
+    const t0 = performance.now(), days = [...Array(10)].map((_, d) => pDaily('2026-12-' + (d + 1)));
+    out.push(days.every(d => Array.isArray(pSolve(d, 5000))), performance.now() - t0 < 5000, JSON.stringify(pDaily('2026-12-3')) === JSON.stringify(days[2]));
+    const stuck = { cols: [[0, 1, 2, C('QD')], [3, 4, 5, 6, C('10H')], [], [7, 8, C('9D')], [9, 10, 11, C('QH')], [], [12, 13, C('10D')]], down: [3, 4, 0, 2, 3, 0, 2], found: [9, 8, 7, 7], stock: [C('JD')], waste: [C('JH')] };
+    out.push(pStuck(stuck), pStuck(pDeal('pas#x')), pScore(52, 600000) < pScore(51, 60000), pScoreText(pScore(52, 221000)), pScoreText(pScore(31, 252000)));
+    return out;
+  }), [true, true, '1234567', 24, true, false, false, true, false, true, 1, true, 3, true, 0, true, true, true, true, true, true, false, true, '3:41', '31/52 · 4:12'],
+    'pas: the deal, the rules, the daily solved and the same each time, stuck, the board number');
+  await page.click('#tilePas');
+  assert.deepStrictEqual(await page.evaluate(() => [view, pasName.textContent, pg.date === dayKey(), pasEnd.hidden, pasUndo.hidden, pasHint.hidden, pasNew.hidden, pt.querySelectorAll('.pc').length, pasCards.firstChild.textContent]),
+    ['pas', 'Pasijans · dnevni', true, false, true, true, true, 29, '0'], 'pas: the daily: Završi only, 28 cards and the stock');
+  const pAt = sel => page.evaluate(sel => { const r = pt.querySelector(sel).getBoundingClientRect(); return [r.left + r.width / 2, r.top + 12]; }, sel);
+  await page.mouse.click(...await pAt('[data-at="s"]'));
+  assert.deepStrictEqual(await page.evaluate(() => [pg.waste.length, pg.stock.length, !!pt.querySelector('[data-at="w"]')]), [1, 23, true], 'pas: a tap on the stock turns a card');
+  await page.keyboard.down('Control'); await page.keyboard.press('z'); await page.keyboard.up('Control');
+  assert.strictEqual(await page.evaluate(() => pg.waste.length), 1, 'pas: no undo on the daily');
+  // a column's card onto another (set up: 9♦ under 10♠ there), by a tap, then one dragged back
+  const C = n => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'].indexOf(n.slice(0, -1)) + 13 * 'SHDC'.indexOf(n.slice(-1));
+  await page.evaluate(([a, b, c]) => { pg.cols[0] = [a]; pg.cols[1] = [pg.cols[1][0], b]; pg.cols[2] = [pg.cols[2][0], pg.cols[2][1], c]; pg.down[0] = 0; drawPas(); }, [C('9D'), C('10S'), C('10C')]);
+  await page.mouse.click(...await pAt('[data-at="c0.0"]'));
+  assert.deepStrictEqual(await page.evaluate(() => [pg.cols[0].length, pg.cols[1].length]), [0, 3], 'pas: a tap sends the card to a column it fits');
+  await new Promise(r => setTimeout(r, 300));   // the slide (FLIP) over
+  const [fx, fy] = await pAt('[data-at="c1.2"]'), [tx, ty] = await pAt('[data-at="c2.2"]');
+  await page.mouse.move(fx, fy); await page.mouse.down(); await page.mouse.move((fx + tx) / 2, fy + 20, { steps: 4 }); await page.mouse.move(tx, ty + 30, { steps: 4 }); await page.mouse.up();
+  assert.deepStrictEqual(await page.evaluate(() => [pg.cols[1].length, pg.cols[2].length]), [2, 4], 'pas: a drag drops the card on the column under it');
+  const pMoves0 = await page.evaluate(() => pg.moves);
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [view, pasName.textContent, pg.moves]), ['pas', 'Pasijans · dnevni', pMoves0], 'pas: a reload goes on');
+  await page.click('#pasEnd');
+  await page.click('#msgAct');
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [!!pg.endedAt, solvedTitle.textContent, solved.classList.contains('stuck'), /^0 od 52 na temelju · \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent),
+    lbNow.level, lbNow.ms >= 52 * P_HOUR, solvedShare.hidden, solvedNext.hidden, shareMsg.text.split('\n')[1].startsWith('0/52 · ')]),
+    [true, 'Kraj igre', true, true, 6, true, false, true, true], 'pas: Završi ends the daily: the cards up, then the time (level 6)');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, solvedTitle.textContent, tilePas.lastChild.className, /^✓ 0\/52 · \d+:\d\d · 1 dan$/.test(tilePas.lastChild.textContent)]), ['games', 'Riješeno!', 'solved', true], 'pas: the tile; the card titled as before for the others');
+  await page.click('#tabPast');
+  assert.deepStrictEqual(await page.evaluate(() => [pasPast.children.length, pasPastTitle.hidden, /^0 od 52 · \d+:\d\d ✓$/.test(pasPast.querySelector('b').textContent)]), [1, false, true], 'pas: in Povijest');
+  await page.click('#tabGames');
+  // Nova igra: undo, Savjet (something outlined), then a game all face up: the cards go up by themselves → the card
+  await page.evaluate(() => pasGame(true));
+  assert.deepStrictEqual(await page.evaluate(() => [view, pasName.textContent, !pg.date, pasUndo.hidden, pasUndo.disabled, pasHint.hidden, pasNew.hidden, pasEnd.hidden]),
+    ['pas', 'Pasijans', true, false, true, false, false, true], 'pas: Nova igra with Poništi, Savjet, Nova igra');
+  await page.mouse.click(...await pAt('[data-at="s"]'));
+  await page.click('#pasUndo');
+  assert.deepStrictEqual(await page.evaluate(() => [pg.waste.length, pg.stock.length, pasUndo.disabled]), [0, 24, true], 'pas: Poništi takes the turn back');
+  await page.evaluate(() => { pg = { ...pFresh(pDaily('2026-12-3')), hist: [] }; drawPas(); });
+  await page.click('#pasHint');
+  assert.strictEqual(await page.evaluate(() => pt.querySelectorAll('.hint').length), 1, 'pas: Savjet outlines a card');
+  await page.evaluate(([ks, kh]) => {   // one king on the waste, one in a column, the rest up: a move to go
+    pg = { cols: [[ks], [], [], [], [], [], []], down: [0, 0, 0, 0, 0, 0, 0], found: [12, 12, 13, 13], stock: [], waste: [kh], moves: 0, elapsed: 61000, endedAt: null, hist: [] };
+    drawPas();
+  }, [C('KS'), C('KH')]);
+  await new Promise(r => setTimeout(r, 300));
+  await page.mouse.click(...await pAt('[data-at="w"]'));
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [pCards(pg), solvedTitle.textContent, solved.classList.contains('stuck'), /^Riješeno za 1:0\d · 2 poteza$/.test(solvedText.textContent), solvedNext.hidden, solvedShare.hidden, lboard.hidden]),
+    [52, 'Riješeno!', false, true, false, true, true], 'pas: all face up → the rest goes up by itself, the card (no board)');
+  await page.click('#solvedNext');
+  assert.deepStrictEqual(await page.evaluate(() => [view, !pg.endedAt, pCards(pg)]), ['pas', true, 0], 'pas: Nova igra again');
+  await page.evaluate(() => go('games'));
+  console.log('pasijans: deal, rules, daily solver, stuck, board number, tile, stock, no undo, tap, drag, reload, Završi (level 6), tile, Povijest, Nova igra: undo, Savjet, auto-complete');
+
   // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
   const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');

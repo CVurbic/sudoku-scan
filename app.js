@@ -25,7 +25,7 @@ const loading = t => { $('loading').textContent = t; $('loading').hidden = !t; }
 // The screens: Igre and Povijest (on the tab bar), Sudoku's menu and its game, Tango. Going between them
 // animates nothing and keeps everything: a game stays on its board. Remembered, so a reload (or the app
 // opened again) comes back where the user was.
-const VIEWS = ['games', 'past', 'menu', 'game', 'tango', 'nit', 'mino', 'xw', 'xwplay'];
+const VIEWS = ['games', 'past', 'menu', 'game', 'tango', 'nit', 'mino', 'pas', 'xw', 'xwplay'];
 let view = 'games';
 function go(v) {
   if (armed) arm(0);
@@ -36,7 +36,7 @@ function go(v) {
   $('tabGames').ariaCurrent = v === 'games' ? 'page' : null;
   $('tabPast').ariaCurrent = v === 'past' ? 'page' : null;
   say('');   // a message belongs to the screen it was said on
-  ({ games: showGames, past: showPast, menu: showMenu, game: placeBubble, tango: drawTango, nit: drawNit, mino: drawMino, xw: showXw, xwplay: drawXw })[v]();
+  ({ games: showGames, past: showPast, menu: showMenu, game: placeBubble, tango: drawTango, nit: drawNit, mino: drawMino, pas: drawPas, xw: showXw, xwplay: drawXw })[v]();
   showRail();
 }
 
@@ -54,18 +54,19 @@ document.querySelectorAll('[data-stairs]').forEach(el => el.replaceWith(stairs(+
 
 // The rail (from 1100px, CSS): where you are, each game's state today, a dot where something waits.
 // Folded to icons by the button or [, kept; in a game it folds by itself and opens again after.
-const RAIL_ON = { games: 'games', past: 'past', menu: 'menu', game: 'menu', tango: 'tango', nit: 'nit', mino: 'mino', xw: 'xw', xwplay: 'xw' };
+const RAIL_ON = { games: 'games', past: 'past', menu: 'menu', game: 'menu', tango: 'tango', nit: 'nit', mino: 'mino', pas: 'pas', xw: 'xw', xwplay: 'xw' };
 const railMini = () => { try { return localStorage.railMini === '1'; } catch { return false; } };
 function showRail() {
-  document.body.classList.toggle('railmini', railMini() || ['game', 'tango', 'nit', 'mino', 'xwplay'].includes(view));
+  document.body.classList.toggle('railmini', railMini() || ['game', 'tango', 'nit', 'mino', 'pas', 'xwplay'].includes(view));
   // today's, read afresh (days is the day being played, maybe an older one)
   const solved = readDay().levels.filter(st => st?.solvedAt).length, t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt;
   const games = xwGames(), key = Object.keys(games).sort((a, b) => games[b].at - games[a].at)[0], p = key && xwProgress(key, games);
   const xwText = p ? (p.done ? '✓' : `${p.n} od ${p.words.length}`) : '';
-  const n = tLoad('nitDaily'), nDone = n?.date === dayKey() && n.solvedAt, m = tLoad('minoDaily'), mDone = m?.date === dayKey() && m.solvedAt;
+  const n = tLoad('nitDaily'), nDone = n?.date === dayKey() && n.solvedAt, m = tLoad('minoDaily'), mDone = m?.date === dayKey() && m.solvedAt, pa = tLoad('pasDaily'), pDone = pa?.date === dayKey() && pa.endedAt;
   const state = { menu: [solved === 3 ? '✓' : `${solved} od 3`, solved < 3], tango: [tDone ? '✓' : t?.date === dayKey() && t.elapsed ? 'u tijeku' : 'čeka', !tDone], xw: [xwText, false],
     nit: [nDone ? '✓' : n?.date === dayKey() && n.elapsed ? 'u tijeku' : 'čeka', !nDone],
-    mino: [mDone ? '✓' : m?.date === dayKey() && m.elapsed ? 'u tijeku' : 'čeka', !mDone] };
+    mino: [mDone ? '✓' : m?.date === dayKey() && m.elapsed ? 'u tijeku' : 'čeka', !mDone],
+    pas: [pDone ? '✓' : pa?.date === dayKey() && pa.elapsed ? 'u tijeku' : 'čeka', !pDone] };
   for (const b of $('rail').querySelectorAll('[data-v]')) {
     b.ariaCurrent = RAIL_ON[view] === b.dataset.v ? 'page' : null;
     if (!state[b.dataset.v]) continue;
@@ -77,11 +78,11 @@ function showRail() {
 document.querySelectorAll('[data-tile]').forEach(el => el.prepend($(el.dataset.tile).firstChild.cloneNode(true)));   // the tiles' pictures
 $('rail').onclick = e => {
   const v = e.target.closest('[data-v]')?.dataset.v;
-  if (v) v === 'tango' ? openTango() : v === 'nit' ? openNit() : v === 'mino' ? openMino() : go(v);
+  if (v) v === 'tango' ? openTango() : v === 'nit' ? openNit() : v === 'mino' ? openMino() : v === 'pas' ? openPas() : go(v);
 };
 function railFold() {
   const mini = !document.body.classList.contains('railmini');
-  if (!['game', 'tango', 'nit', 'mino', 'xwplay'].includes(view)) try { localStorage.railMini = mini ? '1' : '0'; } catch {}
+  if (!['game', 'tango', 'nit', 'mino', 'pas', 'xwplay'].includes(view)) try { localStorage.railMini = mini ? '1' : '0'; } catch {}
   document.body.classList.toggle('railmini', mini);
 }
 $('railFold').onclick = railFold;
@@ -110,8 +111,8 @@ addEventListener('keydown', e => { if (e.key === '[' && !e.target.closest('input
 let todayAsk = 0;
 function showToday() {
   const li = (a, b, cls = '') => { const x = document.createElement('li'); x.append(...[a, b].map((t, i) => Object.assign(document.createElement('span'), { textContent: t, className: i ? cls : '' }))); return x; };
-  // A row's sign: a sudoku level's stairs, or Dinango's / Nit's / Minolovac's own picture (one daily each, no levels)
-  const dot = (el, l) => { el.firstChild.prepend(l < 3 ? stairs(l) : Object.assign($(['tileTango', 'tileNit', 'tileMino'][l - 3]).firstChild.cloneNode(true), { classList: 'tmark' })); return el; };
+  // A row's sign: a sudoku level's stairs, or Dinango's / Nit's / Minolovac's / Pasijans's own picture (one daily each, no levels)
+  const dot = (el, l) => { el.firstChild.prepend(l < 3 ? stairs(l) : Object.assign($(['tileTango', 'tileNit', 'tileMino', 'tilePas'][l - 3]).firstChild.cloneNode(true), { classList: 'tmark' })); return el; };
   $('dDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
   const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt);
   $('dSudoku').replaceChildren(...DAILY.map(([name], i) => dot(li(name, levelText(lv[i]), lv[i]?.solvedAt ? 'solved' : 'muted'), i)));
@@ -128,6 +129,10 @@ function showToday() {
   $('dMino').replaceChildren(li('Dnevni', mDone ? `Riješeno za ${clock(m.elapsed)} ✓` : m?.date === dayKey() && m.elapsed ? `U tijeku · ${clock(m.elapsed)}` : 'Čeka', mDone ? 'solved' : 'muted'),
     ...mRun ? [li('Niz', daysWord(mRun) + ' zaredom')] : []);
   Object.assign($('dMinoGo'), mDone ? { textContent: 'Nova igra', onclick: () => minoGame() } : { textContent: 'Igraj dnevni', onclick: () => openMino() });
+  const p = tLoad('pasDaily'), pDone = p?.date === dayKey() && p.endedAt, pRun = streak(Object.keys(pasDone()));
+  $('dPas').replaceChildren(li('Dnevni', pDone ? `${pasLine(pasDone()[p.date])} ✓` : p?.date === dayKey() && p.elapsed ? `U tijeku · ${clock(p.elapsed)}` : 'Čeka', pDone ? 'solved' : 'muted'),
+    ...pRun ? [li('Niz', daysWord(pRun) + ' zaredom')] : []);
+  Object.assign($('dPasGo'), pDone ? { textContent: 'Nova igra', onclick: () => pasGame() } : { textContent: 'Igraj dnevni', onclick: () => openPas() });
   const games = xwGames(), keys = xwOwn(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics'), day = xwDay();
   // The daily crossword on top: its sheet, topic and where it stands; then your topics (two beside it, else three).
   $('dXwDay').hidden = !day;
@@ -148,9 +153,9 @@ function showToday() {
     : open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
   const recent = saved().slice(0, 3);
   $('dRecent').replaceChildren(...recent.length ? recent.map(historyItem) : [li('Još nema sudokua', '', 'muted')]);
-  // The board: today's fastest per daily (sudoku's three, Dinango, Nit, Minolovac), asked anew each time (6 small requests).
+  // The board: today's fastest per daily (sudoku's three, Dinango, Nit, Minolovac, Pasijans), asked anew each time (7 small requests).
   const ask = ++todayAsk;
-  Promise.all([0, 1, 2, 3, 4, 5].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
+  Promise.all([0, 1, 2, 3, 4, 5, 6].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
     if (ask !== todayAsk) return;
     $('dRanks').replaceChildren(...res.map((b, l) => {
       const top = b?.rows[0], name = lvName(l)[0].toUpperCase() + lvName(l).slice(1);
@@ -177,19 +182,24 @@ function showGames() {
   const m = tLoad('minoDaily'), mDone = m?.date === dayKey() && m.solvedAt;
   Object.assign($('tileMino').lastChild, { className: mDone ? 'solved' : '',
     textContent: mDone ? `✓ ${clock(m.elapsed)} · ${daysWord(streak(Object.keys(minoDone())))}` : m?.date === dayKey() && m.elapsed ? `U tijeku · ${clock(m.elapsed)}` : 'Dnevni čeka' });
+  const p = tLoad('pasDaily'), pDone = p?.date === dayKey() && p.endedAt;
+  Object.assign($('tilePas').lastChild, { className: pDone ? 'solved' : '',
+    textContent: pDone ? `✓ ${pScoreText(pasDone()[p.date])} · ${daysWord(streak(Object.keys(pasDone())))}` : p?.date === dayKey() && p.elapsed ? `U tijeku · ${clock(p.elapsed)}` : 'Dnevni čeka' });
   if (matchMedia('(min-width: 1100px)').matches) showToday();
 }
 matchMedia('(min-width: 1100px)').onchange = () => view === 'games' && showGames();   // a window made wider gets Danas
-// Povijest: Dinango's, Nit's and Minolovac's solved dailies (newest first), then every sudoku.
+// Povijest: Dinango's, Nit's, Minolovac's and Pasijans's finished dailies (newest first), then every sudoku.
+// Pasijans's: the cards up first when not all (its number is pScore), then the time.
+const pasLine = v => v < P_HOUR ? `Riješeno za ${clock(v)}` : `${52 - Math.floor(v / P_HOUR)} od 52 · ${clock(v % P_HOUR)}`;
 function showPast() {
-  [['tango', tangoDone(), 'tileTango'], ['nit', nitDone(), 'tileNit'], ['mino', minoDone(), 'tileMino']].forEach(([g, d, tile]) => {
+  [['tango', tangoDone(), 'tileTango'], ['nit', nitDone(), 'tileNit'], ['mino', minoDone(), 'tileMino'], ['pas', pasDone(), 'tilePas']].forEach(([g, d, tile]) => {
     const done = Object.entries(d).sort((a, b) => a[0] < b[0] ? 1 : -1);
     $(g + 'PastTitle').hidden = $(g + 'Past').hidden = !done.length;
     $(g + 'Past').replaceChildren(...done.map(([date, ms]) => {
       const li = document.createElement('li'), row = Object.assign(document.createElement('span'), { className: 'hrow' });
       row.append($(tile).firstChild.cloneNode(true), Object.assign(document.createElement('span'), { className: 'hmeta' }));
       row.firstChild.style.cssText = 'width: 56px; height: 56px; flex: none';
-      row.lastChild.append(Object.assign(document.createElement('b'), { className: 'solved', textContent: `Riješeno za ${clock(ms)} ✓` }),
+      row.lastChild.append(Object.assign(document.createElement('b'), { className: 'solved', textContent: g === 'pas' ? `${pasLine(ms)} ✓` : `Riješeno za ${clock(ms)} ✓` }),
         Object.assign(document.createElement('small'), { textContent: 'Dnevni · ' + new Date(date + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric', year: 'numeric' }) }));
       li.append(row);
       return li;
@@ -222,8 +232,10 @@ const LB = 'https://fgllmnemukhouwyebfop.supabase.co/rest/v1/scores?', LB_KEY = 
 const lb = (q, o = {}) => fetch(LB + q, { ...o, headers: { apikey: LB_KEY, 'Accept-Profile': 'sudokuscan', 'Content-Profile': 'sudokuscan',
   'Content-Type': 'application/json', ...o.headers } });
 const lbName = () => { try { return localStorage.sudokuName || ''; } catch { return ''; } };
-// Level 3 is Dinango's daily, 4 Nit's, 5 Minolovac's (one a day each); the solved card's result is lbNow: { day, level, ms }.
-const lvName = l => l === 3 ? 'Dinango' : l === 4 ? 'Nit' : l === 5 ? 'Minolovac' : DAILY[l][0].toLowerCase();
+// Level 3 is Dinango's daily, 4 Nit's, 5 Minolovac's, 6 Pasijans's (one a day each); the solved card's result is lbNow: { day, level, ms }.
+// Pasijans's ms is cards first, then time (pScore): shown as such (lvClock).
+const lvName = l => l === 3 ? 'Dinango' : l === 4 ? 'Nit' : l === 5 ? 'Minolovac' : l === 6 ? 'Pasijans' : DAILY[l][0].toLowerCase();
+const lvClock = (l, ms) => l === 6 ? pScoreText(ms) : clock(ms);
 let lbNow = null;
 function lbQueue(day, level, ms) {
   try {
@@ -255,7 +267,7 @@ async function lbRows(day, level, n, mine) {
   const row = (place, r, cls = '') => {
     const li = document.createElement('li');
     li.className = [cls, typeof place === 'number' && place <= 3 && 'p' + place].filter(Boolean).join(' ');   // the podium: medal colours
-    li.append(...[place, r.name, clock(r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
+    li.append(...[place, r.name, lvClock(level, r.ms)].map(t => Object.assign(document.createElement('span'), { textContent: t })));
     return li;
   };
   const ghost = mine?.ghost, me = mine && !ghost ? top.findIndex(r => r.name === mine.name && r.ms === mine.ms) : -1,
@@ -280,7 +292,7 @@ async function lbLate(day, level, ms) {
 // One daily's result to share (Dinango, Nit), as prepShare: made before the tap, the place added once the board answers.
 async function dailyShare(game, day, level, ms) {
   const name = lbName(), make = p => ({ url: location.origin + location.pathname,
-    text: [`${game} · ${new Date(day + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`, `${clock(ms)}${p?.all ? ` (${p.place}. od ${p.all})` : ''}`, 'Možeš li brže?'].join('\n') });
+    text: [`${game} · ${new Date(day + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' })}`, `${lvClock(level, ms)}${p?.all ? ` (${p.place}. od ${p.all})` : ''}`, 'Možeš li brže?'].join('\n') });
   shareMsg = make();
   if (!name || !await lbFlush()) return;
   shareMsg = make(await lbRows(day, level, 0, { name, ms }).catch(() => null));
@@ -334,7 +346,7 @@ function runClimb(others, ms, ask, then) {
   const items = [...$('lbPlot').querySelectorAll('.cdot, .cbar')].map((el, i) => ({ el, ms: few ? others[i].ms : +el.dataset.ms, name: few ? others[i].name : '' }));
   const live = $('lbLive'), cur = $('lbCur'), bump = (el, s, d) => el.animate([{ transform: 'scale(1)' }, { transform: `scale(${s})` }, { transform: 'scale(1)' }], { duration: d, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
   const set = (s, p, sub) => {
-    $('lbClock').textContent = clock(s);
+    $('lbClock').textContent = lvClock(lbNow?.level, s);
     cur.setAttribute('transform', `translate(${x(s)} 0)`);
     $('lbPlace').textContent = few ? p + '.' : Math.round(100 * others.filter(o => o.ms > s).length / n) + '%';
     $('lbLine').textContent = few ? `od ${n + 1} danas` : 'igrača sporije';
@@ -442,7 +454,7 @@ $('lbJoin').onsubmit = e => {
   try { localStorage.sudokuName = name; } catch {}
   lbQueue(lbNow.day, lbNow.level, lbNow.ms);
   lbShow(lbNow.day, lbNow.level, lbNow.ms);
-  if (card === 'tango') tangoButtons(); else if (card === 'nit') nitButtons(); else if (card === 'mino') minoButtons(); else solvedButtons();   // the result to share, now with its place
+  if (card === 'tango') tangoButtons(); else if (card === 'nit') nitButtons(); else if (card === 'mino') minoButtons(); else if (card === 'pas') pasButtons(); else solvedButtons();   // the result to share, now with its place
 };
 $('aboutName').onchange = () => { try { const n = $('aboutName').value.trim(); if (n) localStorage.sudokuName = n; else delete localStorage.sudokuName; } catch {} };
 lbFlush();
@@ -467,6 +479,12 @@ setInterval(() => {
     mg.elapsed += dt;
     mSave();
     return $('minoTimer').textContent = clock(mg.elapsed);
+  }
+  if (view === 'pas') {   // Pasijans: the same rules, its own clock
+    if (pg.endedAt || document.hidden || dt > 5000 || document.querySelector('dialog[open]')) return;
+    pg.elapsed += dt;
+    pSave();
+    return $('pasTimer').textContent = clock(pg.elapsed);
   }
   if (view === 'tango') {   // Tango's board: the same rules, its own clock
     if (tg.solvedAt || document.hidden || dt > 5000 || document.querySelector('dialog[open]')) return;
