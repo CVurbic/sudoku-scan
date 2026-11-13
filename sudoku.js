@@ -1154,8 +1154,8 @@ $('solvedShare').onclick = async () => {
 let card = 'sudoku';
 $('solvedLevel').onclick = () => { $('solved').close(); if (card === 'tango') go('menu'); openDaily(+$('solvedLevel').dataset.lvl, $('solvedLevel').dataset.day); };
 $('solvedClose').onclick = () => $('solved').close();
-$('solvedNext').onclick = () => card === 'tango' ? ($('solved').close(), tangoGame()) : card === 'nit' ? ($('solved').close(), nitGame()) : newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
-$('solvedMenu').onclick = () => { $('solved').close(); go({ tango: 'games', nit: 'games', xw: 'xw' }[card] ?? 'menu'); };
+$('solvedNext').onclick = () => card === 'tango' ? ($('solved').close(), tangoGame()) : card === 'nit' ? ($('solved').close(), nitGame()) : card === 'mino' ? ($('solved').close(), minoGame()) : newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
+$('solvedMenu').onclick = () => { $('solved').close(); go({ tango: 'games', nit: 'games', mino: 'games', xw: 'xw' }[card] ?? 'menu'); };
 
 // Also the hook for "the board changed": a task's progress goes into the history, candidates redrawn,
 // a finished board celebrated.

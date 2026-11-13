@@ -89,9 +89,9 @@ svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor;
 /* The game's top bar: back to the menu, the clock, ⋯. */
 .ghead { display: flex; flex-direction: column; gap: var(--gap); }
 .gbar { display: flex; align-items: center; height: 56px; margin: 0 -8px; }
-#backBtn, #menuBack, #tangoBack, #nitBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+#backBtn, #menuBack, #tangoBack, #nitBack, #minoBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
 #menuBack { margin-left: -8px; }
-#timer, #tangoTimer, #nitTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+#timer, #tangoTimer, #nitTimer, #minoTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 #moreBtn, #pauseBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
 /* The veil (pause): the board unreadable (blurred, the digits gone), one big ▶ over it, a line under it;
    the controls asleep. Seen once per game: it may ease in. */
@@ -259,6 +259,38 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
 @keyframes knot { 40% { transform: scale(1.18); } }
 #nb:focus { outline: none; }
 #nb:focus-visible { outline: 3px solid var(--hue); outline-offset: 4px; border-radius: 20px; }   /* arrows lead the thread */
+
+/* Minolovac: raised tiles (Pločice) on the line colour; an opened cell sinks flat, its number in the
+   classic order of colours (1 blue, 2 green, 3 red…). A held finger fills a ring; a mine is a red tile and
+   the clock flashes its fine. The board is as wide as fits both ways (its height follows its rows). */
+#mino { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
+#minoLeft { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#minoLeft svg { width: 18px; height: 18px; }
+#minoTimer { position: relative; }
+#minoTimer.hit { animation: mfine 1.6s cubic-bezier(.23, 1, .32, 1); }
+#minoTimer.hit::after { content: "+30 s"; position: absolute; top: 100%; right: 0; padding: 1px 7px; border-radius: 999px; background: var(--bad-bg); color: var(--negative);
+  font-size: 12px; white-space: nowrap; animation: mpen 1.6s cubic-bezier(.23, 1, .32, 1) forwards; }
+@keyframes mfine { 0%, 60% { color: var(--negative); } }
+@keyframes mpen { 0% { opacity: 0; transform: translateY(-4px); } 15%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+#mb { --g: 2px; display: grid; grid-template-columns: repeat(var(--w), minmax(0, 1fr)); gap: var(--g); padding: var(--g); border-radius: 12px; background: var(--line);
+  width: min(100%, calc((100dvh - 230px) * var(--w) / var(--h))); margin: 0 auto; flex: none; container-type: inline-size;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#mb > i { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 4px; background: var(--surface); font: normal 700 calc(100cqi / var(--w) * .5) / 1 var(--font); font-variant-numeric: tabular-nums; }
+#mb > i.u { cursor: pointer; background: color-mix(in srgb, var(--control) 70%, var(--raised)); box-shadow: inset 0 -3px 0 rgb(0 0 0 / .12), inset 0 1px 0 rgb(255 255 255 / .35); transition: transform 120ms cubic-bezier(.23, 1, .32, 1); }
+#mb > i.u:active { transform: scale(.94); }
+#mb > i.x { background: var(--negative); color: #fff; animation: mboom .5s cubic-bezier(.23, 1, .32, 1); }
+@keyframes mboom { from { transform: scale(.85); } }
+#mb svg { width: 58%; height: 58%; }
+#mb .k1 { color: var(--n1); } #mb .k2 { color: var(--n3); } #mb .k3 { color: var(--n6); } #mb .k4 { color: var(--n7); }
+#mb .k5 { color: var(--n5); } #mb .k6 { color: var(--n2); } #mb .k7 { color: var(--text); } #mb .k8 { color: var(--muted); }
+@property --p { syntax: "<number>"; inherits: false; initial-value: 0; }
+#mb > i.hold::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--negative) calc(var(--p) * 1turn), transparent 0);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px)); mask: radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  animation: mhold .4s linear forwards; }
+@keyframes mhold { to { --p: 1; } }
+#minoNew { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#minoNew button { gap: 8px; }
 
 /* Križaljke: topics as cards (a small picture of the grid), the form, ideas; the wait while a topic is made.
    The game: white cells with numbers, the clue in a bar, own keyboard (Č Ć Ž Š Đ, LJ NJ DŽ as one key). */
@@ -569,7 +601,7 @@ canvas { max-width: 100%; }
   .dock { grid-area: dock; align-self: start; position: static; grid-template-columns: 1fr; margin: 0; padding: 18px; border: 0; border-radius: 14px; background: var(--surface); }
   .dock .dtitle { display: block; order: -2; font-size: 17px; }
   #liveBtn { order: -1; }
-  #games, #past, #tango, #nit, #xw, #xwplay { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
+  #games, #past, #tango, #nit, #mino, #xw, #xwplay { width: 100%; max-width: 520px; margin: 0 auto; }   /* one column, as on the phone */
   #tabs { width: 520px; margin: auto auto 0; border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0; }
   /* The last row takes the board's spare height, so the controls keep their own (no stretched keys). */
   #game { grid-template-rows: auto auto 1fr; padding-top: 24px;
@@ -589,6 +621,12 @@ canvas { max-width: 100%; }
   #nb { grid-area: 1 / 1 / -1; align-self: start; }
   #nit > :not(#nb) { grid-column: 2; }
   #nit .controls { grid-area: auto / 2; }
+  #mino { display: grid; max-width: none; justify-content: center; align-content: start; column-gap: 48px; padding: 24px 0 32px;
+    grid-template-columns: auto 340px; grid-template-rows: repeat(3, auto) 1fr; }
+  #mb { grid-area: 1 / 1 / -1; align-self: start; width: min(var(--col), calc((100dvh - 56px) * var(--w) / var(--h))); }
+  #mino > :not(#mb) { grid-column: 2; }
+  #mino .controls { grid-area: auto / 2; }
+  #minoNew { grid-template-columns: 1fr; }
   #pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }   /* like a calculator */
   #pad button { min-height: 64px; flex-direction: row; align-items: baseline; gap: 6px; background: var(--surface); font-size: 28px; }
   /* The toast in the right column: under Skeniraj in the menu; in the game at its foot, clear of the
@@ -634,7 +672,9 @@ canvas { max-width: 100%; }
   .dhead p { margin: 0; color: var(--muted); }
   .dhead p::first-letter { text-transform: uppercase; }
   .dhead h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.15; }
-  .dcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .dcards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }   /* three cards, then two wider */
+  .dcard { grid-column: span 2; }
+  .dcard:nth-child(n + 4) { grid-column: span 3; }
   .dcard { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surface); }
   .dtop { display: flex; align-items: center; gap: 12px; }
   .dtop svg { width: 46px; height: 46px; padding: 9px; border-radius: 11px; background: var(--ground); }
@@ -696,7 +736,9 @@ canvas { max-width: 100%; }
   .dhead p { margin: 0; color: var(--muted); }
   .dhead p::first-letter { text-transform: uppercase; }
   .dhead h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; line-height: 1.15; }
-  .dcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .dcards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }   /* three cards, then two wider */
+  .dcard { grid-column: span 2; }
+  .dcard:nth-child(n + 4) { grid-column: span 3; }
   .dcard { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surface); }
   .dtop { display: flex; align-items: center; gap: 12px; }
   .dtop svg { width: 46px; height: 46px; padding: 9px; border-radius: 11px; background: var(--ground); }
@@ -921,7 +963,9 @@ canvas { max-width: 100%; }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring { animation: none; stroke-dashoffset: 0; }
+  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring, #mb > i, #minoTimer.hit { animation: none; stroke-dashoffset: 0; }
+  #minoTimer.hit::after { animation: none; opacity: 0; }
+  #mb > i.hold::after { animation: none; --p: 1; }
   #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
   #more, #more[open], #live video, #live canvas { transform: none; }
   #more, #live video, #live canvas, .diffpill .dfill, .sw, .sw::after { transition: none; }

@@ -88,6 +88,7 @@
   <button data-v="tango" data-tile="tileTango" title="Dinango"><span class="t">Dinango</span><small></small></button>
   <button data-v="xw" data-tile="tileXw" title="Križaljke"><span class="t">Križaljke</span><small></small></button>
   <button data-v="nit" data-tile="tileNit" title="Nit"><span class="t">Nit</span><small></small></button>
+  <button data-v="mino" data-tile="tileMino" title="Minolovac"><span class="t">Minolovac</span><small></small></button>
   <hr>
   <button data-v="past" title="Povijest"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="t">Povijest</span></button>
   <button id="themeRail" class="theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="t">Tema</span><small></small></button>
@@ -105,6 +106,7 @@
     <button id="tileTango" class="tile"><svg viewBox="0 0 48 48" aria-hidden="true"></svg><b>Dinango</b><small></small></button>
     <button id="tileXw" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M2 3h6v6H2zM8 3h6v6H8zM14 3h6v6h-6zM8 9h6v6H8zM8 15h6v6H8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="9.6" y="10.6" width="2.8" height="2.8" fill="var(--hue)"/></svg><b>Križaljke</b><small></small></button>
     <button id="tileNit" class="tile"><svg viewBox="-10 -10 380 380" aria-hidden="true"></svg><b>Nit</b><small></small></button>
+    <button id="tileMino" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="9.5" height="9.5" rx="2" fill="var(--surface)" stroke="var(--line)"/><text x="5.75" y="8.9" text-anchor="middle" font-size="8" font-weight="700" fill="var(--n1)">1</text><rect x="11.5" y="1" width="9.5" height="9.5" rx="2" fill="var(--control)"/><rect x="1" y="11.5" width="9.5" height="9.5" rx="2" fill="var(--control)"/><rect x="11.5" y="11.5" width="9.5" height="9.5" rx="2" fill="var(--control)"/><path d="M14.6 19V13.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M15.1 13.6l3.6 1.5-3.6 1.5z" fill="var(--negative)"/></svg><b>Minolovac</b><small></small></button>
   </div>
   <!-- Danas: Igre on a big screen (with the rail), the tiles as cards with today's state, the board and the last sudokus. -->
   <div id="today">
@@ -114,6 +116,7 @@
       <div class="dcard"><div class="dtop" data-tile="tileTango"><b>Dinango</b></div><ul id="dTango"></ul><button id="dTangoGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><button id="dXwDay" hidden><span class="cal"></span><span><b></b><small></small></span></button><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tileNit"><b>Nit</b></div><ul id="dNit"></ul><button id="dNitGo" class="go"></button></div>
+      <div class="dcard"><div class="dtop" data-tile="tileMino"><b>Minolovac</b></div><ul id="dMino"></ul><button id="dMinoGo" class="go"></button></div>
     </div>
     <div class="drow">
       <div class="dpanel"><h2>Ljestvica · danas</h2><ul id="dRanks"></ul></div>
@@ -182,6 +185,8 @@
   <ul id="tangoPast" class="hlist"></ul>
   <h2 id="nitPastTitle">Nit</h2>
   <ul id="nitPast" class="hlist"></ul>
+  <h2 id="minoPastTitle">Minolovac</h2>
+  <ul id="minoPast" class="hlist"></ul>
   <h2>Sudoku</h2>
   <ul id="historyList" class="hlist"></ul>
   <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
@@ -222,6 +227,20 @@
       <button id="nHintBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg>Savjet</button>
     </div>
     <button id="nitNew" hidden>Nova igra</button>
+  </div>
+</section>
+
+<section id="mino" hidden>
+  <div class="gbar">
+    <button id="minoBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Igre</button>
+    <span id="minoLeft" title="Mina bez zastavice"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 17V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 3.5l9 3.5-9 3.5z" fill="var(--negative)"/></svg><b></b></span>
+    <b id="minoTimer" aria-label="Vrijeme">0:00</b>
+  </div>
+  <p class="gname"><b id="minoName"></b><span id="minoSide"></span></p>
+  <div id="mb" role="img"></div>
+  <p class="rules">Otvori sva polja bez mina; broj kaže koliko mina dodiruje polje. Dodir otvori, drži za zastavicu (računalo: desni klik). Dodir na broj otvori susjede. Mina je +30 s, igra ide dalje.</p>
+  <div class="controls">
+    <div id="minoNew" hidden><button>Lagano</button><button>Srednje</button><button>Teško</button></div>
   </div>
 </section>
 
@@ -333,6 +352,7 @@
 <script src="scan.js"></script>
 <script src="tango.js"></script>
 <script src="nit.js"></script>
+<script src="mino.js"></script>
 <script src="krizaljka.js"></script>
 <script>
 // The saved game, now that everything it needs exists, as it was left. Back where the user was: the
@@ -347,6 +367,7 @@ if (!openShared()) {   // a shared link wins
     if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily);
   } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango();
   else if (wasIn === 'nit') localStorage.nitOn === 'game' ? nitGame() : openNit();
+  else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino();
   else if (wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
   else go(['menu', 'past', 'xw'].includes(wasIn) ? wasIn : 'games');
 }

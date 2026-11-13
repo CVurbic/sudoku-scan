@@ -619,6 +619,77 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.click('#solvedMenu');
   console.log(`nit: the tile opens the daily, drag (a jump walked: ${jumped} cells), knots in turn, back, Poništi, solved → card (Ljestvica, Podijeli), tile, Povijest, Savjet in a game`);
 
+  // 1d3. Minolovac: one board per date and level, its mines off the start and around it. The tile opens today's
+  //      (9 × 12, 20 mines) opened at the start. Mouse: right flags (again unflags), left opens; a number with its
+  //      flags opens the rest around it. Finger: a tap opens, held 400 ms flags. A mine: +30 s, shown, the game goes
+  //      on. A reload goes on; every safe cell open → the card (level 5, the fine in its line), the tile, Povijest; Nova igra.
+  assert.deepStrictEqual(await page.evaluate(() => [0, 1, 2].flatMap(lv => [...Array(10)].map((_, d) => {
+    const a = mMake('mino#2026-11-' + d, lv), [, w, h, n] = M_LV[lv], g = mNew(a);
+    return [JSON.stringify(a) === JSON.stringify(mMake('mino#2026-11-' + d, lv)), a.w === w && a.h === h && new Set(a.mines).size === n,
+      [a.start, ...mNear(a.start, w, h)].every(k => !a.mines.includes(k)), g.open.length >= 9 && !g.hits.length].join();
+  })).filter(r => r !== 'true,true,true,true')), [], 'mino: same board per date, its size and mines, none at the start, an opening');
+  await page.click('#tileMino');
+  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.date === dayKey(), mg.w, mg.h, mg.mines.length, mg.open.includes(mg.start), mb.children.length, minoLeft.textContent]),
+    ['mino', 'Minolovac · dnevni', true, 9, 12, 20, true, 108, '20'], 'mino: the daily, opened at the start');
+  const mAtCell = k => page.evaluate(k => { const r = mb.children[k].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, k);
+  const mClick = async (k, button = 'left') => { const [x, y] = await mAtCell(k); await page.mouse.click(x, y, { button }); };
+  const [mSafe, mMine] = await page.evaluate(() => { const edge = k => !mg.open.includes(k) && mNear(k, mg.w, mg.h).some(j => mg.open.includes(j));
+    return [[...Array(mg.w * mg.h).keys()].find(k => edge(k) && !mg.mines.includes(k)), mg.mines.find(edge)]; });
+  await mClick(mMine, 'right');
+  assert.deepStrictEqual(await page.evaluate(k => [mg.flag.includes(k), !!mb.children[k].querySelector('svg'), minoLeft.textContent], mMine), [true, true, '19'], 'mino: right click flags');
+  await mClick(mMine, 'right');
+  assert.strictEqual(await page.evaluate(k => mg.flag.includes(k), mMine), false, 'mino: right click again unflags');
+  await mClick(mSafe);
+  assert.strictEqual(await page.evaluate(k => mg.open.includes(k) && mb.children[k].classList.contains('o'), mSafe), true, 'mino: left click opens');
+  // a number: its mines flagged (by hand), a click on it opens the rest around it
+  const chord = await page.evaluate(() => {
+    const k = mg.open.find(k => mCount(mg, k) && mNear(k, mg.w, mg.h).some(j => !mg.open.includes(j) && !mg.mines.includes(j)));
+    mNear(k, mg.w, mg.h).filter(j => mg.mines.includes(j) && !mg.flag.includes(j)).forEach(j => mFlag(mg, j));
+    return k;
+  });
+  await mClick(chord);
+  assert.strictEqual(await page.evaluate(k => mNear(k, mg.w, mg.h).every(j => mg.mines.includes(j) ? mg.flag.includes(j) : mg.open.includes(j)), chord), true, 'mino: a number with its flags opens the rest');
+  // a finger: a tap opens, held flags (the ring while held)
+  const touch = (k, type) => page.evaluate((k, type) => { const r = mb.children[k].getBoundingClientRect();
+    mb.children[k].dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: 'touch', isPrimary: true, clientX: r.left + 5, clientY: r.top + 5 })); }, k, type);
+  const [tSafe, tMine] = await page.evaluate(() => { const shut = k => !mg.open.includes(k) && !mg.flag.includes(k);
+    return [[...Array(mg.w * mg.h).keys()].find(k => shut(k) && !mg.mines.includes(k)), mg.mines.find(shut)]; });
+  await touch(tMine, 'pointerdown');
+  assert.strictEqual(await page.evaluate(k => mb.children[k].classList.contains('hold'), tMine), true, 'mino: a held finger fills the ring');
+  await new Promise(r => setTimeout(r, 500));
+  await touch(tMine, 'pointerup');
+  assert.deepStrictEqual(await page.evaluate(k => [mg.flag.includes(k), mg.hits.length], tMine), [true, 0], 'mino: held 400 ms flags (and the release opens nothing)');
+  await touch(tSafe, 'pointerdown'); await touch(tSafe, 'pointerup');
+  assert.strictEqual(await page.evaluate(k => mg.open.includes(k), tSafe), true, 'mino: a tap opens');
+  // a mine: +30 s, shown red, the clock flashes, the game goes on
+  const [boom, tBefore] = await page.evaluate(() => [mg.mines.find(k => !mg.flag.includes(k)), mg.elapsed]);
+  await mClick(boom);
+  assert.deepStrictEqual(await page.evaluate(([k, t]) => [mg.hits.includes(k), mg.elapsed - t >= 30000, mb.children[k].classList.contains('x'), minoTimer.classList.contains('hit'), !mg.solvedAt], [boom, tBefore]),
+    [true, true, true, true, true], 'mino: a mine is +30 s, red, and the game goes on');
+  const opened = await page.evaluate(() => mg.open.length);
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.open.length, mg.hits.length]), ['mino', 'Minolovac · dnevni', opened, 1], 'mino: a reload goes on');
+  await page.evaluate(() => [...Array(mg.w * mg.h).keys()].filter(k => !mg.mines.includes(k)).forEach(k => mAct(k, false)));
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [!!mg.solvedAt, /^Riješeno za \d+:\d\d \(1 mina, \+0:30\) · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedNext.hidden,
+    solvedShare.hidden, lboard.hidden, lbNow.level, lbNow.ms === mg.elapsed, shareMsg.text.split('\n')[0].startsWith('Minolovac · '), mb.querySelectorAll('.u svg').length, minoLeft.textContent, minoNew.hidden]),
+    [true, true, 'Igre', true, false, false, 5, true, true, 19, '0', false], 'mino solved: the card with the fine, Ljestvica (level 5), Podijeli; the mines flagged; Nova igra under the board');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tileMino.lastChild.className, /^✓ \d+:\d\d · 1 dan$/.test(tileMino.lastChild.textContent)]), ['games', 'solved', true], 'mino: the tile says solved');
+  await page.click('#tabPast');
+  assert.deepStrictEqual(await page.evaluate(() => [minoPast.children.length, minoPastTitle.hidden]), [1, false], 'mino: in Povijest');
+  await page.click('#tabGames');
+  await page.click('#tileMino');
+  await page.click('#minoNew button:nth-child(3)');
+  assert.deepStrictEqual(await page.evaluate(() => [minoName.textContent, mg.w, mg.h, mg.mines.length, !mg.date, minoNew.hidden]), ['Minolovac · Teško', 10, 14, 30, true, true], 'mino: Nova igra, Teško');
+  await page.evaluate(() => [...Array(mg.w * mg.h).keys()].filter(k => !mg.mines.includes(k)).forEach(k => mAct(k, false)));
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [solvedText.textContent.startsWith('Vrijeme: '), solvedNext.hidden, solvedShare.hidden, lboard.hidden]), [true, false, true, true], 'mino game: the card without a board, Nova igra');
+  await page.click('#solvedNext');
+  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, !mg.solvedAt]), ['mino', 'Minolovac · Teško', true], 'mino: Nova igra again at the same level');
+  await page.evaluate(() => go('games'));
+  console.log('minolovac: a board per date and level, the tile opens the daily, right click / held finger flags, chord, a mine +30 s, reload, solved → card (level 5), tile, Povijest, Nova igra');
+
   // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
   const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');
@@ -709,8 +780,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
-  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo'), /^DnevniRiješeno za \d+:\d\d ✓$/.test(dNit.firstChild.textContent), dNitGo.textContent, getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length]),
-    ['flex', 'none', 3, true, true, 'Nova igra', 4], 'rail: shown, no tab bar, Danas with the dailies, the crossword and Nit (four in a row)');
+  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo'), /^DnevniRiješeno za \d+:\d\d ✓$/.test(dNit.firstChild.textContent), dNitGo.textContent, getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length, /^DnevniRiješeno za \d+:\d\d ✓$/.test(dMino.firstChild.textContent), dMinoGo.textContent]),
+    ['flex', 'none', 3, true, true, 'Nova igra', 6, true, 'Nova igra'], 'rail: shown, no tab bar, Danas with the dailies, the crossword, Nit and Minolovac (three, then two)');
   await page.evaluate(() => rail.querySelector('[data-v="tango"]').click());   // not by position: the rail is still animating its width
   assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
   await page.evaluate(() => rail.querySelector('[data-v="games"]').click());
