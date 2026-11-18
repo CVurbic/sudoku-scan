@@ -764,6 +764,39 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await page.evaluate(() => go('games'));
   console.log('pasijans: deal, rules, daily solver, stuck, board number, tile, stock, no undo, tap, drag, reload, Završi (level 6), tile, Povijest, Nova igra: undo, Savjet, auto-complete');
 
+  // 1d5. Mahjong (logic only): three layouts with whole sets; the free rule on the turtle's half steps; every
+  //      deal (365 dailies, 100 of each other layout) solved by its own path, the same per seed; Promiješaj
+  //      half way solvable again, null on two stacked tiles; Savjet a free pair that matches.
+  assert.deepStrictEqual(await page.evaluate(() => {
+    const out = [], same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+    const play = (L, face, live, path) => path.every(([i, j]) => mjFree(L, live, i) && mjFree(L, live, j) && mjGrp(face[i]) === mjGrp(face[j]) && !(live[i] = live[j] = false)) && live.every(x => !x);
+    for (const k of ['daily', 'quick', 'turtle']) out.push(MJ[k].pos.length, new Set(MJ[k].pos.map(String)).size === MJ_SET[k].length);
+    const T = MJ.turtle, at = (x, y, z) => T.pos.findIndex(p => p.join() === [x, y, z].join()), all = T.pos.map(() => true), fr = (i, l = all) => mjFree(T, l, i);
+    const noHead = [...all]; noHead[at(0, 7, 0)] = false;
+    out.push(fr(at(0, 7, 0)), fr(at(2, 6, 0)), fr(at(2, 6, 0), noHead), fr(at(13, 7, 4)), fr(at(12, 6, 3)), mjWhy(T, all, at(12, 6, 3)).join() === String(at(13, 7, 4)),
+      fr(at(28, 7, 0)), fr(at(26, 7, 0)), fr(at(24, 6, 0)), mjGrp('f0') === mjGrp('f3'), mjGrp('f0') === mjGrp('s0'));
+    const t0 = performance.now(), days = [...Array(365)].map((_, d) => mjMake('daily', 'mj#' + d));
+    out.push(days.every(g => g && same(g.face, MJ_SET.daily) && play(MJ.daily, g.face, g.face.map(() => true), g.path)), performance.now() - t0 < 3000,
+      JSON.stringify(mjMake('daily', 'mj#2026-11-18')) === JSON.stringify(mjMake('daily', 'mj#2026-11-18')), JSON.stringify(days[0].face) !== JSON.stringify(days[1].face));
+    for (const k of ['quick', 'turtle']) out.push([...Array(100)].every((_, s) => { const g = mjMake(k, 'x' + s); return g && same(g.face, MJ_SET[k]) && play(MJ[k], g.face, g.face.map(() => true), g.path); }));
+    const L = MJ.daily, g = days[5], live = g.face.map(() => true);
+    out.push(mjHint(L, g.face, live, g.path).join() === g.path[0].join(), mjPairs(L, g.face, live).length > 0);
+    g.path.slice(0, 36).forEach(([i, j]) => live[i] = live[j] = false);
+    const m = mjShuffle(L, g.face, live, 'mj#5#mix#1'), keep = g.face.filter((_, i) => !live[i]);
+    out.push(!!m && same(m.face.filter((_, i) => live[i]), g.face.filter((_, i) => live[i])) && same(m.face.filter((_, i) => !live[i]), keep)
+      && play(L, m.face, [...live], m.path));
+    const two = L.pos.map(p => p.join() === '2,2,0' || p.join() === '2,2,1'), f2 = L.pos.map(() => 'd1');
+    out.push(mjShuffle(L, f2, two, 'x'), mjPairs(L, f2, two).length);
+    const r = rng(7), l2 = g.face.map(() => true);
+    for (let k = 0; k < 10; k++) { const p = mjPairs(L, g.face, l2); if (!p.length) break; const [i, j] = p[r() * p.length | 0]; l2[i] = l2[j] = false; }
+    const h = mjHint(L, g.face, l2, g.path);
+    out.push(!mjPairs(L, g.face, l2).length || (mjFree(L, l2, h[0]) && mjFree(L, l2, h[1]) && mjGrp(g.face[h[0]]) === mjGrp(g.face[h[1]])));
+    return out;
+  }), [144, true, 72, true, 144, true, true, false, true, true, false, true, true, false, false, true, false,
+    true, true, true, true, true, true, true, true, true, null, 0, true],
+    'mahjong: layouts, the free rule, every deal solvable and the same per seed, Promiješaj, Savjet');
+  console.log('mahjong: layouts 144/72/144, free rule (turtle head, tail, top), 365 dailies + 200 deals solvable, same per seed, Promiješaj (and null when stacked), Savjet');
+
   // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
   const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');
