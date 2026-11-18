@@ -90,6 +90,7 @@
   <button data-v="nit" data-tile="tileNit" title="Nit"><span class="t">Nit</span><small></small></button>
   <button data-v="mino" data-tile="tileMino" title="Minolovac"><span class="t">Minolovac</span><small></small></button>
   <button data-v="pas" data-tile="tilePas" title="Pasijans"><span class="t">Pasijans</span><small></small></button>
+  <button data-v="mj" data-tile="tileMj" title="Mahjong"><span class="t">Mahjong</span><small></small></button>
   <hr>
   <button data-v="past" title="Povijest"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="t">Povijest</span></button>
   <button id="themeRail" class="theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="t">Tema</span><small></small></button>
@@ -109,6 +110,7 @@
     <button id="tileNit" class="tile"><svg viewBox="-10 -10 380 380" aria-hidden="true"></svg><b>Nit</b><small></small></button>
     <button id="tileMino" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="9.5" height="9.5" rx="2" fill="var(--surface)" stroke="var(--line)"/><text x="5.75" y="8.9" text-anchor="middle" font-size="8" font-weight="700" fill="var(--n1)">1</text><rect x="11.5" y="1" width="9.5" height="9.5" rx="2" fill="var(--control)"/><rect x="1" y="11.5" width="9.5" height="9.5" rx="2" fill="var(--control)"/><rect x="11.5" y="11.5" width="9.5" height="9.5" rx="2" fill="var(--control)"/><path d="M14.6 19V13.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M15.1 13.6l3.6 1.5-3.6 1.5z" fill="var(--negative)"/></svg><b>Minolovac</b><small></small></button>
     <button id="tilePas" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="2.5" y="4" width="10" height="14" rx="1.8" fill="#b8322a" transform="rotate(-12 7.5 11)"/><rect x="9" y="3.5" width="10.5" height="14.5" rx="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/><path d="M14.25 14.6l-2.7-2.6a1.65 1.65 0 012.7-1.9 1.65 1.65 0 012.7 1.9z" fill="#c2352b"/></svg><b>Pasijans</b><small></small></button>
+    <button id="tileMj" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="7.5" y="1.5" width="11" height="14" rx="2" fill="#546e7a"/><rect x="3.5" y="6" width="11" height="14.5" rx="2" fill="#546e7a"/><rect x="3.5" y="6" width="9.8" height="13.3" rx="1.8" fill="#f6f0e1" stroke="#1b1b1a" stroke-opacity=".25"/><circle cx="8.4" cy="12.6" r="3.3" fill="none" stroke="#1d5fbf" stroke-width="1.6"/><circle cx="8.4" cy="12.6" r="1.3" fill="#c2352b"/></svg><b>Mahjong</b><small></small></button>
   </div>
   <!-- Danas: Igre on a big screen (with the rail), the tiles as cards with today's state, the board and the last sudokus. -->
   <div id="today">
@@ -120,6 +122,7 @@
       <div class="dcard"><div class="dtop" data-tile="tileNit"><b>Nit</b></div><ul id="dNit"></ul><button id="dNitGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tileMino"><b>Minolovac</b></div><ul id="dMino"></ul><button id="dMinoGo" class="go"></button></div>
       <div class="dcard"><div class="dtop" data-tile="tilePas"><b>Pasijans</b></div><ul id="dPas"></ul><button id="dPasGo" class="go"></button></div>
+      <div class="dcard"><div class="dtop" data-tile="tileMj"><b>Mahjong</b></div><ul id="dMj"></ul><button id="dMjGo" class="go"></button></div>
     </div>
     <div class="drow">
       <div class="dpanel"><h2>Ljestvica · danas</h2><ul id="dRanks"></ul></div>
@@ -192,6 +195,8 @@
   <ul id="minoPast" class="hlist"></ul>
   <h2 id="pasPastTitle">Pasijans</h2>
   <ul id="pasPast" class="hlist"></ul>
+  <h2 id="mjPastTitle">Mahjong</h2>
+  <ul id="mjPast" class="hlist"></ul>
   <h2>Sudoku</h2>
   <ul id="historyList" class="hlist"></ul>
   <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
@@ -261,6 +266,22 @@
   <div class="controls">
     <div id="pasTools"><button id="pasUndo">Poništi</button><button id="pasHint">Savjet</button><button id="pasNew">Nova igra</button><button id="pasEnd">Završi</button></div>
   </div>
+</section>
+
+<section id="mj" hidden>
+  <div class="gbar">
+    <button id="mjBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Igre</button>
+    <span id="mjLeft" title="Spojeni parovi"><b></b><small></small></span>
+    <b id="mjTimer" aria-label="Vrijeme">0:00</b>
+  </div>
+  <p class="gname"><b id="mjName"></b><span id="mjSide"></span><button id="mjZoom" hidden>Povećaj</button></p>
+  <div id="mjWrap"><div id="mjb" role="application" aria-label="Mahjong"></div></div>
+  <p id="mjLine"></p>
+  <div class="controls">
+    <div id="mjTools"><button id="mjUndo"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L3 8l4 4"/><path d="M3 8h9a5 5 0 010 10H9"/></svg>Poništi<small></small></button><button id="mjHint"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2.5a5.5 5.5 0 00-3.2 10c.6.5.9 1.1.9 1.8v.2h4.6v-.2c0-.7.3-1.3.9-1.8A5.5 5.5 0 0010 2.5zM8 18h4"/></svg>Savjet<small></small></button><button id="mjMix"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h3c4 0 6 8 10 8h1M14 12l3 2-3 2M3 14h3c1.5 0 2.6-1 3.5-2.4M11 7.4C12 6.3 13.3 6 16 6h1M14 4l3 2-3 2"/></svg>Promiješaj<small></small></button></div>
+    <div id="mjNew" hidden><button data-lay="quick">Nova · Brzi</button><button data-lay="turtle">Nova · Kornjača</button></div>
+  </div>
+  <p class="rules">Spoji dvije iste slobodne pločice. Slobodna je ona na kojoj ništa ne leži i kojoj je lijeva ili desna strana prazna. Bilo koja dva cvijeta i bilo koja dva godišnja doba čine par. Dnevni: Poništi +10 s, Savjet +30 s, Promiješaj +60 s. Računalo: Z poništi, H savjet, S promiješaj, desni klik ili Esc pusti odabir.</p>
 </section>
 
 <section id="menu" hidden>
@@ -390,6 +411,7 @@ if (!openShared()) {   // a shared link wins
   else if (wasIn === 'nit') localStorage.nitOn === 'game' ? nitGame() : openNit();
   else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino();
   else if (wasIn === 'pas') localStorage.pasOn === 'game' ? pasGame() : openPas();
+  else if (wasIn === 'mj') localStorage.mjOn === 'game' ? mjGame() : openMj();
   else if (wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
   else go(['menu', 'past', 'xw'].includes(wasIn) ? wasIn : 'games');
 }

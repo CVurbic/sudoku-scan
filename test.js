@@ -797,6 +797,59 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     'mahjong: layouts, the free rule, every deal solvable and the same per seed, Promiješaj, Savjet');
   console.log('mahjong: layouts 144/72/144, free rule (turtle head, tail, top), 365 dailies + 200 deals solvable, same per seed, Promiješaj (and null when stacked), Savjet');
 
+  // 1d6. Mahjong on screen: the tile opens today's daily (144 tiles, the fines on the buttons); a blocked tap: red,
+  //      yellow neighbours, why; a pair taps off; Poništi +10 s, Savjet +30 s (two outlined), Promiješaj +60 s (the same
+  //      tiles, the same spots); a reload goes on; solved → card (level 7, the help shown), tile, Povijest. Nova igra:
+  //      Brzi (72) free of fines; Kornjača small on this screen: Povećaj makes it 44 wide.
+  await page.click('#tileMj');
+  assert.deepStrictEqual(await page.evaluate(() => [view, mjName.textContent, jg.date === dayKey(), mjNew.hidden, mjb.querySelectorAll('.mt').length, mjLeft.textContent, mjUndo.disabled, mjUndo.lastChild.textContent, mjMix.lastChild.textContent]),
+    ['mj', 'Mahjong · dnevni', true, true, 144, '0/72', true, '+10 s', '+60 s'], 'mj: the tile opens the daily');
+  const jAt = i => page.evaluate(i => { const r = mjEls[i].querySelector('.f').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, i);
+  const jBlk = await page.evaluate(() => jg.live.findIndex((x, k) => x && !mjFree(MJ.daily, jg.live, k) && !MJ.daily.up[k].some(j => jg.live[j])));
+  await page.mouse.click(...await jAt(jBlk));
+  assert.deepStrictEqual(await page.evaluate(i => [mjEls[i].classList.contains('why'), mjb.querySelectorAll('.by').length, /Zatvorena lijevo i desno/.test(mjLine.textContent), jSel], jBlk),
+    [true, 2, true, -1], 'mj: a blocked tile: red, its two neighbours yellow, why');
+  const [ja, jb] = await page.evaluate(() => jg.path[0]);
+  await page.mouse.click(...await jAt(ja));
+  assert.strictEqual(await page.evaluate(() => jSel), ja, 'mj: a free tile picked');
+  await page.mouse.click(...await jAt(jb));
+  assert.deepStrictEqual(await page.evaluate(([a, b]) => [jg.live[a], jg.live[b], jg.hist.length, mjEls[a].classList.contains('gone'), mjLeft.firstChild.textContent, jSel], [ja, jb]),
+    [0, 0, 1, true, '1', -1], 'mj: a pair taps off');
+  const jFace = await page.evaluate(() => JSON.stringify([...jg.face].sort()));
+  await page.click('#mjUndo');
+  assert.deepStrictEqual(await page.evaluate(([a, b]) => [jg.live[a], jg.live[b], jg.help, jg.elapsed >= 10000, mjTimer.dataset.fine, mjUndo.disabled], [ja, jb]), [1, 1, 10000, true, '+10 s', true], 'mj: Poništi +10 s');
+  await page.click('#mjHint');
+  assert.deepStrictEqual(await page.evaluate(() => [mjb.querySelectorAll('.hint').length, jg.help]), [2, 40000], 'mj: Savjet outlines a pair, +30 s');
+  await page.click('#mjMix');
+  assert.deepStrictEqual(await page.evaluate(f => [jg.help, jg.mix, JSON.stringify([...jg.face].sort()) === f, jg.live.every(Boolean)], jFace), [100000, 1, true, true], 'mj: Promiješaj +60 s, the same tiles');
+  await page.reload();
+  assert.deepStrictEqual(await page.evaluate(() => [view, mjName.textContent, jg.help, mjb.querySelectorAll('.mt').length]), ['mj', 'Mahjong · dnevni', 100000, 144], 'mj: a reload goes on');
+  await page.evaluate(() => { jg.path.slice(0, 71).forEach(([i, j]) => jg.live[i] = jg.live[j] = 0); mjMark(); });
+  const [jy, jz] = await page.evaluate(() => jg.path[71]);
+  await page.mouse.click(...await jAt(jy));
+  await page.mouse.click(...await jAt(jz));
+  await page.waitForFunction(() => solved.open);
+  assert.deepStrictEqual(await page.evaluate(() => [!!jg.solvedAt, lbNow.level, lbNow.ms === jg.elapsed, /^Riješeno za \d+:\d\d \(pomoć \+1:40\) · 1 dan zaredom$/.test(solvedText.textContent), solvedShare.hidden, solvedNext.hidden, shareMsg.text.startsWith('Mahjong · ')]),
+    [true, 7, true, true, false, true, true], 'mj: solved → the card (level 7, the help shown)');
+  await page.click('#solvedMenu');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tileMj.lastChild.className, /^✓ \d+:\d\d · 1 dan$/.test(tileMj.lastChild.textContent)]), ['games', 'solved', true], 'mj: the tile');
+  await page.click('#tabPast');
+  assert.deepStrictEqual(await page.evaluate(() => [mjPast.children.length, mjPastTitle.hidden, /^Riješeno za \d+:\d\d ✓$/.test(mjPast.querySelector('b').textContent)]), [1, false, true], 'mj: in Povijest');
+  await page.click('#tabGames');
+  await page.evaluate(() => mjGame('quick', true));
+  assert.deepStrictEqual(await page.evaluate(() => [view, mjName.textContent, !jg.date, mjNew.hidden, mjb.querySelectorAll('.mt').length, mjLeft.textContent, mjUndo.lastChild.textContent]),
+    ['mj', 'Mahjong · Brzi', true, false, 72, '0/36', ''], 'mj: Nova igra · Brzi');
+  const [qa, qb] = await page.evaluate(() => jg.path[0]);
+  await page.mouse.click(...await jAt(qa)); await page.mouse.click(...await jAt(qb));
+  await page.click('#mjUndo'); await page.click('#mjHint');
+  assert.deepStrictEqual(await page.evaluate(() => [jg.hist.length, jg.help, jg.elapsed < 5000]), [0, 0, true], 'mj: Nova igra without fines');
+  await page.click('[data-lay="turtle"]');
+  assert.deepStrictEqual(await page.evaluate(() => [mjName.textContent, mjb.querySelectorAll('.mt').length, mjZoom.hidden]), ['Mahjong · Kornjača', 144, false], 'mj: Kornjača, small: Povećaj offered');
+  await page.click('#mjZoom');
+  assert.deepStrictEqual(await page.evaluate(() => [mjWrap.classList.contains('zoom'), mjEls[0].offsetWidth, mjZoom.textContent]), [true, 44, 'Cijela'], 'mj: Povećaj: 44 wide, Cijela back');
+  await page.evaluate(() => { mjBig = false; go('games'); });
+  console.log('mahjong on screen: tile → daily, blocked tap (red, yellow), pair off, Poništi/Savjet/Promiješaj fines, reload, solved (level 7), tile, Povijest, Nova igra Brzi without fines, Kornjača + Povećaj');
+
   // 1e. Križaljke: a topic from the server (answered here: no Claude in the test), woven on the device with
   // LJ/NJ/DŽ as one cell; on-screen keys fill a word, a wrong full word goes red, a reload goes on, all solved → done.
   const XW = 'AKTIVA PASIVA KONTO SALDO PRIHOD RASHOD OBVEZE FAKTURA PDV DOBIT GUBITAK STORNO OIB BRUTO NETO DUG IBAN KASA POREZ RAČUN KNJIGA KNJIŽENJE PLAĆANJE BUDŽET'.split(' ');

@@ -89,9 +89,9 @@ svg.i { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor;
 /* The game's top bar: back to the menu, the clock, ⋯. */
 .ghead { display: flex; flex-direction: column; gap: var(--gap); }
 .gbar { display: flex; align-items: center; height: 56px; margin: 0 -8px; }
-#backBtn, #menuBack, #tangoBack, #nitBack, #minoBack, #pasBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
+#backBtn, #menuBack, #tangoBack, #nitBack, #minoBack, #pasBack, #mjBack { margin-right: auto; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
 #menuBack { margin-left: -8px; }
-#timer, #tangoTimer, #nitTimer, #minoTimer, #pasTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+#timer, #tangoTimer, #nitTimer, #minoTimer, #pasTimer, #mjTimer { padding: 0 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 #moreBtn, #pauseBtn { width: 44px; min-height: 44px; padding: 0; border-color: transparent; background: transparent; }
 /* The veil (pause): the board unreadable (blurred, the digits gone), one big ▶ over it, a line under it;
    the controls asleep. Seen once per game: it may ease in. */
@@ -326,6 +326,57 @@ body:has(#pas:not([hidden])) { background: radial-gradient(120% 70% at 50% 20%, 
 #pasTools { display: flex; gap: 8px; }
 #pasTools button { flex: 1; }
 #pasTools button:disabled { opacity: .45; }
+
+/* Mahjong: jade under the game (darker in the dark theme), ivory tiles with a slate edge (right lighter, bottom
+   darker). Layers: a lower one a shade darker (--d: layers below the top) and a shadow on the tiles under; a blocked
+   tile dimmed. Picked: warm and lifted; Savjet: gold; tapped blocked: red, what closes it yellow. Only a face
+   takes a tap (the edge lets it through to the tile below). Placed by mj.js (left / top / size). */
+body:has(#mj:not([hidden])) { background: #1e4a3c; }
+:root[data-theme="dark"] body:has(#mj:not([hidden])) { background: #12302a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body:has(#mj:not([hidden])) { background: #12302a; } }
+#mj { --text: #f3f1ea; --muted: rgb(243 241 234 / .72); --surface: rgb(0 0 0 / .18); --line: rgb(255 255 255 / .16);
+  --control: rgb(0 0 0 / .26); --raised: rgb(0 0 0 / .22); --primary: #f3f1ea; --on-primary: #173d31; --hue: #ffd66b;
+  --face: #f6f0e1; --edge-r: #78909c; --edge-b: #546e7a; --sel: #ffe6a0; --dim: rgb(0 0 0 / .16);
+  flex: 1; display: flex; flex-direction: column; gap: var(--gap); color: var(--text); }
+:root[data-theme="dark"] #mj { --face: #e3dccb; --edge-r: #5d717b; --edge-b: #43545d; --dim: rgb(0 0 0 / .3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #mj { --face: #e3dccb; --edge-r: #5d717b; --edge-b: #43545d; --dim: rgb(0 0 0 / .3); } }
+#mj button { color: var(--text); }
+#mjLeft { margin-right: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#mjLeft small { color: var(--muted); font-weight: 600; }
+#mjTimer { position: relative; }
+#mjTimer.hit { animation: mfine 1.6s cubic-bezier(.23, 1, .32, 1); }
+#mjTimer.hit::after { content: attr(data-fine); position: absolute; top: 100%; right: 0; padding: 1px 7px; border-radius: 999px; background: var(--bad-bg); color: var(--negative);
+  font-size: 12px; white-space: nowrap; animation: mpen 1.6s cubic-bezier(.23, 1, .32, 1) forwards; }
+#mjWrap { margin: 0 -8px; padding: 2px 8px 6px; overflow: hidden; }
+#mjWrap.zoom { overflow: auto; overscroll-behavior: contain; }
+#mjb { position: relative; margin: 0 auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.mt { position: absolute; border-radius: 6px; background: var(--edge-b); box-shadow: 3px 4px 7px rgb(0 0 0 / .4); pointer-events: none;
+  transition: opacity .15s ease-out, transform .15s cubic-bezier(.23, 1, .32, 1); }
+.mt::before { content: ""; position: absolute; top: 0; right: 0; bottom: var(--e); width: var(--e); border-radius: 0 6px 0 0; background: var(--edge-r); }
+.mt .f { position: absolute; inset: 0 var(--e) var(--e) 0; border-radius: 5px; overflow: hidden; pointer-events: auto; cursor: pointer;
+  background: color-mix(in srgb, var(--face), #2b3a35 calc(var(--d) * 7%)); }
+.mt svg { display: block; width: 100%; height: 100%; }
+.mt.sel { transform: translateY(-3px); }
+.mt.sel .f { background: var(--sel); }
+.mt.blk .f { cursor: default; }
+.mt.blk .f::after { content: ""; position: absolute; inset: 0; background: var(--dim); }
+.mt.hint .f { outline: 3px solid var(--hue); outline-offset: -3px; }
+.mt.why .f { outline: 3px solid #e0483c; outline-offset: -3px; }
+.mt.by .f { outline: 3px solid #ffd66b; outline-offset: -3px; }
+.mt.gone { opacity: 0; transform: scale(.85); visibility: hidden; transition: opacity .15s ease-out, transform .15s ease-out, visibility 0s .15s; }
+.mt.gone .f { pointer-events: none; }
+#mjLine { margin: 0; min-height: 1.45em; color: var(--muted); font-size: 15px; }
+#mjLine b { color: var(--text); }
+#mjLine.stuck b { color: #ffd66b; }
+#mjTools { display: flex; gap: 8px; }
+#mjTools button { flex: 1; flex-direction: column; gap: 1px; min-height: 56px; padding: 6px 8px; }
+#mjTools svg { width: 20px; height: 20px; }
+#mjTools small { color: var(--muted); font-size: 12px; font-weight: 500; }
+#mjTools small:empty { display: none; }
+#mjTools button:disabled { opacity: .45; }
+#mjNew { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#mjNew button { flex: 1; }
+#mjZoom { min-height: 36px; margin-left: auto; padding: 0 12px; font-size: 14px; }
 
 /* Križaljke: topics as cards (a small picture of the grid), the form, ideas; the wait while a topic is made.
    The game: white cells with numbers, the clue in a bar, own keyboard (Č Ć Ž Š Đ, LJ NJ DŽ as one key). */
@@ -668,6 +719,14 @@ canvas { max-width: 100%; }
   #pas > :not(#pt) { grid-column: 2; }
   #pas .controls { grid-area: auto / 2; }
   #pasTools { flex-direction: column; }
+  #mj { display: grid; max-width: none; justify-content: center; align-content: start; column-gap: 48px; padding: 24px 0 32px;
+    grid-template-columns: min(940px, calc(100vw - var(--rail, 0px) - 480px)) 340px; grid-template-rows: repeat(4, auto) 1fr; }
+  #mjWrap { grid-area: 1 / 1 / -1; align-self: start; margin: 0; padding: 0 0 8px; }
+  #mj > :not(#mjWrap) { grid-column: 2; }
+  #mj .controls { grid-area: auto / 2; }
+  #mjTools, #mjNew { flex-direction: column; }
+  #mjTools button { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 48px; padding: 0 14px; }
+  #mjTools small { margin-left: auto; }
   #pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }   /* like a calculator */
   #pad button { min-height: 64px; flex-direction: row; align-items: baseline; gap: 6px; background: var(--surface); font-size: 28px; }
   /* The toast in the right column: under Skeniraj in the menu; in the game at its foot, clear of the
@@ -1002,8 +1061,9 @@ canvas { max-width: 100%; }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring, #mb > i, #minoTimer.hit { animation: none; stroke-dashoffset: 0; }
-  #minoTimer.hit::after { animation: none; opacity: 0; }
+  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring, #mb > i, #minoTimer.hit, #mjTimer.hit { animation: none; stroke-dashoffset: 0; }
+  #minoTimer.hit::after, #mjTimer.hit::after { animation: none; opacity: 0; }
+  .mt, .mt.gone { transition: opacity .15s, visibility 0s .15s; transform: none; }
   #mb > i.hold::after { animation: none; --p: 1; }
   #toast, #toast.on { transform: none !important; }   /* over the desktop placement too */
   #more, #more[open], #live video, #live canvas { transform: none; }
