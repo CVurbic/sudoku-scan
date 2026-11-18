@@ -380,6 +380,7 @@ body:has(#mj:not([hidden])) { background: #1e4a3c; }
 
 /* Križaljke: topics as cards (a small picture of the grid), the form, ideas; the wait while a topic is made.
    The game: white cells with numbers, the clue in a bar, own keyboard (Č Ć Ž Š Đ, LJ NJ DŽ as one key). */
+.xwoff [data-v="xw"], .xwoff #tileXw, .xwoff .dcard:has([data-tile="tileXw"]) { display: none; }   /* Križaljke off (krizaljka.js) */
 #xw, #xwplay { flex: 1; display: flex; flex-direction: column; gap: var(--gap); }
 #xwHome { margin-left: -8px; gap: 2px; min-height: 44px; padding: 0 8px; border-color: transparent; background: transparent; }
 h1.big { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }

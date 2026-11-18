@@ -81,6 +81,10 @@ const xwN = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : n % 10
 // made days ahead; their hints the hour after. ---
 const XW_MJ = ['SIJEČANJ', 'VELJAČA', 'OŽUJAK', 'TRAVANJ', 'SVIBANJ', 'LIPANJ', 'SRPANJ', 'KOLOVOZ', 'RUJAN', 'LISTOPAD', 'STUDENI', 'PROSINAC'];
 const xwIsDay = key => key.startsWith('dan:');
+// ponytail: Križaljke off (Chris, 19. 11.): no tile, rail entry or Danas card, nothing asked of the server.
+// The code stays; localStorage.xwBack = '1' brings them back (the tests do).
+const XW_OFF = (() => { try { return localStorage.xwBack !== '1'; } catch { return true; } })();
+document.body.classList.toggle('xwoff', XW_OFF);
 const xwDayKey = () => 'dan:' + dayKey();
 const xwOwn = games => Object.keys(games).filter(k => !xwIsDay(k));   // the topics you picked
 // The calendar sheet: the month on a red band, the day large, the weekday under it.
@@ -106,6 +110,7 @@ async function xwDayLoad() {
 }
 // Today's daily once its terms are here: { key, t: the topic, g: its game if begun }; else null (and asked for).
 function xwDay() {
+  if (XW_OFF) return null;
   const key = xwDayKey(), t = xwGet('xwTopics')[key];
   if (!t) { xwDayLoad(); return null; }
   return { key, t, g: xwGames()[key]?.l[1] };
@@ -143,6 +148,7 @@ function xwWords(key, g) {
 const xwSolved = (w, fill) => w.at.every((k, j) => fill[k] === w.cells[j]);
 
 function xwTile() {
+  if (XW_OFF) return;
   const day = xwDay();
   if (day && !day.g?.done) return Object.assign($('tileXw').lastChild, { textContent: day.g ? 'Dnevna u tijeku' : 'Dnevna čeka', className: '' });
   const games = xwGames(), key = xwOwn(games).sort((a, b) => games[b].at - games[a].at)[0];

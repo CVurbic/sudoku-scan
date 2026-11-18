@@ -868,6 +868,10 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
         : r.postData().includes('savjeti') ? JSON.stringify({ savjeti: XW.map(w => 'Savjet za ' + w.length) })
         : JSON.stringify({ tema: 'Knjigovodstvo', pojmovi: XW.map(w => ({ slova: w.match(/LJ|NJ|DŽ|./gu), trag: 'Trag ' + w.length })) }) });
   page.on('request', xwRoute);
+  // Off (Chris, 19. 11.): no tile, rail entry or Danas card; xwBack = '1' brings them back for the rest.
+  assert.deepStrictEqual(await page.evaluate(() => [XW_OFF, getComputedStyle(tileXw).display, getComputedStyle(document.querySelector('#rail [data-v="xw"]')).display]), [true, 'none', 'none'], 'xw: off');
+  await page.evaluate(() => { localStorage.xwBack = '1'; });
+  await page.reload();
   await page.click('#tileXw');
   await page.waitForFunction(() => xwPop.childElementCount === 2);
   assert.deepStrictEqual(await page.evaluate(() => [xwPop.firstChild.textContent, xwChips.childElementCount, xwChips.hidden]),

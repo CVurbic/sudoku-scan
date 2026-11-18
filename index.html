@@ -412,8 +412,8 @@ if (!openShared()) {   // a shared link wins
   else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino();
   else if (wasIn === 'pas') localStorage.pasOn === 'game' ? pasGame() : openPas();
   else if (wasIn === 'mj') localStorage.mjOn === 'game' ? mjGame() : openMj();
-  else if (wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
-  else go(['menu', 'past', 'xw'].includes(wasIn) ? wasIn : 'games');
+  else if (!XW_OFF && wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
+  else go(['menu', 'past', ...XW_OFF ? [] : ['xw']].includes(wasIn) ? wasIn : 'games');
 }
 </script>
 <script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>   <!-- offline + install (sw.js) -->
