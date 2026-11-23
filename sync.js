@@ -55,7 +55,7 @@ function syncKey(k, a, b, ta = 0, tb = 0) {
   }
   if (SYNC_BOARD.includes(k)) return syncBoard(x, y) === y ? b : a;
   if (k === 'sudokuName' && !a !== !b) return a || b;   // a name beats none
-  return tb > ta ? b : a;   // the rest: changed last wins; a tie (or no times yet) keeps the first, the local one
+  return ta && tb > ta ? b : a;   // the rest: changed last wins; a tie, or no time here yet (first sign-in), keeps the local one
 }
 // Two snapshots { v, at } → the merged one.
 function syncMerge(L, R) {
@@ -81,15 +81,14 @@ function syncLocal() {
 }
 // What changed here since the last look gets its time (the merge's "changed last").
 function syncScan() {
-  const at = syncAt();
-  let changed = false;
+  const at = syncAt(), changed = [];
   for (const k of SYNC_KEYS) {
     const s = localStorage.getItem(k);
-    if (k in syncLast && s !== syncLast[k]) { at[k] = Date.now(); changed = true; }
+    if (k in syncLast && s !== syncLast[k]) { at[k] = Date.now(); changed.push(k); }
     syncLast[k] = s;
   }
-  if (changed) { try { localStorage.sudokuSyncAt = JSON.stringify(at); } catch {} syncDirty = true; }
-  return changed;
+  if (changed.length) { try { localStorage.sudokuSyncAt = JSON.stringify(at); } catch {} syncDirty = true; }
+  return changed;   // the keys changed since the last look
 }
 async function syncApi(q, o = {}) {
   const t = await authToken();
@@ -114,7 +113,8 @@ function syncWrite(M, keys) {
     if (s != null && syncCanon(s) !== syncCanon(localStorage.getItem(k))) { try { localStorage.setItem(k, s); changed = true; } catch {} }
     syncLast[k] = localStorage.getItem(k);
   }
-  try { localStorage.sudokuSyncAt = JSON.stringify({ ...syncAt(), ...M.at }); } catch {}
+  // the times only of the keys written: one left as it is keeps its own time, so a newer one elsewhere still wins next time
+  try { localStorage.sudokuSyncAt = JSON.stringify({ ...syncAt(), ...Object.fromEntries(keys.filter(k => M.at[k]).map(k => [k, M.at[k]])) }); } catch {}
   return changed;
 }
 // Read, merge, write back; the write only if the row is still the one read (else again, at most 3 times).
@@ -124,9 +124,10 @@ async function syncPush(first) {
     const R = await syncRead();
     if (!R) return false;
     const M = syncMerge(syncLocal(), R);
-    if (first && syncWrite(M, SYNC_KEYS) && !sessionStorage.syncReloaded) { sessionStorage.syncReloaded = '1'; location.reload(); return true; }
-    if (!first) syncWrite(M, SYNC_KEYS.filter(k => SYNC_SAFE.has(k)));
-    syncDirty = false;
+    if (first) {   // a reload when anything came in, once: the flag goes only on a start that brought nothing
+      if (syncWrite(M, SYNC_KEYS)) { if (!sessionStorage.syncReloaded) { sessionStorage.syncReloaded = '1'; location.reload(); return 'reload'; } }
+      else sessionStorage.removeItem('syncReloaded');
+    } else syncWrite(M, SYNC_KEYS.filter(k => SYNC_SAFE.has(k)));
     if (SYNC_KEYS.every(k => M.v[k] == R.v?.[k] && (M.at[k] || 0) === (R.at?.[k] || 0))) return true;   // nothing new (jsonb reorders keys: compare each)
     const body = JSON.stringify({ user_id: authGet().id, data: M, updated_at: new Date().toISOString() });
     const r = syncSeen == null ? await syncApi('', { method: 'POST', body })
@@ -138,17 +139,19 @@ async function syncPush(first) {
   return false;
 }
 var syncedAt = 0;   // the last time the server had all of this device's (the account dialog says so); var: app.js reads it
-const syncNow = first => syncBusy ||= syncPush(first).then(ok => { if (ok) syncedAt = Date.now(); }).finally(() => { syncBusy = null; });
-// Signed in: once at the start, then every change (looked for every 4 s) after 3 s of quiet, and on leaving.
+const syncNow = first => syncBusy ||= syncPush(first).then(ok => { if (ok === true) { syncedAt = Date.now(); syncDirty = false; } return ok; }).finally(() => { syncBusy = null; });
+// Signed in: once at the start, then after changes (looked for every 4 s): a solved daily at once, the rest
+// after 30 s of quiet (ponytail: the whole row each time; per-key rows if it grows too big), and on leaving.
+function syncSoon(keys) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow().then(() => { if (syncDirty) syncSoon([]); }), keys.some(k => SYNC_DONE.includes(k)) ? 0 : 30000);
+}
 function syncStart() {
   if (syncOn || !authGet()) return;
   syncOn = true;
   syncScan();
-  syncNow(true).then(() => { sessionStorage.removeItem('syncReloaded'); showAcct(); });
-  setInterval(() => {
-    if (!authGet()) return;
-    if (syncScan()) { clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 3000); }
-  }, 4000);
-  addEventListener('visibilitychange', () => { if (document.hidden && authGet() && (syncScan() || syncDirty)) syncNow(); });
+  syncNow(true).then(showAcct);
+  setInterval(() => { const c = authGet() && syncScan(); if (c?.length) syncSoon(c); }, 4000);
+  addEventListener('visibilitychange', () => { if (document.hidden && authGet() && (syncScan().length || syncDirty)) syncNow(); });
 }
 syncStart();

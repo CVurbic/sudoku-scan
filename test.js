@@ -1254,7 +1254,19 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(sy.game, 'computer', 'sync: Nova igra changed last wins');
   assert.strictEqual(sy.name, 'Chiki', 'sync: a name beats none');
   assert.strictEqual(sy.unknownLocal, 'here', 'sync: no times yet: the local one');
-  console.log('sync: unions, better results, solved dailies kept, either order, idempotent');
+  // Mid-game only the safe keys are written here, with only their times: a newer Nova igra elsewhere still wins next time.
+  const sw = await sp.evaluate(() => {
+    localStorage.clear();
+    localStorage.tangoGame = '{"g":"computer"}'; localStorage.sudokuSyncAt = '{"tangoGame":100}';
+    const R = { v: { tangoGame: '{"g":"phone"}', nitDone: '{"2026-11-23":35}' }, at: { tangoGame: 200 } };
+    syncWrite(syncMerge(syncLocal(), R), SYNC_KEYS.filter(k => SYNC_SAFE.has(k)));
+    const r = [localStorage.tangoGame, localStorage.nitDone, JSON.parse(syncMerge(syncLocal(), R).v.tangoGame).g,
+      JSON.parse(syncMerge({ v: { tangoGame: '{"g":"here"}' }, at: {} }, R).v.tangoGame).g];
+    localStorage.clear();
+    return r;
+  });
+  assert.deepStrictEqual(sw, ['{"g":"computer"}', '{"2026-11-23":35}', 'phone', 'here'], 'sync: safe keys written mid-game, the newer game elsewhere still wins; no time here: local');
+  console.log('sync: unions, better results, solved dailies kept, either order, idempotent, mid-game writes');
   await cam.close(); fs.unlinkSync(mjpeg); server.close();
   console.log('ALL OK');
 })().catch(e => { console.error(e.message); process.exit(1); });
