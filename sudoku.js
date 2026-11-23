@@ -1152,7 +1152,12 @@ $('solvedShare').onclick = async () => {
 };
 // The card serves both games: card says whose result it shows (Tango's buttons: tangoButtons).
 let card = 'sudoku';
-$('solvedLevel').onclick = () => { $('solved').close(); if (card === 'tango') go('menu'); openDaily(+$('solvedLevel').dataset.lvl, $('solvedLevel').dataset.day); };
+$('solvedLevel').onclick = () => {
+  $('solved').close();
+  if (card === 'tango' && tNextLv >= 0) return openTango(tNextLv);   // Dinango's next level
+  if (card === 'tango') go('menu');
+  openDaily(+$('solvedLevel').dataset.lvl, $('solvedLevel').dataset.day);
+};
 $('solvedClose').onclick = () => $('solved').close();
 $('solvedNext').onclick = () => card === 'tango' ? ($('solved').close(), tangoGame()) : card === 'nit' ? ($('solved').close(), nitGame()) : card === 'mino' ? ($('solved').close(), minoGame()) : card === 'pas' ? ($('solved').close(), pasGame(true)) : card === 'mj' ? ($('solved').close(), mjGame(jg.lay, true)) : newRandom(Math.min(task.level, 2), $('solvedNext'));   // a shared one may be Vrlo teško: games go to Teško
 $('solvedMenu').onclick = () => { $('solved').close(); go({ tango: 'games', nit: 'games', mino: 'games', pas: 'games', mj: 'games', xw: 'xw' }[card] ?? 'menu'); };

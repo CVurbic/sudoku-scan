@@ -172,6 +172,14 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
 .board[aria-busy="true"] .stairs { display: none; }
 #home h2, #homeSide h2 { margin: 8px 0 0; color: var(--muted); font-size: 14px; font-weight: 600; }
 #home > h1 { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+/* Dinango's page (showTmenu): as the sudoku's menu, the next daily marked, Nova igra as three keys, today's Ljestvica. */
+.tpage { display: flex; flex-direction: column; gap: var(--gap); max-width: 560px; }
+.tpage > h1 { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.board.next { border-color: var(--text); }
+.tnews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tnews .key { gap: 6px; padding: 0 8px; font-weight: 600; }
+.tranks { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.tranks small { color: var(--muted); font-size: 13px; }
 /* The puzzle at a glance (miniGrid): printed digits as dark squares, the user's in blue, green once solved. */
 .mb { display: block; width: 100%; height: auto; aspect-ratio: 1; flex: none; }
 .mb .bg { fill: var(--surface); }

@@ -506,16 +506,19 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await wp.close();
   console.log(`X-Wing, Y-Wing: explained in parts with Dalje, marks and lines, the bubble under the board; answer right`);
 
-  // 1d. Tango: a fresh start is Igre. The daily is one board per date (one solution, finished by Savjet's steps
-  //     alone, at least 4 printed), solo; three alike turn red; solved → the card (Igre, Sudoku, share), the tile
-  //     and Povijest. Then Nova igra with Savjet: a wrong cell first, then every step right to the end.
+  // 1d. Tango: a fresh start is Igre. The dailies are three boards per date (Lagano, Srednje, Teško: one solution each,
+  //     finished by Savjet's steps alone, with none / 1-3 / 4+ steps needing a whole line), solo; the tile opens the
+  //     Dinango page; three alike turn red; solved → the card (Igre, the next level, share), the tile and Povijest.
+  //     Then Nova igra at a level with Savjet: a wrong cell first, then every step right to the end.
   await open(null);
   assert.strictEqual(await page.evaluate(() => view), 'games', 'start: Igre');
-  assert.deepStrictEqual(await page.evaluate(() => [...Array(20)].map((_, d) => {
-    const a = tMake(`tango#2026-11-${d}`), g = a.giv.slice();
-    for (let h; (h = tHint(g, a.signs)); ) { if (h.v !== a.sol[h.k]) return 'wrong step'; g[h.k] = h.v; }
-    return [JSON.stringify(a) === JSON.stringify(tMake(`tango#2026-11-${d}`)), tSolve(a.giv, a.signs).length, g.join() === a.sol.join(), a.giv.filter(x => x >= 0).length >= 4].join();
-  }).filter(r => r !== 'true,1,true,true')), [], 'tango: same board per date, one solution, Savjet finishes it');
+  assert.deepStrictEqual(await page.evaluate(() => [...Array(30)].map((_, d) => {
+    const lv = d % 3, t = performance.now(), a = tMake(`tango#${lv}#2026-11-${d}`, lv), ms = performance.now() - t, g = a.giv.slice();
+    let red = 0;
+    for (let h; (h = tHint(g, a.signs)); ) { if (h.v !== a.sol[h.k]) return 'wrong step'; g[h.k] = h.v; red += h.rule === 'red'; }
+    const [keep, lo, hi] = T_LV[lv];
+    return [JSON.stringify(a) === JSON.stringify(tMake(`tango#${lv}#2026-11-${d}`, lv)), tSolve(a.giv, a.signs).length, g.join() === a.sol.join(), a.giv.filter(x => x >= 0).length >= keep, red >= lo && red <= hi, ms < 1500].join();
+  }).filter(r => r !== 'true,1,true,true,true,true')), [], 'tango: same boards per date and level, one solution, Savjet finishes it, the level\'s line steps, fast');
   // Nit: one board per date; the path goes over all 36 cells, one step at a time; the knots and walls leave
   // it one way only (that very path), 7-12 knots, the first and last at the ends, made in well under a second.
   assert.deepStrictEqual(await page.evaluate(() => [...Array(20)].map((_, d) => {
@@ -525,28 +528,32 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   }).filter(r => r !== 'true,true,true,true,true')), [], 'nit: same board per date, a full path, one solution, 7-12 knots, fast');
   console.log('nit: a board per date, the path over every cell, one way only');
   await page.click('#tileTango');
-  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Dinango · dnevni', true], 'tango daily: solo');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tDailyCount.textContent, tDays.children.length, tDays.firstChild.classList.contains('next'), tDays.querySelectorAll('svg svg').length, tNews.children.length]),
+    ['tmenu', '0 od 3', 3, true, 0, 3], 'tango: the tile opens the Dinango page, three dailies (dots, no eggs or dinos), Nova igra at three levels');
+  await page.evaluate(() => tDays.firstChild.click());
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent, tHintBtn.hidden]), ['tango', 'Dinango · Lagano', true], 'tango daily: solo');
   const three = await page.evaluate(() => { const L = T_LINES.find(L => L.slice(0, 3).every(k => tg.giv[k] < 0)).slice(0, 3); L.forEach(k => tCells[k].click()); return L; });
   assert.strictEqual(await page.evaluate(k => tCells[k].classList.contains('bad'), three[2]), false, 'tango: the cell just tapped is not red yet');
   await page.waitForFunction(L => L.every(k => tCells[k].classList.contains('bad')), { timeout: 3000 }, three);   // after T_WAIT: three alike are red
   await page.click('#tClearBtn');
   await page.evaluate(() => tg.sol.forEach((v, k) => { if (tg.giv[k] < 0) { tCells[k].click(); if (v) tCells[k].click(); } }));
   await page.waitForFunction(() => solved.open);   // after the wave
-  assert.deepStrictEqual(await page.evaluate(() => [solved.open, /^Riješeno za \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedLevel.textContent, solvedShare.textContent, lbHead.textContent]),
-    [true, true, 'Igre', 'Sudoku', 'Podijeli rezultat', 'Upiši se na današnju ljestvicu'], 'tango solved: the card');
+  assert.deepStrictEqual(await page.evaluate(() => [solved.open, /^Lagano · \d+:\d\d · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedLevel.textContent, solvedShare.textContent, lbHead.textContent]),
+    [true, true, 'Igre', 'Srednje', 'Podijeli rezultat', 'Upiši se na današnju ljestvicu'], 'tango solved: the card, on to Srednje');
   await page.click('#solvedMenu');
-  assert.deepStrictEqual(await page.evaluate(() => [view, tileTango.lastChild.className]), ['games', 'solved'], 'tango: the tile says solved');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tileTango.lastChild.textContent]), ['games', 'Dnevni 1 od 3'], 'tango: the tile says one of three');
   await page.click('#tabPast');
   assert.strictEqual(await page.$$eval('#tangoPast li', x => x.length), 1, 'tango: in Povijest');
   await page.click('#tabGames');
   await page.click('#tileTango');
-  await page.click('#tangoNew');
-  assert.deepStrictEqual(await page.evaluate(() => [tangoName.textContent, tHintBtn.hidden]), ['Dinango · Nova igra', false], 'tango game: with Savjet');
+  assert.deepStrictEqual(await page.evaluate(() => [tDailyCount.textContent, tDays.firstChild.className, tDays.children[1].classList.contains('next')]), ['1 od 3', 'key board solved', true], 'tango page: Lagano solved, Srednje next');
+  await page.evaluate(() => tNews.children[1].click());
+  assert.deepStrictEqual(await page.evaluate(() => [tangoName.textContent, tHintBtn.hidden, tg.lv]), ['Nova igra · Srednje', false, 1], 'tango game: at Srednje, with Savjet');
   await page.evaluate(() => { const k = tg.values.findIndex(v => v < 0); tCells[k].click(); if (tg.sol[k] === 0) tCells[k].click(); });
   await page.click('#tHintBtn');
   assert.strictEqual(await page.evaluate(() => tTip.title), 'Nešto ne štima', 'tango Savjet: a wrong cell first');
   await page.reload();
-  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent]), ['tango', 'Dinango · Nova igra'], 'tango: a reload goes on');
+  assert.deepStrictEqual(await page.evaluate(() => [view, tangoName.textContent]), ['tango', 'Nova igra · Srednje'], 'tango: a reload goes on');
   assert.strictEqual(await page.evaluate(() => {
     for (let i = 0; i < 40 && !tg.solvedAt; i++) { tHintBtn.click(); if (tTip.v >= 0 && tTip.v !== tg.sol[tTip.k]) return 'wrong step'; tTipDo.click(); }
     return [!!tg.solvedAt, tb.classList.contains('won')].join();
@@ -555,7 +562,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(await page.evaluate(() => [solvedNext.hidden, solvedShare.hidden, getComputedStyle(solvedDino).display !== 'none', solvedFor.textContent, getComputedStyle(document.querySelector('#solved .tick')).display]),
     [false, true, true, '♥ za U', 'none'], 'tango game: then the card, the little dino and U\'s line, Nova igra');
   await page.click('#solvedMenu');
-  console.log('tango: Igre first, a board per date (unique, Savjet finishes it), solo daily, red rules, card, tile, Povijest, game with Savjet');
+  console.log('tango: Igre first, three boards per date (unique, Savjet finishes them, line steps by level), the Dinango page, solo daily, red rules, card → next level, tile, Povijest, game at a level with Savjet');
 
   // 1d2. Nit: the tile opens today's board, the thread starts on 1. A drag (the mouse as a finger, cells skipped
   //      by a fast move walked one by one) draws it; a knot out of turn stops it; dragging back over it takes it
@@ -955,6 +962,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await page.evaluate(() => view), 'nit', 'Danas: a solved card opens Nova igra');
   await page.evaluate(() => go('games'));
   await page.evaluate(() => rail.querySelector('[data-v="tango"]').click());   // not by position: the rail is still animating its width
+  assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tmenu', false], 'rail: Dinango opens its page');
+  await page.evaluate(() => tDays.firstChild.click());
   assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
   await page.evaluate(() => rail.querySelector('[data-v="games"]').click());
   assert.strictEqual(await page.evaluate(() => document.body.classList.contains('railmini')), false, 'rail: open again after the game');

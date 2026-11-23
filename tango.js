@@ -42,22 +42,27 @@ function tHint(g, signs) {
   }
   return null;
 }
-// A board from a seed: a random full one, 6-9 signs, givens taken away (down to 4) while the solution stays
-// one and the steps of tHint alone still finish it. ~0.1 s on a computer.
-function tMake(seed) {
-  const r = rng(hash(seed));
+// The levels (Lagano, Srednje, Teško): givens kept at least, and how many steps need a whole line ("red",
+// the hardest of tHint's): none / 1-3 / 4 or more. Measured on 150 old dailies: 26 / 53 / 21 %.
+const T_LV = [[8, 0, 0], [4, 1, 3], [4, 4, 99]], T_BOARD = [8, 9, 10];   // T_BOARD: the leaderboard's level of each
+let T_ALL = null;   // every full board, made on the first board asked for
+// tHint's steps from the givens → { g: where they end, red: how many needed a whole line }.
+function tSteps(giv, signs) { const g = giv.slice(); let red = 0; for (let h; (h = tHint(g, signs)); ) { g[h.k] = h.v; red += h.rule === 'red'; } return { g, red }; }
+// A board from a seed at a level: a random full one, 6-9 signs, givens taken away (down to the level's) while the
+// solution stays one, kept when tHint's steps alone finish it with the level's count of line steps. ~10-25 ms.
+function tMake(seed, lv = 1) {
+  const r = rng(hash(seed)), [keep, lo, hi] = T_LV[lv];
   for (;;) {
-    const all = tSolve(Array(36).fill(-1), [], 1e5), sol = all[r() * all.length | 0];
+    const all = T_ALL ??= tSolve(Array(36).fill(-1), [], 1e5), sol = all[r() * all.length | 0];
     const edges = shuffle([...Array(36).keys()].flatMap(i => [...i % 6 < 5 ? [[i, i + 1]] : [], ...i < 30 ? [[i, i + 6]] : []]), r);
     const signs = edges.slice(0, 6 + (r() * 4 | 0)).map(([a, z]) => [a, z, sol[a] === sol[z]]), giv = sol.slice();
     for (const i of shuffle([...Array(36).keys()], r)) {
-      if (giv.filter(x => x >= 0).length <= 4) break;
+      if (giv.filter(x => x >= 0).length <= keep) break;
       giv[i] = -1;
       if (tSolve(giv, signs).length !== 1) giv[i] = sol[i];
     }
-    const g = giv.slice();
-    for (let h; (h = tHint(g, signs)); ) g[h.k] = h.v;
-    if (g.every((x, i) => x === sol[i])) return { giv, sol, signs };
+    const { g, red } = tSteps(giv, signs);
+    if (g.every((x, i) => x === sol[i]) && red >= lo && red <= hi) return { giv, sol, signs };
   }
 }
 // Broken rules → { cells, signs (indexes) }: three alike in a row, four alike in a line, a sign not kept.
@@ -95,24 +100,70 @@ const tCells = Array.from({ length: 36 }, (_, k) => {
 });
 let tg = null, tUndo = [], tTip = null;   // the board on screen, its earlier values, the open Savjet ({ k, v, from, title, text, act })
 const tLoad = key => { try { return JSON.parse(localStorage[key] || 'null'); } catch { return null; } };
-const tSave = () => { try { localStorage[tg.date ? 'tangoDaily' : 'tangoGame'] = JSON.stringify(tg); } catch {} };
-const tangoDone = () => tLoad('tangoDone') || {};   // date → ms of each solved daily
+// A board's lv: 0-2 (Lagano, Srednje, Teško). The dailies: one per level and day (tangoDaily0-2); a game: tangoGame.
+const tSave = () => { try { localStorage[tg.date ? 'tangoDaily' + tg.lv : 'tangoGame'] = JSON.stringify(tg); } catch {} };
+// date → ms of each solved daily: one number up to 23. 11. 2026 (one daily a day), then [ms or null] per level.
+const tangoDone = () => tLoad('tangoDone') || {};
+const tDoneMs = v => Array.isArray(v) ? v : [null, v, null];   // an old day's one daily counts as Srednje
 const tNew = p => ({ ...p, values: p.giv.slice(), elapsed: 0, solvedAt: null });
 const tOpen = which => { try { localStorage.tangoOn = which; } catch {} tUndo = []; tTip = null; $('tb').classList.remove('won'); go('tango'); };
-// The Igre tile: today's daily, made on the day's first open.
-function openTango() {
-  tg = tLoad('tangoDaily');
-  if (tg?.date !== dayKey()) { tg = { ...tNew(tMake('tango#' + dayKey())), date: dayKey() }; tSave(); }
-  tOpen('daily');
+// Today's daily at a level, made (and kept) on the day's first look; the same for everyone.
+function tDay(lv) {
+  let g = tLoad('tangoDaily' + lv);
+  if (g?.date !== dayKey()) { g = { ...tNew(tMake(`tango#${lv}#${dayKey()}`, lv)), date: dayKey(), lv }; try { localStorage['tangoDaily' + lv] = JSON.stringify(g); } catch {} }
+  return g;
 }
-// Nova igra: a random board, with Savjet; one started earlier goes on.
-function tangoGame() {
+const tToday = () => [0, 1, 2].map(lv => { const g = tLoad('tangoDaily' + lv); return g?.date === dayKey() ? g : null; });   // without making any
+function openTango(lv) { tg = tDay(lv); tOpen('daily' + lv); }
+// Nova igra at a level: a random board, with Savjet; one started earlier at that level goes on.
+function tangoGame(lv) {
   tg = tLoad('tangoGame');
-  if (!tg || tg.solvedAt) { tg = tNew(tMake('t' + Math.random())); tSave(); }
+  lv ??= tg?.lv ?? 1;
+  if (!tg || tg.solvedAt || (tg.lv ?? 1) !== lv) { tg = { ...tNew(tMake('t' + Math.random(), lv)), lv }; tSave(); }
   tOpen('game');
 }
-$('tangoBack').onclick = () => go('games');
+$('tangoBack').onclick = () => go('tmenu');
 $('tangoNew').onclick = () => tangoGame();
+
+// The Dinango page: today's three dailies (where the help is, not what it is: a dot on each given cell), Nova igra
+// at a level, and today's Ljestvica one level at a time.
+const tMini = g => {
+  let s = '<rect width="96" height="96" rx="8" fill="var(--board)"/>';
+  for (let k = 0; k < 36; k++) { const x = 2 + k % 6 * 15.5, y = 2 + (k / 6 | 0) * 15.5, on = g.giv[k] >= 0;
+    s += `<rect x="${x}" y="${y}" width="14" height="14" rx="2.5" fill="var(${on ? '--given' : '--cell'})"/>`;
+    if (on) s += `<circle cx="${x + 7}" cy="${y + 7}" r="3.2" fill="var(--sign)" opacity=".55"/>`; }
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 96 96');
+  svg.classList.add('mb');
+  svg.innerHTML = s;
+  return svg;
+};
+let tRankLv = 0, tRankAsk = 0;
+function showTmenu() {
+  const days = [0, 1, 2].map(tDay), next = days.findIndex(g => !g.solvedAt);
+  $('tDailyCount').textContent = `${days.filter(g => g.solvedAt).length} od 3`;
+  $('tDays').replaceChildren(...days.map((g, lv) => {
+    const b = boardKey(lv, tMini(g), g.solvedAt ? `✓ ${clock(g.elapsed)}` : g.elapsed ? 'u tijeku' : '');
+    b.classList.toggle('solved', !!g.solvedAt);
+    b.classList.toggle('next', lv === next);
+    b.onclick = () => openTango(lv);
+    return b;
+  }));
+  tRankLv = Math.max(0, days.findLastIndex(g => g.solvedAt));   // the last level you solved
+  tRanks();
+}
+$('tNews').replaceChildren(...[0, 1, 2].map(lv => { const b = document.createElement('button'); b.className = 'key'; b.append(stairs(lv), DAILY[lv][0]); b.onclick = () => tangoGame(lv); return b; }));
+$('tRanksLv').querySelectorAll('button').forEach((b, lv) => b.onclick = () => { tRankLv = lv; tRanks(); });
+async function tRanks() {
+  $('tRanksLv').querySelectorAll('button').forEach((b, lv) => b.ariaPressed = String(lv === tRankLv));
+  const g = tToday()[tRankLv], ask = ++tRankAsk, mine = g?.solvedAt && lbName() ? { name: lbName(), ms: g.elapsed } : undefined;
+  let b = null;
+  try { b = await lbRows(dayKey(), T_BOARD[tRankLv], 8, mine); } catch {}
+  if (ask !== tRankAsk) return;
+  $('tRanksCount').textContent = !b ? 'Ljestvica se nije učitala.' : b.all ? players(b.all) : 'Još nitko danas';
+  $('tRanksList').replaceChildren(...b?.rows ?? []);
+}
+$('tmenuBack').onclick = () => go('games');
 
 function drawTango() {
   // the cell being tapped through egg → dino: its broken rules wait for a pause (tQuiet); the rest show at once
@@ -125,7 +176,7 @@ function drawTango() {
   $('tbSigns').replaceChildren(...tg.signs.map(([a, z, same], i) => Object.assign(document.createElement('span'), {
     textContent: same ? '=' : '×', className: (z - a === 1 ? 'h' : 'v') + (bad.signs.has(i) ? ' bad' : ''),
     style: `grid-area: ${(a / 6 | 0) + 1} / ${a % 6 + 1}` })));   // in a's cell, pushed onto the gap after it
-  $('tangoName').textContent = solo ? 'Dinango · dnevni' : 'Dinango · Nova igra';
+  $('tangoName').textContent = `${solo ? 'Dinango' : 'Nova igra'} · ${DAILY[tg.lv ?? 1][0]}`;
   $('tangoSide').textContent = solo ? new Date(tg.date + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
   $('tangoTimer').textContent = clock(tg.elapsed);
   $('tHintBtn').hidden = solo;   // the daily is solo, as the sudoku's
@@ -188,27 +239,34 @@ function tangoSolved() {
   $('solvedMenu').textContent = 'Igre';
   $('diffSolved').hidden = $('solvedTechs').hidden = $('lboard').hidden = true;
   if (tg.date) {
-    const done = tangoDone();
-    done[tg.date] = tg.elapsed;
+    const done = tangoDone(), L = T_BOARD[tg.lv];
+    done[tg.date] = Object.assign(tDoneMs(done[tg.date]).slice(), { [tg.lv]: tg.elapsed });
     try { localStorage.tangoDone = JSON.stringify(done); } catch {}
-    $('solvedText').textContent = `Riješeno za ${clock(tg.elapsed)} · ${daysWord(streak(Object.keys(done)))} zaredom`;
-    lbNow = { day: tg.date, level: 3, ms: tg.elapsed };
-    if (lbName()) lbQueue(lbNow.day, 3, lbNow.ms);
-    lbShow(lbNow.day, 3, lbNow.ms);
+    $('solvedText').textContent = `${DAILY[tg.lv][0]} · ${clock(tg.elapsed)} · ${daysWord(streak(Object.keys(done)))} zaredom`;
+    lbNow = { day: tg.date, level: L, ms: tg.elapsed };
+    if (lbName()) lbQueue(lbNow.day, L, lbNow.ms);
+    lbShow(lbNow.day, L, lbNow.ms);
   } else $('solvedText').textContent = `Vrijeme: ${clock(tg.elapsed)}`;
   tangoButtons();
   setTimeout(() => view === 'tango' && $('solved').showModal(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 900);
 }
-// The daily: Igre, and on to today's sudoku daily (its first level not solved), the result shared quietly;
-// with the sudokus done too, Podijeli is the main one. A game: Igre and the next one.
+// The daily: on to today's next Dinango level (as the sudoku's), then to today's sudoku daily (its first level
+// not solved), the result shared quietly; with everything done, Podijeli is the main one. A game: Igre and the next one.
+let tNextLv = -1;   // the Dinango level the card's main button opens, else -1 (the sudoku's)
 function tangoButtons() {
-  const next = tg.date ? loadDays().levels.findIndex(st => !st?.solvedAt) : -1;
+  const left = tg.date ? tToday().findIndex(g => !g?.solvedAt) : -1;
+  tNextLv = left;
+  const next = !tg.date ? -1 : left >= 0 ? left : loadDays().levels.findIndex(st => !st?.solvedAt);
   $('solvedClose').hidden = true;
   $('solvedNext').hidden = !!tg.date;
   $('solvedLevel').hidden = next < 0;
-  if (next >= 0) { Object.assign($('solvedLevel').dataset, { lvl: next, day: dayKey() }); $('solvedLevel').firstChild.hidden = true; $('solvedLevel').lastChild.textContent = 'Sudoku'; }
+  if (next >= 0) {
+    Object.assign($('solvedLevel').dataset, { lvl: next, day: dayKey() });
+    if (left >= 0) { $('solvedLevel').firstChild.replaceWith(stairs(left)); $('solvedLevel').lastChild.textContent = DAILY[left][0]; }
+    else { $('solvedLevel').firstChild.hidden = true; $('solvedLevel').lastChild.textContent = 'Sudoku'; }
+  }
   $('solvedShare').hidden = !tg.date;
   $('solvedShare').classList.toggle('quiet', next >= 0);
   $('solvedShare').lastChild.textContent = next < 0 ? 'Podijeli' : 'Podijeli rezultat';
-  if (tg.date) dailyShare('Dinango', tg.date, 3, tg.elapsed);
+  if (tg.date) dailyShare(`Dinango ${DAILY[tg.lv][0]}`, tg.date, T_BOARD[tg.lv], tg.elapsed);
 }

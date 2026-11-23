@@ -117,7 +117,7 @@
     <div class="dhead"><p id="dDate"></p><h1>Danas</h1></div>
     <div class="dcards">
       <button class="gcard" id="gSud" data-g="sud"><span class="gart"><span class="gbadge"></span><b>Sudoku</b></span><span class="gbody"><span class="glv"></span><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
-      <button class="gcard" id="gDin" data-g="din"><span class="gart"><span class="gbadge"></span><b>Dinango</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gDin" data-g="din"><span class="gart"><span class="gbadge"></span><b>Dinango</b></span><span class="gbody"><span class="glv"></span><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><button id="dXwDay" hidden><span class="cal"></span><span><b></b><small></small></span></button><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
       <button class="gcard" id="gNit" data-g="nit"><span class="gart"><span class="gbadge"></span><b>Nit</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <button class="gcard" id="gMino" data-g="min"><span class="gart"><span class="gbadge"></span><b>Minolovac</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
@@ -199,6 +199,23 @@
   <h2>Sudoku</h2>
   <ul id="historyList" class="hlist"></ul>
   <p id="historyEmpty">Još nema sudokua. Skeniraj jedan i stisni "Ovo je zadatak" ili ga riješi kamerom uživo, pa će se pojaviti ovdje.</p>
+</section>
+
+<!-- Dinango: today's three dailies (a dot where help is given, not what), Nova igra at a level, today's Ljestvica. -->
+<section id="tmenu" hidden>
+  <header class="bar">
+    <button id="tmenuBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Igre</button>
+  </header>
+  <div class="tpage">
+    <h1>Dinango</h1>
+    <div class="hsec"><h3>Dnevni<span id="tDailyCount" class="tag"></span></h3><div id="tDays" class="boards"></div></div>
+    <div class="hsec"><h3>Nova igra<span class="tag"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/></svg>sa savjetima</span></h3><div id="tNews" class="tnews"></div></div>
+    <div class="hsec">
+      <h3>Ljestvica<span class="tag">danas</span></h3>
+      <div id="tRanksLv" class="seg"><button><span data-stairs="0"></span>Lagano</button><button><span data-stairs="1"></span>Srednje</button><button><span data-stairs="2"></span>Teško</button></div>
+      <div class="tranks"><small id="tRanksCount"></small><ol id="tRanksList" class="lblist"></ol></div>
+    </div>
+  </div>
 </section>
 
 <section id="tango" hidden>
@@ -406,13 +423,13 @@ if (!openShared()) {   // a shared link wins
   if ((wasIn === 'game' || !wasIn) && task && celebrated !== task.solution.join('')) {
     go('game');
     if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily);
-  } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango();
+  } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango(+localStorage.tangoOn?.slice(5) || 0);
   else if (wasIn === 'nit') localStorage.nitOn === 'game' ? nitGame() : openNit();
   else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino();
   else if (wasIn === 'pas') localStorage.pasOn === 'game' ? pasGame() : openPas();
   else if (wasIn === 'mj') localStorage.mjOn === 'game' ? mjGame() : openMj();
   else if (!XW_OFF && wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
-  else go(['menu', 'past', ...XW_OFF ? [] : ['xw']].includes(wasIn) ? wasIn : 'games');
+  else go(['menu', 'tmenu', 'past', ...XW_OFF ? [] : ['xw']].includes(wasIn) ? wasIn : 'games');
 }
 </script>
 <script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>   <!-- offline + install (sw.js) -->
