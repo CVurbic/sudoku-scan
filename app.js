@@ -146,26 +146,41 @@ function throne(el, b, note) {
     return s; };
   el.querySelector('.gline').textContent = [note, !b ? 'Nije se učitalo' : !b.all ? 'Još nitko' : apart && `Ti si ${b.place}. · ${apart.children[2].textContent}`].filter(Boolean).join(' · ');
   el.querySelector('.podium').replaceChildren(step(2), step(1), step(3));
+  el.querySelector('.podium').classList.remove('swap');
+}
+// Sudoku's and Dinango's three levels (mockups/danas-razine.html V3): a bar with its name each, the one on the podium dark.
+// All three solved: each is a button inside the card's button (a span, so the card is not opened); it swaps the podium.
+const dPick = {};
+function levelBars(id, done, at) {
+  const pick = i => { dPick[id] = i; $(id).querySelector('.podium').classList.add('swap'); showToday(); };
+  $(id).querySelector('.glv').replaceChildren(...DAILY.map(([name], i) => {
+    const s = Object.assign(document.createElement('span'), { className: i === at ? 'on' : '' });
+    s.append(Object.assign(document.createElement('i'), { className: done[i] ? 'done' : '' }), name);
+    if (done.every(Boolean)) Object.assign(s, { role: 'button', tabIndex: 0, ariaPressed: i === at,
+      onclick: e => { e.stopPropagation(); pick(i); },
+      onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); pick(i); } } });
+    return s; }));
 }
 let todayAsk = 0;
 function showToday() {
   const li = (a, b, cls = '') => { const x = document.createElement('li'); x.append(...[a, b].map((t, i) => Object.assign(document.createElement('span'), { textContent: t, className: i ? cls : '' }))); return x; };
   $('dDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
-  // Sudoku: three bars; its podium is the last level solved today, else the next one to play
+  // Sudoku: three bars; its podium is the level picked (all three solved), else the last solved today, else the next to play
   const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt), solved = lv.filter(st => st?.solvedAt).length;
-  const sLv = lv.reduce((a, st, i) => st?.solvedAt ? i : a, Math.max(next, 0));
-  $('gSud').querySelector('.glv').replaceChildren(...DAILY.map((_, i) => Object.assign(document.createElement('i'), { className: lv[i]?.solvedAt ? 'done' : '' })));
+  const sLv = solved === 3 && dPick.gSud != null ? dPick.gSud : lv.reduce((a, st, i) => st?.solvedAt ? i : a, Math.max(next, 0));
+  levelBars('gSud', DAILY.map((_, i) => !!lv[i]?.solvedAt), sLv);
   // the others: today's saved game, done or going; ms: your number on the board
   const one = (key, done = g => g.solvedAt) => { const g = tLoad(key), on = g?.date === dayKey(); return { done: on && !!done(g), going: on && !!g.elapsed, ms: g?.elapsed }; };
-  const tl = tToday(), tNext = tl.findIndex(g => !g?.solvedAt), tSolved = tl.filter(g => g?.solvedAt).length, tLv = tl.reduce((a, g, i) => g?.solvedAt ? i : a, Math.max(tNext, 0));
-  $('gDin').querySelector('.glv').replaceChildren(...tl.map(g => Object.assign(document.createElement('i'), { className: g?.solvedAt ? 'done' : '' })));
+  const tl = tToday(), tNext = tl.findIndex(g => !g?.solvedAt), tSolved = tl.filter(g => g?.solvedAt).length;
+  const tLv = tSolved === 3 && dPick.gDin != null ? dPick.gDin : tl.reduce((a, g, i) => g?.solvedAt ? i : a, Math.max(tNext, 0));
+  levelBars('gDin', tl.map(g => !!g?.solvedAt), tLv);
   const n = one('nitDaily'), m = one('minoDaily'), p = one('pasDaily', g => g.endedAt), j = one('mjDaily');
   p.ms = pasDone()[dayKey()];
   const daily = (id, level, d, open, again, text = clock(d.ms ?? 0)) => ({ id, level, ms: d.done ? d.ms : null, badge: d.done ? ['✓ ' + text, 'ok'] : [d.going ? 'Nastavi' : 'Igraj', ''], open: d.done ? again : open });
   const cards = [
-    { id: 'gSud', level: sLv, ms: lv[sLv]?.solvedAt ? lv[sLv].elapsed : null, note: DAILY[sLv][0], badge: [solved === 3 ? '✓ 3 od 3' : `${solved} od 3`, solved === 3 ? 'ok' : ''],
+    { id: 'gSud', level: sLv, ms: lv[sLv]?.solvedAt ? lv[sLv].elapsed : null, badge: [solved === 3 ? '✓ 3 od 3' : `${solved} od 3`, solved === 3 ? 'ok' : ''],
       open: () => next < 0 ? go('menu') : openDaily(next) },
-    { id: 'gDin', level: T_BOARD[tLv], ms: tl[tLv]?.solvedAt ? tl[tLv].elapsed : null, note: DAILY[tLv][0], badge: [tSolved === 3 ? '✓ 3 od 3' : `${tSolved} od 3`, tSolved === 3 ? 'ok' : ''],
+    { id: 'gDin', level: T_BOARD[tLv], ms: tl[tLv]?.solvedAt ? tl[tLv].elapsed : null, badge: [tSolved === 3 ? '✓ 3 od 3' : `${tSolved} od 3`, tSolved === 3 ? 'ok' : ''],
       open: () => tNext < 0 ? go('tmenu') : openTango(tNext) },
     daily('gNit', 4, n, openNit, nitGame), daily('gMino', 5, m, openMino, minoGame),
     daily('gPas', 6, p, openPas, pasGame, p.ms != null ? pScoreText(p.ms) : ''), daily('gMj', 7, j, openMj, mjGame)];

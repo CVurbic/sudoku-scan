@@ -886,9 +886,19 @@ canvas { max-width: 100%; }
   .gbadge { position: absolute; z-index: 1; top: 12px; right: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .gbadge.ok { color: var(--positive); }
   .gbody { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 16px; }
-  .glv { display: flex; gap: 6px; }   /* Sudoku's three levels: a bar each, coloured when solved */
-  .glv i { flex: 1; height: 6px; border-radius: 3px; background: var(--raised); }
-  .glv i.done { background: var(--c); }
+  /* Sudoku's and Dinango's three levels: a bar and its name each, coloured when solved; the one on the podium dark */
+  .glv { display: flex; gap: 6px; }
+  .glv span { flex: 1; display: flex; flex-direction: column; gap: 5px; padding-bottom: 2px; border-radius: 6px; color: var(--muted); font-size: 12px; text-align: center; }
+  .glv i { height: 6px; border-radius: 3px; background: var(--raised); transition: opacity .16s ease; }
+  .glv i.done { background: var(--c); opacity: .35; }
+  .glv span.on { color: var(--text); font-weight: 700; }
+  .glv span.on i { opacity: 1; }
+  .glv [role="button"] { cursor: pointer; }
+  .glv [role="button"]:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+  @media (hover: hover) { .glv [role="button"]:not(.on):hover { color: var(--text); } }
+  .gcard:active:has(.glv [role="button"]:active) { transform: none; }   /* picking a level is not opening the game */
+  .podium { transition: opacity .18s ease, filter .18s ease; }
+  .podium.swap { opacity: 0; filter: blur(2px); }
   .throne { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   .gline { color: var(--muted); font-size: 13px; text-align: center; }
   .gline:empty { display: none; }
