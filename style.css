@@ -82,8 +82,48 @@ body { margin: 0 auto; max-width: 520px; min-height: 100dvh; display: flex; flex
 /* The theme button: Igre's bar on the phone, the foot of the rail on the computer. One tap = Auto → Svijetla → Tamna. */
 #themeBar { width: 44px; min-height: 44px; margin: 0 -10px 0 auto; padding: 0; border-color: transparent; border-radius: 50%; background: transparent; color: var(--text); }
 #installBtn:not([hidden]) + #themeBar { margin-left: 0; }
-#themeRail { display: none; }
+/* Prijava: a person when signed out, the name's letter in a dark circle when in (green dot on the rail). */
+#acctBar { width: 44px; min-height: 44px; margin: 0 0 0 auto; padding: 0; border-color: transparent; border-radius: 50%; background: transparent; color: var(--text); }
+#installBtn:not([hidden]) + #acctBar, #acctBar + #themeBar { margin-left: 0; }
+.acct .av, .acct.in svg, #acct.in .out, #acct:not(.in) #acctOut { display: none; }
+.acct.in .av { display: grid; }
+.av { place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-size: 13px; font-weight: 700; flex: none; }
+.adot { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--positive); }
+#acctRail:not(.in) small { display: none; }
+#acctRail, #themeRail { display: none; }
+#acct { width: min(88vw, 380px); padding: 0; border: 0; border-radius: 20px; background: var(--surface); color: var(--text); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3); }
+#acct > div { display: flex; flex-direction: column; gap: 12px; padding: 24px; }
+#acct::backdrop { background: rgba(0, 0, 0, 0.45); }
+#acct[open] { animation: pop .24s cubic-bezier(0.23, 1, 0.32, 1); }
+#acct h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+#acct.in h2 { display: none; }
+#acct .credits { margin: 0; font-size: 15px; }
+#acct .who { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--raised); }
+#acct.in .who { padding: 0; background: none; }
+#acct .who .av { display: grid; width: 44px; height: 44px; font-size: 18px; }
+#acct .who > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+#acct .who small { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; }
+#acct .fine { margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
+/* Google's own button: white, its four-colour G, in both themes */
+.gbtn { gap: 10px; border-color: #dadce0; border-radius: 10px; background: #fff; color: #1f1f1f; font-weight: 600; }
+.gbtn svg { width: 18px; height: 18px; }
+@media (max-width: 1099px) {   /* the phone: a sheet from the bottom */
+  #acct { width: min(100%, 520px); max-width: none; margin: auto auto 0; border-radius: 20px 20px 0 0; }
+  #acct > div { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  #acct[open] { animation: rise .28s cubic-bezier(0.32, 0.72, 0, 1); }
+}
+@keyframes rise { from { transform: translateY(100%); } }
 @media (min-width: 1100px) {
+  #acctBar { display: none; }
+  #rail #acctRail { display: flex; margin-top: auto; justify-content: flex-start; gap: 10px; min-height: 42px; padding: 0 10px; border: 0; border-radius: 8px;
+    background: transparent; color: var(--muted); font-size: 15px; font-weight: 600; }
+  #rail #acctRail.in { color: var(--text); }
+  #acctRail:hover { background: var(--raised); }
+  body.railmini #rail #acctRail { justify-content: center; padding: 0; }
+  #rail #acctRail + #themeRail { margin-top: 0; }
+  #acct.in { margin: auto auto 16px 250px; border: 1px solid var(--line); }   /* the account: a popover beside its row, no dimming */
+  body.railmini #acct.in { margin-left: 82px; }
+  #acct.in::backdrop { background: transparent; }
   #themeBar { display: none; }
   #rail #themeRail { display: flex; margin-top: auto; justify-content: flex-start; gap: 10px; min-height: 42px; padding: 0 10px; border: 0; border-radius: 8px;
     background: transparent; color: var(--muted); font-size: 15px; font-weight: 600; }
@@ -1116,7 +1156,7 @@ canvas { max-width: 100%; }
 
 /* Reduced motion: nothing travels or grows; fades stay. */
 @media (prefers-reduced-motion: reduce) {
-  #solved[open], #about[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring, #mb > i, #minoTimer.hit, #mjTimer.hit { animation: none; stroke-dashoffset: 0; }
+  #solved[open], #about[open], #acct[open], #solved .tick path, #tb.won button svg, #nb.won .nk, .nring, #mb > i, #minoTimer.hit, #mjTimer.hit { animation: none; stroke-dashoffset: 0; }
   #minoTimer.hit::after, #mjTimer.hit::after { animation: none; opacity: 0; }
   .mt, .mt.gone { transition: opacity .15s, visibility 0s .15s; transform: none; }
   #mb > i.hold::after { animation: none; --p: 1; }

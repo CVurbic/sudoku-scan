@@ -309,6 +309,73 @@ async function lbFlush() {
   }
   return true;
 }
+
+// --- Prijava: Google through Supabase Auth, plain fetch like the Ljestvica (ponytail: no supabase-js for four
+// calls). Google sends the browser back with the tokens in the address (#access_token=…); they live in
+// localStorage.sudokuAuth and are refreshed a minute before they run out. The project's Site URL belongs to
+// another app, so redirect_to is always given (localhost works once it is on the project's Redirect URLs).
+// Odjava forgets only the tokens: everything played stays on the device. ---
+const AUTH = 'https://fgllmnemukhouwyebfop.supabase.co/auth/v1/';
+const authGet = () => { try { return JSON.parse(localStorage.sudokuAuth || 'null'); } catch { return null; } };
+const authSet = a => { try { a ? localStorage.sudokuAuth = JSON.stringify(a) : localStorage.removeItem('sudokuAuth'); } catch {} showAcct(); };
+const authApi = (path, o = {}) => fetch(AUTH + path, { ...o, headers: { apikey: LB_KEY, 'Content-Type': 'application/json', ...o.headers } });
+function signIn() {
+  const back = location.hostname === 'localhost' ? location.origin + location.pathname : 'https://cvurbic.github.io/sudoku-scan/';
+  location.href = AUTH + 'authorize?provider=google&redirect_to=' + encodeURIComponent(back);
+}
+// A fresh access token; null when signed out, offline at expiry, or the refresh was refused (then signed out).
+async function authToken() {
+  const a = authGet();
+  if (!a) return null;
+  if (a.expires_at - 60 > Date.now() / 1000) return a.access_token;
+  const r = await authApi('token?grant_type=refresh_token', { method: 'POST', body: JSON.stringify({ refresh_token: a.refresh_token }) }).catch(() => null);
+  if (!r || r.status >= 500) return null;   // no network: keep the session for later
+  if (!r.ok) { authSet(null); return null; }
+  const t = await r.json();
+  authSet({ ...a, access_token: t.access_token, refresh_token: t.refresh_token, expires_at: t.expires_at });
+  return t.access_token;
+}
+function signOut() {
+  const a = authGet();
+  authSet(null);
+  if (a) authApi('logout', { method: 'POST', headers: { Authorization: 'Bearer ' + a.access_token } }).catch(() => {});
+}
+// Back from Google: the tokens out of the address at once, then whose they are.
+async function authReturn() {
+  const h = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+  if (!h.has('access_token') && !h.has('error')) return;
+  history.replaceState(null, '', location.pathname);
+  if (!h.has('access_token')) return say('Prijava nije uspjela: ' + (h.get('error_description') || h.get('error')), Infinity);
+  const at = h.get('access_token'), r = await authApi('user', { headers: { Authorization: 'Bearer ' + at } }).catch(() => null);
+  if (!r?.ok) return say('Prijava nije uspjela. Pokušaj ponovno.', Infinity);
+  const u = await r.json();
+  authSet({ access_token: at, refresh_token: h.get('refresh_token'), expires_at: +h.get('expires_at') || Date.now() / 1000 + +h.get('expires_in'), id: u.id, email: u.email });
+  say(`Prijavljen si kao *${u.email}*.`);
+}
+// The rail's row (bar's icon on the phone) and its dialog: Google when signed out, the account and Odjava when in.
+// The name is the Ljestvica's (sudokuName), else the email's first part.
+function showAcct() {
+  const a = authGet(), name = lbName() || a?.email.split('@')[0] || '';
+  for (const b of [$('acctRail'), $('acctBar')]) {
+    b.classList.toggle('in', !!a);
+    b.querySelector('.av').textContent = (name[0] || '').toUpperCase();
+    b.title = b.ariaLabel = a ? 'Račun: ' + a.email : 'Prijava';
+  }
+  $('acctRail').querySelector('.t').textContent = a ? name : 'Prijava';
+  $('acct').classList.toggle('in', !!a);
+  $('acctWho').hidden = !name;
+  $('acctWho').querySelector('.av').textContent = (name[0] || '').toUpperCase();
+  $('acctName').textContent = name;
+  $('acctSub').textContent = a ? a.email : 'Ime na ljestvici ostaje isto';
+  $('acctFine').textContent = a ? 'Odjava ne briše ništa s ovog uređaja.' : 'Bez prijave sve ostaje samo na ovom uređaju.';
+}
+for (const b of [$('acctRail'), $('acctBar')]) b.onclick = () => { showAcct(); $('acct').showModal(); };
+$('acct').onclick = e => { if (e.target === $('acct')) $('acct').close(); };   // the backdrop (the content sits in a div)
+$('acctGoogle').onclick = signIn;
+$('acctOut').onclick = () => { signOut(); $('acct').close(); say('Odjavljen si. Sve odigrano ostaje na ovom uređaju.'); };
+showAcct();
+authReturn();
+
 // A day and level's top n as list rows, your own (mine: { name, ms }) marked, or below them if you are
 // further down (equal times share a place). mine.ghost: solved on a later day, not on the board: your row
 // where it would have been, "(3)", the others keeping theirs. → { rows, all: players, place: yours }; rejects when it did not load.
