@@ -1212,6 +1212,49 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   await unsheet();
   assert.strictEqual(await dragSheet(150), false, 'sheet: dragged down, closed');
   console.log(`live: frozen, rot ${frozen.rot}, tap + pad fix, printed/own toggle, Potvrdi → game, ⋯: candidates, explanation, paper check, restart; answers kept, one history entry`);
+  // Sinkronizacija (sync.js): the merge loses nothing, in either order, and twice is once.
+  const sp = await cam.newPage();
+  await sp.goto('http://localhost:8768/');
+  const sy = await sp.evaluate(() => {
+    const S = (v, at = {}) => ({ v: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typeof x === 'string' ? x : JSON.stringify(x)])), at });
+    const J = (M, k) => JSON.parse(M.v[k]);
+    const board = (o) => ({ date: '2026-11-23', elapsed: 0, solvedAt: null, ...o });
+    const A = S({ sudokuDailyDone: { '2026-11-20/0': { ms: 500 }, '2026-11-21/1': { ms: 900 } }, nitDone: { '2026-11-22': 40 },
+      tangoDone: { '2026-11-20': 61, '2026-11-23': [30, null, 90] }, pasDone: { '2026-11-23': 5000 },
+      sudokuHistory: [{ key: 'a', last: 5 }, { key: 'b', last: 9, done: 'x' }],
+      sudokuDays: { '2026-11-23': [board({ elapsed: 50, solvedAt: 1 }), null, board({ elapsed: 10 })] },
+      tangoDaily1: board({ elapsed: 80, solvedAt: 7 }), minoDaily: board({ date: '2026-11-22', elapsed: 99, solvedAt: 3 }),
+      tangoGame: { g: 'computer' }, sudokuName: 'Chiki' }, { tangoDaily1: 10, tangoGame: 100 });
+    const B = S({ sudokuDailyDone: { '2026-11-20/0': { ms: 400 }, '2026-11-22/2': { ms: 1200 } }, nitDone: { '2026-11-23': 35 },
+      tangoDone: { '2026-11-20': [null, 70, 20], '2026-11-23': [25, 44, null] }, pasDone: { '2026-11-23': 3000 },
+      sudokuHistory: [{ key: 'b', last: 12, done: 'y' }, { key: 'c', last: 1 }],
+      sudokuDays: { '2026-11-23': [board({ elapsed: 20 }), board({ elapsed: 5 }), board({ elapsed: 30 })], '2026-11-22': [null, board({ solvedAt: 2 }), null] },
+      tangoDaily1: board(), minoDaily: board({ elapsed: 4 }),   // the phone only looked at today: fresh, and changed later
+      tangoGame: { g: 'phone' }, sudokuName: '' }, { tangoDaily1: 999, tangoGame: 50 });
+    const AB = syncMerge(A, B), BA = syncMerge(B, A), ABB = syncMerge(AB, B);
+    const same = (X, Y) => SYNC_KEYS.every(k => X.v[k] === Y.v[k]);
+    const loses = Object.keys(A.v).filter(k => SYNC_DONE.includes(k) && Object.keys(J(A, k)).some(d => !(d in J(AB, k))));
+    return { commute: SYNC_KEYS.filter(k => k !== 'tangoGame' && AB.v[k] !== BA.v[k]), idem: same(AB, ABB), loses,
+      done: J(AB, 'sudokuDailyDone'), nit: J(AB, 'nitDone'), tango: J(AB, 'tangoDone'), pas: J(AB, 'pasDone'),
+      hist: J(AB, 'sudokuHistory').map(e => e.key + (e.done || '')), days: J(AB, 'sudokuDays'),
+      td1: J(AB, 'tangoDaily1').solvedAt, mino: J(AB, 'minoDaily').date, game: J(AB, 'tangoGame').g, name: AB.v.sudokuName,
+      unknownLocal: J(syncMerge(S({ tangoGame: { g: 'here' } }), S({ tangoGame: { g: 'there' } })), 'tangoGame').g };
+  });
+  assert.deepStrictEqual(sy.commute, [], 'sync: the same in either order');
+  assert.ok(sy.idem && !sy.loses.length, 'sync: twice is once, nothing dropped');
+  assert.deepStrictEqual(sy.done, { '2026-11-20/0': { ms: 400 }, '2026-11-21/1': { ms: 900 }, '2026-11-22/2': { ms: 1200 } }, 'sync: done = union, the better ms');
+  assert.deepStrictEqual(sy.nit, { '2026-11-22': 40, '2026-11-23': 35 }, 'sync: nitDone union');
+  assert.deepStrictEqual(sy.tango, { '2026-11-20': [null, 61, 20], '2026-11-23': [25, 44, 90] }, 'sync: tangoDone per level, old number = Srednje');
+  assert.deepStrictEqual(sy.pas, { '2026-11-23': 3000 }, 'sync: pasDone lower pScore');
+  assert.deepStrictEqual(sy.hist, ['by', 'a', 'c'], 'sync: history union, newer entry, newest first');
+  assert.deepStrictEqual(sy.days['2026-11-23'].map(l => l && [l.elapsed, !!l.solvedAt]), [[50, true], [5, false], [30, false]], 'sync: days per level, solved then longer');
+  assert.ok(sy.days['2026-11-22'][1].solvedAt, 'sync: a day only the other device has');
+  assert.strictEqual(sy.td1, 7, 'sync: a fresh daily changed later never beats a solved one');
+  assert.strictEqual(sy.mino, '2026-11-23', 'sync: the newer day\'s daily');
+  assert.strictEqual(sy.game, 'computer', 'sync: Nova igra changed last wins');
+  assert.strictEqual(sy.name, 'Chiki', 'sync: a name beats none');
+  assert.strictEqual(sy.unknownLocal, 'here', 'sync: no times yet: the local one');
+  console.log('sync: unions, better results, solved dailies kept, either order, idempotent');
   await cam.close(); fs.unlinkSync(mjpeg); server.close();
   console.log('ALL OK');
 })().catch(e => { console.error(e.message); process.exit(1); });

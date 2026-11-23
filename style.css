@@ -103,6 +103,9 @@ body { margin: 0 auto; max-width: 520px; min-height: 100dvh; display: flex; flex
 #acct .who .av { display: grid; width: 44px; height: 44px; font-size: 18px; }
 #acct .who > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 #acct .who small { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; }
+#acct .stat { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 14px; }
+#acct:not(.in) .stat { display: none; }
+#acct .stat.off .adot { background: var(--control); }
 #acct .fine { margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
 /* Google's own button: white, its four-colour G, in both themes */
 .gbtn { gap: 10px; border-color: #dadce0; border-radius: 10px; background: #fff; color: #1f1f1f; font-weight: 600; }

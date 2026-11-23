@@ -307,6 +307,7 @@ async function lbFlush() {
     q.shift();
     try { localStorage.sudokuLbQueue = JSON.stringify(q); } catch {}
   }
+  if (authGet()) claimDevice();
   return true;
 }
 
@@ -351,6 +352,15 @@ async function authReturn() {
   const u = await r.json();
   authSet({ access_token: at, refresh_token: h.get('refresh_token'), expires_at: +h.get('expires_at') || Date.now() / 1000 + +h.get('expires_in'), id: u.id, email: u.email });
   say(`Prijavljen si kao *${u.email}*.`);
+  claimDevice();
+  syncStart();   // sync.js
+}
+// The Ljestvica's rows sent from this device (sudokuDevice, never served) become the account's. Inserts stay
+// anonymous, so again after every send while signed in.
+async function claimDevice() {
+  const t = await authToken(), dev = (() => { try { return localStorage.sudokuDevice; } catch {} })();
+  if (t && dev) fetch(LB.replace('scores?', 'rpc/claim_device'), { method: 'POST', body: JSON.stringify({ dev }),
+    headers: { apikey: LB_KEY, Authorization: 'Bearer ' + t, 'Content-Profile': 'sudokuscan', 'Content-Type': 'application/json' } }).catch(() => {});
 }
 // The rail's row (bar's icon on the phone) and its dialog: Google when signed out, the account and Odjava when in.
 // The name is the Ljestvica's (sudokuName), else the email's first part.
@@ -367,6 +377,9 @@ function showAcct() {
   $('acctWho').querySelector('.av').textContent = (name[0] || '').toUpperCase();
   $('acctName').textContent = name;
   $('acctSub').textContent = a ? a.email : 'Ime na ljestvici ostaje isto';
+  const t = typeof syncedAt === 'number' && syncedAt, min = t && Math.round((Date.now() - t) / 60000);   // sync.js
+  $('acctSync').classList.toggle('off', !t);
+  $('acctSync').lastChild.textContent = !t ? 'Još nije spremljeno' : min < 1 ? 'Spremljeno upravo' : `Spremljeno prije ${min} min`;
   $('acctFine').textContent = a ? 'Odjava ne briše ništa s ovog uređaja.' : 'Bez prijave sve ostaje samo na ovom uređaju.';
 }
 for (const b of [$('acctRail'), $('acctBar')]) b.onclick = () => { showAcct(); $('acct').showModal(); };
