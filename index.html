@@ -112,20 +112,19 @@
     <button id="tilePas" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="2.5" y="4" width="10" height="14" rx="1.8" fill="#b8322a" transform="rotate(-12 7.5 11)"/><rect x="9" y="3.5" width="10.5" height="14.5" rx="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/><path d="M14.25 14.6l-2.7-2.6a1.65 1.65 0 012.7-1.9 1.65 1.65 0 012.7 1.9z" fill="#c2352b"/></svg><b>Pasijans</b><small></small></button>
     <button id="tileMj" class="tile"><svg viewBox="0 0 22 22" aria-hidden="true"><rect x="7.5" y="1.5" width="11" height="14" rx="2" fill="#546e7a"/><rect x="3.5" y="6" width="11" height="14.5" rx="2" fill="#546e7a"/><rect x="3.5" y="6" width="9.8" height="13.3" rx="1.8" fill="#f6f0e1" stroke="#1b1b1a" stroke-opacity=".25"/><circle cx="8.4" cy="12.6" r="3.3" fill="none" stroke="#1d5fbf" stroke-width="1.6"/><circle cx="8.4" cy="12.6" r="1.3" fill="#c2352b"/></svg><b>Mahjong</b><small></small></button>
   </div>
-  <!-- Danas: Igre on a big screen (with the rail), the tiles as cards with today's state, the board and the last sudokus. -->
+  <!-- Danas: Igre on a big screen (with the rail): a card per game with its picture, state and today's podium; the last sudokus. -->
   <div id="today">
     <div class="dhead"><p id="dDate"></p><h1>Danas</h1></div>
     <div class="dcards">
-      <div class="dcard"><div class="dtop" data-tile="tileSudoku"><b>Sudoku</b></div><ul id="dSudoku"></ul><button id="dSudokuGo" class="go"></button></div>
-      <div class="dcard"><div class="dtop" data-tile="tileTango"><b>Dinango</b></div><ul id="dTango"></ul><button id="dTangoGo" class="go"></button></div>
+      <button class="gcard" id="gSud" data-g="sud"><span class="gart"><span class="gbadge"></span><b>Sudoku</b></span><span class="gbody"><span class="glv"></span><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gDin" data-g="din"><span class="gart"><span class="gbadge"></span><b>Dinango</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><button id="dXwDay" hidden><span class="cal"></span><span><b></b><small></small></span></button><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
-      <div class="dcard"><div class="dtop" data-tile="tileNit"><b>Nit</b></div><ul id="dNit"></ul><button id="dNitGo" class="go"></button></div>
-      <div class="dcard"><div class="dtop" data-tile="tileMino"><b>Minolovac</b></div><ul id="dMino"></ul><button id="dMinoGo" class="go"></button></div>
-      <div class="dcard"><div class="dtop" data-tile="tilePas"><b>Pasijans</b></div><ul id="dPas"></ul><button id="dPasGo" class="go"></button></div>
-      <div class="dcard"><div class="dtop" data-tile="tileMj"><b>Mahjong</b></div><ul id="dMj"></ul><button id="dMjGo" class="go"></button></div>
+      <button class="gcard" id="gNit" data-g="nit"><span class="gart"><span class="gbadge"></span><b>Nit</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gMino" data-g="min"><span class="gart"><span class="gbadge"></span><b>Minolovac</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gPas" data-g="pas"><span class="gart"><span class="gbadge"></span><b>Pasijans</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gMj" data-g="mj"><span class="gart"><span class="gbadge"></span><b>Mahjong</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
     </div>
     <div class="drow">
-      <div class="dpanel"><h2>Ljestvica · danas</h2><ul id="dRanks"></ul></div>
       <div class="dpanel"><h2>Nedavno</h2><ul id="dRecent" class="hlist"></ul></div>
     </div>
   </div>

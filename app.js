@@ -109,36 +109,66 @@ document.querySelectorAll('.theme').forEach(b => b.onclick = () => {
 showTheme();
 addEventListener('keydown', e => { if (e.key === '[' && !e.target.closest('input, textarea') && matchMedia('(min-width: 1100px)').matches) railFold(); });
 
-// Danas (Igre with the rail): each game's card with today's state and one button, the board's leaders, the last sudokus.
+// Danas (Igre with the rail): a card per game (its picture, name and state; the whole card plays), today's top three
+// on a podium under it, the last sudokus.
+// A game's picture, drawn from its own pieces in its colour (currentColor): mockups/danas-kartice.html V6.
+const D_ART = {
+  sud: () => { let s = ''; const f = [0, 4, 8, 10, 15, 21, 23, 30, 33, 38, 40, 44, 47, 52, 56, 60, 63, 67, 70, 76, 80];
+    for (let i = 0; i < 81; i++) s += `<rect x="${i % 9 * 10 + (i % 9 / 3 | 0) * 2}" y="${(i / 9 | 0) * 10 + (i / 27 | 0) * 2}" width="9" height="9" rx="1.5" fill="currentColor" opacity="${f.includes(i) ? .9 : .14}"/>`;
+    return `<svg viewBox="0 0 94 94">${s}</svg>`; },
+  din: () => { let s = ''; const m = 'ESEDSDDESEDSSDDESEEDSESDDSEDSEESDSED';
+    for (let i = 0; i < 36; i++) { const x = i % 6 * 16 + 8, y = (i / 6 | 0) * 16 + 8;
+      s += `<rect x="${x - 7.5}" y="${y - 7.5}" width="15" height="15" rx="3" fill="currentColor" opacity=".1"/>`;
+      if (m[i] === 'E') s += `<ellipse cx="${x}" cy="${y + .5}" rx="4.2" ry="5.3" fill="currentColor"/>`;
+      if (m[i] === 'D') s += `<circle cx="${x}" cy="${y}" r="4.6" fill="none" stroke="currentColor" stroke-width="2"/>`; }
+    return `<svg viewBox="0 0 96 96">${s}</svg>`; },
+  nit: () => { let s = ''; for (let i = 0; i < 36; i++) s += `<circle cx="${i % 6 * 16 + 8}" cy="${(i / 6 | 0) * 16 + 8}" r="2" fill="currentColor" opacity=".25"/>`;
+    const p = [[0,0],[1,0],[2,0],[2,1],[1,1],[0,1],[0,2],[0,3],[1,3],[1,2],[2,2],[3,2],[3,1],[3,0],[4,0],[5,0],[5,1],[4,1],[4,2],[5,2],[5,3],[4,3],[3,3],[2,3]].map(([x, y]) => `${x * 16 + 8},${y * 16 + 8}`).join(' ');
+    return `<svg viewBox="0 0 96 96">${s}<polyline points="${p}" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="8" r="5" fill="currentColor"/></svg>`; },
+  min: () => { let s = ''; const g = '..1F2...1222..1x1....111.......1221..';
+    for (let i = 0; i < 36; i++) { const x = i % 6 * 16, y = (i / 6 | 0) * 16, c = g[i] || '.', open = c !== 'x' && c !== 'F' && (i % 6 + (i / 6 | 0)) % 3 !== 0;
+      s += `<rect x="${x + .5}" y="${y + .5}" width="15" height="15" rx="2.5" fill="currentColor" opacity="${open ? .08 : .35}"/>`;
+      if (open && /\d/.test(c)) s += `<text x="${x + 8}" y="${y + 12}" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">${c}</text>`;
+      if (c === 'F') s += `<path d="M${x + 6} ${y + 13}V${y + 3}l6 3-6 3" fill="currentColor"/>`; }
+    return `<svg viewBox="0 0 96 96">${s}</svg>`; },
+  pas: () => `<svg viewBox="0 0 110 90">${[-18, -6, 6, 18].map((r, i) => `<rect x="37" y="12" width="36" height="52" rx="4" transform="rotate(${r} 55 95)" fill="${i === 3 ? 'var(--surface)' : 'currentColor'}" opacity="${i === 3 ? 1 : .25 + i * .2}" stroke="currentColor" stroke-width="${i === 3 ? 1.5 : 0}"/>`).join('')}<path d="M68 47l-5-4.7a3 3 0 0 1 5-3.4 3 3 0 0 1 5 3.4z" fill="#c2352b" transform="rotate(18 55 95)"/></svg>`,
+  mj: () => `<svg viewBox="0 0 96 90">${[[0,2,0],[1,2,0],[2,2,0],[3,2,0],[.5,1,0],[1.5,1,0],[2.5,1,0],[1,0,0],[2,0,0],[1,1.2,1],[2,1.2,1],[1.5,.6,2]].map(([x, y, z]) => { const X = 8 + x * 20 - z * 3, Y = 10 + y * 24 - z * 3;
+    return `<rect x="${X + 2}" y="${Y + 2}" width="18" height="23" rx="3" fill="currentColor" opacity=".55"/><rect x="${X}" y="${Y}" width="18" height="23" rx="3" fill="var(--surface)" stroke="currentColor" stroke-opacity=".5"/><circle cx="${X + 9}" cy="${Y + 11.5}" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/>`; }).join('')}</svg>`,
+};
+document.querySelectorAll('.gcard').forEach(c => c.querySelector('.gart').insertAdjacentHTML('afterbegin', D_ART[c.dataset.g]()));
+// The podium under a card: 2 · 1 · 3 from lbRows' rows (null: it did not load); above it a line: the note (Sudoku's level),
+// and your place when you are not on the podium.
+function throne(el, b, note) {
+  const top = b ? b.rows.filter(r => !r.classList.contains('apart')) : [], apart = b?.rows.find(r => r.classList.contains('apart'));
+  const step = p => { const r = top[p - 1], [, name = '', time = ''] = r ? [...r.children].map(x => x.textContent) : [];
+    const s = Object.assign(document.createElement('span'), { className: `p${p}${r ? '' : ' empty'}${r?.classList.contains('me') ? ' me' : ''}` });
+    s.append(...[[name.slice(0, 1).toUpperCase(), 'av'], [name, 'nm'], [time, 'tm'], [p, 'step']].map(([t, k]) => Object.assign(document.createElement('span'), { textContent: t, className: k })));
+    return s; };
+  el.querySelector('.gline').textContent = [note, !b ? 'Nije se učitalo' : !b.all ? 'Još nitko' : apart && `Ti si ${b.place}. · ${apart.children[2].textContent}`].filter(Boolean).join(' · ');
+  el.querySelector('.podium').replaceChildren(step(2), step(1), step(3));
+}
 let todayAsk = 0;
 function showToday() {
   const li = (a, b, cls = '') => { const x = document.createElement('li'); x.append(...[a, b].map((t, i) => Object.assign(document.createElement('span'), { textContent: t, className: i ? cls : '' }))); return x; };
-  // A row's sign: a sudoku level's stairs, or Dinango's / Nit's / Minolovac's / Pasijans's / Mahjong's own picture (one daily each, no levels)
-  const dot = (el, l) => { el.firstChild.prepend(l < 3 ? stairs(l) : Object.assign($(['tileTango', 'tileNit', 'tileMino', 'tilePas', 'tileMj'][l - 3]).firstChild.cloneNode(true), { classList: 'tmark' })); return el; };
   $('dDate').textContent = new Date().toLocaleDateString('hr', { weekday: 'long', day: 'numeric', month: 'long' });
-  const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt);
-  $('dSudoku').replaceChildren(...DAILY.map(([name], i) => dot(li(name, levelText(lv[i]), lv[i]?.solvedAt ? 'solved' : 'muted'), i)));
-  Object.assign($('dSudokuGo'), next < 0 ? { textContent: 'Nova igra', onclick: () => go('menu') } : { textContent: `Igraj ${DAILY[next][0].toLowerCase()}`, onclick: () => openDaily(next) });
-  const t = tLoad('tangoDaily'), tDone = t?.date === dayKey() && t.solvedAt, run = streak(Object.keys(tangoDone()));
-  $('dTango').replaceChildren(li('Dnevni', tDone ? `Riješeno za ${clock(t.elapsed)} ✓` : t?.date === dayKey() && t.elapsed ? `U tijeku · ${clock(t.elapsed)}` : 'Čeka', tDone ? 'solved' : 'muted'),
-    ...run ? [li('Niz', daysWord(run) + ' zaredom')] : []);
-  Object.assign($('dTangoGo'), tDone ? { textContent: 'Nova igra', onclick: () => tangoGame() } : { textContent: 'Igraj dnevni', onclick: () => openTango() });
-  const n = tLoad('nitDaily'), nDone = n?.date === dayKey() && n.solvedAt, nRun = streak(Object.keys(nitDone()));
-  $('dNit').replaceChildren(li('Dnevni', nDone ? `Riješeno za ${clock(n.elapsed)} ✓` : n?.date === dayKey() && n.elapsed ? `U tijeku · ${clock(n.elapsed)}` : 'Čeka', nDone ? 'solved' : 'muted'),
-    ...nRun ? [li('Niz', daysWord(nRun) + ' zaredom')] : []);
-  Object.assign($('dNitGo'), nDone ? { textContent: 'Nova igra', onclick: () => nitGame() } : { textContent: 'Igraj dnevni', onclick: () => openNit() });
-  const m = tLoad('minoDaily'), mDone = m?.date === dayKey() && m.solvedAt, mRun = streak(Object.keys(minoDone()));
-  $('dMino').replaceChildren(li('Dnevni', mDone ? `Riješeno za ${clock(m.elapsed)} ✓` : m?.date === dayKey() && m.elapsed ? `U tijeku · ${clock(m.elapsed)}` : 'Čeka', mDone ? 'solved' : 'muted'),
-    ...mRun ? [li('Niz', daysWord(mRun) + ' zaredom')] : []);
-  Object.assign($('dMinoGo'), mDone ? { textContent: 'Nova igra', onclick: () => minoGame() } : { textContent: 'Igraj dnevni', onclick: () => openMino() });
-  const p = tLoad('pasDaily'), pDone = p?.date === dayKey() && p.endedAt, pRun = streak(Object.keys(pasDone()));
-  $('dPas').replaceChildren(li('Dnevni', pDone ? `${pasLine(pasDone()[p.date])} ✓` : p?.date === dayKey() && p.elapsed ? `U tijeku · ${clock(p.elapsed)}` : 'Čeka', pDone ? 'solved' : 'muted'),
-    ...pRun ? [li('Niz', daysWord(pRun) + ' zaredom')] : []);
-  Object.assign($('dPasGo'), pDone ? { textContent: 'Nova igra', onclick: () => pasGame() } : { textContent: 'Igraj dnevni', onclick: () => openPas() });
-  const j = tLoad('mjDaily'), jDone = j?.date === dayKey() && j.solvedAt, jRun = streak(Object.keys(mjDays()));
-  $('dMj').replaceChildren(li('Dnevni', jDone ? `Riješeno za ${clock(j.elapsed)} ✓` : j?.date === dayKey() && j.elapsed ? `U tijeku · ${clock(j.elapsed)}` : 'Čeka', jDone ? 'solved' : 'muted'),
-    ...jRun ? [li('Niz', daysWord(jRun) + ' zaredom')] : []);
-  Object.assign($('dMjGo'), jDone ? { textContent: 'Nova igra', onclick: () => mjGame() } : { textContent: 'Igraj dnevni', onclick: () => openMj() });
+  // Sudoku: three bars; its podium is the last level solved today, else the next one to play
+  const lv = loadDays().levels, next = lv.findIndex(st => !st?.solvedAt), solved = lv.filter(st => st?.solvedAt).length;
+  const sLv = lv.reduce((a, st, i) => st?.solvedAt ? i : a, Math.max(next, 0));
+  $('gSud').querySelector('.glv').replaceChildren(...DAILY.map((_, i) => Object.assign(document.createElement('i'), { className: lv[i]?.solvedAt ? 'done' : '' })));
+  // the others: today's saved game, done or going; ms: your number on the board
+  const one = (key, done = g => g.solvedAt) => { const g = tLoad(key), on = g?.date === dayKey(); return { done: on && !!done(g), going: on && !!g.elapsed, ms: g?.elapsed }; };
+  const t = one('tangoDaily'), n = one('nitDaily'), m = one('minoDaily'), p = one('pasDaily', g => g.endedAt), j = one('mjDaily');
+  p.ms = pasDone()[dayKey()];
+  const daily = (id, level, d, open, again, text = clock(d.ms ?? 0)) => ({ id, level, ms: d.done ? d.ms : null, badge: d.done ? ['✓ ' + text, 'ok'] : [d.going ? 'Nastavi' : 'Igraj', ''], open: d.done ? again : open });
+  const cards = [
+    { id: 'gSud', level: sLv, ms: lv[sLv]?.solvedAt ? lv[sLv].elapsed : null, note: DAILY[sLv][0], badge: [solved === 3 ? '✓ 3 od 3' : `${solved} od 3`, solved === 3 ? 'ok' : ''],
+      open: () => next < 0 ? go('menu') : openDaily(next) },
+    daily('gDin', 3, t, openTango, tangoGame), daily('gNit', 4, n, openNit, nitGame), daily('gMino', 5, m, openMino, minoGame),
+    daily('gPas', 6, p, openPas, pasGame, p.ms != null ? pScoreText(p.ms) : ''), daily('gMj', 7, j, openMj, mjGame)];
+  for (const c of cards) {
+    Object.assign($(c.id).querySelector('.gbadge'), { textContent: c.badge[0], className: 'gbadge ' + c.badge[1] });
+    $(c.id).onclick = () => c.open();
+  }
   const games = xwGames(), keys = xwOwn(games).sort((a, b) => games[b].at - games[a].at), topics = xwGet('xwTopics'), day = xwDay();
   // The daily crossword on top: its sheet, topic and where it stands; then your topics (two beside it, else three).
   $('dXwDay').hidden = !day;
@@ -159,15 +189,10 @@ function showToday() {
     : open ? { textContent: `Nastavi: ${topics[open].tema}`, onclick: () => xwOpen(open) } : { textContent: 'Odaberi temu', onclick: () => go('xw') });
   const recent = saved().slice(0, 3);
   $('dRecent').replaceChildren(...recent.length ? recent.map(historyItem) : [li('Još nema sudokua', '', 'muted')]);
-  // The board: today's fastest per daily (sudoku's three, Dinango, Nit, Minolovac, Pasijans, Mahjong), asked anew each time (8 small requests).
+  // The podiums: each card's top three and you (6 small requests), asked anew each time.
   const ask = ++todayAsk;
-  Promise.all([0, 1, 2, 3, 4, 5, 6, 7].map(l => lbRows(dayKey(), l, 1).catch(() => null))).then(res => {
-    if (ask !== todayAsk) return;
-    $('dRanks').replaceChildren(...res.map((b, l) => {
-      const top = b?.rows[0], name = lvName(l)[0].toUpperCase() + lvName(l).slice(1);
-      return dot(li(top ? `${name} · ${top.children[1].textContent}` : name, !b ? 'Nije se učitalo' : top ? top.children[2].textContent : 'Još nitko', top ? 'time' : 'muted'), l);
-    }));
-  });
+  for (const c of cards) lbRows(dayKey(), c.level, 3, c.ms != null && lbName() ? { name: lbName(), ms: c.ms } : undefined)
+    .catch(() => null).then(b => ask === todayAsk && throne($(c.id), b, c.note));
 }
 $('tabGames').onclick = () => go('games');
 $('tabPast').onclick = () => go('past');

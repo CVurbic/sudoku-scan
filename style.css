@@ -18,6 +18,8 @@
   --negative: #b3261e; --bad-bg: #fbdcd8; --beam: #fbeae8;
   --unsure-bg: #ffe6a0; --unsure-ink: #5f4200;
   --easy: #2f8a4c; --medium: #c99a06; --hard: #d9681c; --expert: #c2352b;   /* difficulty bands */
+  --c-sud: #1d5fbf; --t-sud: #e6eefa; --c-din: #d0782a; --t-din: #fbefe2; --c-nit: #7a4fc4; --t-nit: #efe8fa;   /* Danas: each game's colour and tint */
+  --c-min: #c2352b; --t-min: #f9e7e5; --c-pas: #1f6b3a; --t-pas: #e3f1e7; --c-mj: #2f7d6d; --t-mj: #e2f1ee;
   --board: #e4eedd; --cell: #ffffff; --given: #d3e3c8; --sign: #3d6b3f;   /* Dinango: the field, its eggs and dinos */
   --dg: #5bb662; --dg2: #3f9a4b; --dgl: #b9e3ad; --egg: #fff1d9; --egg2: #dcc093; --eye: #2a2420; --cheek: #ff8da1;
   --calendar: #c8352b;   /* the daily crossword's calendar sheet */
@@ -38,6 +40,8 @@
   --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
   --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
   --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
+  --c-sud: #7fa8f0; --t-sud: #18243a; --c-din: #f0a35e; --t-din: #33241a; --c-nit: #b393f0; --t-nit: #261e38;
+  --c-min: #f07b70; --t-min: #361b19; --c-pas: #6fcf8f; --t-pas: #163020; --c-mj: #6cc9b5; --t-mj: #142e29;
   --board: #1c261c; --cell: #232822; --given: #2e3d2c; --sign: #a7d3a0; --egg2: #c9b48f;
   --calendar: #d9493e;
   --n1: #7fa8f0; --n2: #4fc1c3; --n3: #5cc47e; --n4: #e8bf3a; --n5: #f08a45; --n6: #ff6f61; --n7: #e98bb8;
@@ -53,6 +57,8 @@
     --negative: #ff8b80; --bad-bg: #4b1f1c; --beam: #2d1c1b;
     --unsure-bg: #4a3b0c; --unsure-ink: #ffd66b;
     --easy: #5cc47e; --medium: #e8bf3a; --hard: #f08a45; --expert: #ff6f61;
+    --c-sud: #7fa8f0; --t-sud: #18243a; --c-din: #f0a35e; --t-din: #33241a; --c-nit: #b393f0; --t-nit: #261e38;
+    --c-min: #f07b70; --t-min: #361b19; --c-pas: #6fcf8f; --t-pas: #163020; --c-mj: #6cc9b5; --t-mj: #142e29;
     --board: #1c261c; --cell: #232822; --given: #2e3d2c; --sign: #a7d3a0; --egg2: #c9b48f;
     --calendar: #d9493e;
     --n1: #7fa8f0; --n2: #4fc1c3; --n3: #5cc47e; --n4: #e8bf3a; --n5: #f08a45; --n6: #ff6f61; --n7: #e98bb8;
@@ -791,8 +797,6 @@ canvas { max-width: 100%; }
   .drow { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; align-items: start; }
   .dpanel { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 16px; background: var(--surface); }
   .dpanel h2 { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-  #dRanks li { padding: 6px 0; border-top: 1px solid var(--line); }
-  #dRanks li:first-child { border-top: 0; }
   #dRecent { padding: 0; }
   #dRecent li { background: var(--ground); }
   #dRecent li:not(:has(.hrow)) { background: none; }
@@ -854,11 +858,43 @@ canvas { max-width: 100%; }
   .drow { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; align-items: start; }
   .dpanel { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 16px; background: var(--surface); }
   .dpanel h2 { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-  #dRanks li { padding: 6px 0; border-top: 1px solid var(--line); }
-  #dRanks li:first-child { border-top: 0; }
   #dRecent { padding: 0; }
   #dRecent li { background: var(--ground); }
   #dRecent li:not(:has(.hrow)) { background: none; }
+
+  /* Danas cards (mockups/danas-kartice.html V6): the game's picture on its tint, its name on it, the state in a badge;
+     under it today's podium, standing on the card's floor so every podium in a row ends on one line. */
+  .gcard { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; grid-column: span 2; min-height: 0; padding: 0;
+    overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--text); text-align: left; font-weight: 400;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .05), 0 6px 16px -10px rgb(0 0 0 / .12); transition: transform .16s ease-out, box-shadow .16s ease-out; }
+  .gcard:hover { transform: translateY(-2px); box-shadow: 0 1px 2px rgb(0 0 0 / .05), 0 12px 24px -12px rgb(0 0 0 / .25); }
+  .gcard:active { transform: scale(.985); }
+  #gSud { --c: var(--c-sud); --t: var(--t-sud); } #gDin { --c: var(--c-din); --t: var(--t-din); } #gNit { --c: var(--c-nit); --t: var(--t-nit); }
+  #gMino { --c: var(--c-min); --t: var(--t-min); } #gPas { --c: var(--c-pas); --t: var(--t-pas); } #gMj { --c: var(--c-mj); --t: var(--t-mj); }
+  .gart { position: relative; display: grid; place-items: center; height: 150px; background: var(--t); color: var(--c); }
+  .gart svg { height: 96px; width: auto; opacity: .9; }
+  .gart::after { content: ""; position: absolute; inset: 50% 0 0; background: linear-gradient(transparent, var(--t)); }
+  .gart b { position: absolute; z-index: 1; left: 16px; bottom: 10px; font-size: 22px; letter-spacing: -0.02em; }
+  .gbadge { position: absolute; z-index: 1; top: 12px; right: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .gbadge.ok { color: var(--positive); }
+  .gbody { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 16px; }
+  .glv { display: flex; gap: 6px; }   /* Sudoku's three levels: a bar each, coloured when solved */
+  .glv i { flex: 1; height: 6px; border-radius: 3px; background: var(--raised); }
+  .glv i.done { background: var(--c); }
+  .throne { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  .gline { color: var(--muted); font-size: 13px; text-align: center; }
+  .gline:empty { display: none; }
+  .podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 6px; text-align: center; font-size: 13px; }
+  .podium > span { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+  .podium .av { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--t); color: var(--c); font-weight: 700; }
+  .podium .p1 .av { width: 42px; height: 42px; box-shadow: 0 0 0 2px var(--medium); }
+  .podium .me .av { background: var(--c); color: var(--surface); }
+  .podium .nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .podium .tm { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .podium .empty .av { visibility: hidden; }
+  .podium .empty .nm::before, .podium .empty .tm::before { content: "\00a0"; }   /* an empty step keeps its height */
+  .podium .step { width: 100%; padding-top: 4px; border-radius: 6px 6px 0 0; background: var(--t); color: var(--c); font-weight: 700; line-height: 1; }
+  .podium .p1 .step { height: 38px; } .podium .p2 .step { height: 28px; } .podium .p3 .step { height: 20px; }
 
   /* Križaljke: the question on top, your topics and Popularno side by side */
   #xw { max-width: 1080px; padding-bottom: 40px; }

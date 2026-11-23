@@ -944,8 +944,16 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
-  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, dSudoku.children.length, dXw.textContent.includes('Knjigovodstvo'), /^DnevniRiješeno za \d+:\d\d ✓$/.test(dNit.firstChild.textContent), dNitGo.textContent, getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length, /^DnevniRiješeno za \d+:\d\d ✓$/.test(dMino.firstChild.textContent), dMinoGo.textContent]),
-    ['flex', 'none', 3, true, true, 'Nova igra', 6, true, 'Nova igra'], 'rail: shown, no tab bar, Danas with the dailies, the crossword, Nit and Minolovac (three, then two)');
+  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, gSud.querySelectorAll('.glv i').length, dXw.textContent.includes('Knjigovodstvo'), /^✓ \d+:\d\d$/.test(gNit.querySelector('.gbadge').textContent), getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length, /^✓ \d+:\d\d$/.test(gMino.querySelector('.gbadge').textContent), [...document.querySelectorAll('.gcard svg')].length, getComputedStyle(gNit).display]),
+    ['flex', 'none', 3, true, true, 6, true, 6, 'flex'], 'rail: shown, no tab bar, Danas: a card per game with its picture, Nit and Minolovac solved in the badge (three cards a row)');
+  // every card's podium: three steps, loaded or not, ending on one line in a row
+  await page.mouse.move(0, 0);   // no card lifted by hover
+  await new Promise(r => setTimeout(r, 300));
+  await page.waitForFunction(() => [...document.querySelectorAll('.gcard .podium')].every(p => p.children.length === 3), { timeout: 15000 });
+  assert.ok(await page.evaluate(() => { const rows = {}; for (const c of document.querySelectorAll('.gcard')) (rows[Math.round(c.getBoundingClientRect().top)] ??= new Set()).add(Math.round(c.querySelector('.podium').getBoundingClientRect().bottom)); return Object.values(rows).every(b => b.size === 1); }), 'Danas: the podiums of a row end on one line');
+  await page.evaluate(() => gNit.click());
+  assert.strictEqual(await page.evaluate(() => view), 'nit', 'Danas: a solved card opens Nova igra');
+  await page.evaluate(() => go('games'));
   await page.evaluate(() => rail.querySelector('[data-v="tango"]').click());   // not by position: the rail is still animating its width
   assert.deepStrictEqual(await page.evaluate(() => [view, document.body.classList.contains('railmini')]), ['tango', true], 'rail: a game folds it');
   await page.evaluate(() => rail.querySelector('[data-v="games"]').click());
