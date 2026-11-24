@@ -133,12 +133,19 @@ function drawNit() {
   $('nitNew').hidden = !ng.solvedAt;
 }
 
-// The thread to cell k: back to it if it is on the thread already; else one step on from the end, if a
-// neighbour without a wall between, not a knot out of turn, and the thread doesn't end on the last knot yet.
-function nTo(k) {
+// The thread to cell k: back to it if it is on the thread already (a drag only within the piece since the
+// last knot reached, or the piece before when the end is on that knot: no crossing a done piece; a tap or
+// Backspace goes back anywhere); else one step on
+// from the end, if a neighbour without a wall between, not a knot out of turn, and the thread doesn't end on the last knot yet.
+function nTo(k, back) {
   const line = ng.line, at = line.indexOf(k), head = line.at(-1);
   if (k < 0 || ng.solvedAt) return false;
-  if (at >= 0) { if (at === line.length - 1) return false; line.length = at + 1; return true; }
+  if (at >= 0) {
+    const ks = line.flatMap((c, i) => ng.knots.includes(c) ? [i] : []);
+    const fixed = ks.at(-1) === line.length - 1 ? ks.at(-2) ?? 0 : ks.at(-1);   // back on a knot → the piece before opens
+    if (at === line.length - 1 || (!back && at < fixed)) return false;
+    line.length = at + 1; return true;
+  }
   const wall = ng.walls.some(([a, z]) => (a === head && z === k) || (a === k && z === head));
   const turn = line.filter(c => ng.knots.includes(c)).length, num = ng.knots.indexOf(k);
   if (!nNear(head).includes(k) || wall || head === ng.knots.at(-1) || (num >= 0 && num !== turn)) return false;
@@ -146,11 +153,11 @@ function nTo(k) {
   return true;
 }
 // A finger moves faster than the cells: walk to it one cell at a time, the longer way first.
-function nToward(k) {
+function nToward(k, back) {
   for (let n = 0; n < 12 && k >= 0; n++) {
     const h = ng.line.at(-1);
     if (h === k) return;
-    if (ng.line.includes(k)) return void nTo(k);
+    if (ng.line.includes(k)) return void nTo(k, back);
     const dr = (k / N_SIZE | 0) - (h / N_SIZE | 0), dc = k % N_SIZE - h % N_SIZE;
     const rows = dr ? h + Math.sign(dr) * N_SIZE : -1, cols = dc ? h + Math.sign(dc) : -1;
     const [first, then] = Math.abs(dr) >= Math.abs(dc) ? [rows, cols] : [cols, rows];
@@ -166,7 +173,7 @@ $('nb').onpointerdown = e => {
   if (ng.solvedAt || nDrag) return;   // a second finger is ignored
   nDrag = ng.line.slice();
   $('nb').setPointerCapture(e.pointerId);
-  nToward(nAt(e));
+  nToward(nAt(e), true);   // a tap on the thread takes it back there, a drag can't cross a fixed piece
   drawNit();
 };
 $('nb').onpointermove = e => {
@@ -187,7 +194,7 @@ $('nb').onkeydown = e => {
   const step = { ArrowUp: -N_SIZE, ArrowDown: N_SIZE, ArrowLeft: -1, ArrowRight: 1 }[e.key], h = ng.line.at(-1), before = ng.line.slice();
   if (step === undefined && e.key !== 'Backspace') return;
   e.preventDefault();
-  if (e.key === 'Backspace') { if (ng.line.length > 1) nTo(ng.line.at(-2)); }
+  if (e.key === 'Backspace') { if (ng.line.length > 1) nTo(ng.line.at(-2), true); }
   else if ((step !== -1 || h % N_SIZE) && (step !== 1 || h % N_SIZE < N_SIZE - 1)) nTo(h + step);
   if (before.join() !== ng.line.join()) { nUndo.push(before); nChanged(); }
 };

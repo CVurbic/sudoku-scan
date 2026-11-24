@@ -580,8 +580,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   console.log('tango: Igre first, three boards per date (unique, Savjet finishes them, line steps by level), the Dinango page, solo daily, red rules, card → next level, tile, Povijest, game at a level with Savjet');
 
   // 1d2. Nit: the tile opens today's board, the thread starts on 1. A drag (the mouse as a finger, cells skipped
-  //      by a fast move walked one by one) draws it; a knot out of turn stops it; dragging back over it takes it
-  //      back; Poništi undoes a drag; the whole path solves it → the knots pop, the card, the tile says ✓.
+  //      by a fast move walked one by one) draws it; a knot out of turn stops it; a tap on it takes it back, a drag
+  //      only within the piece since the last knot; Poništi undoes a drag; the whole path solves it → the knots pop, the card, the tile says ✓.
   await page.click('#tabGames');
   await page.click('#tileNit');
   assert.deepStrictEqual(await page.evaluate(() => [view, nitName.textContent, ng.date === dayKey(), ng.line.length]), ['nit', 'Nit · dnevni', true, 1], 'nit: the daily on 1');
@@ -600,8 +600,20 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await nLine(), nPath.slice(0, 12).join(), 'nit: the drag draws the thread');
   const outOfTurn = await page.evaluate(() => { const k = ng.knots.at(-1); return nNear(ng.line.at(-1)).includes(k) ? null : (nTo(k), ng.line.at(-1) === k); });
   assert.notStrictEqual(outOfTurn, true, 'nit: the last knot out of turn stops the thread');
-  await nDrag([nPath[11], nPath[10], nPath[9]]);
-  assert.strictEqual(await nLine(), nPath.slice(0, 10).join(), 'nit: back over the thread takes it back');
+  await nDrag([nPath[9]]);
+  assert.strictEqual(await nLine(), nPath.slice(0, 10).join(), 'nit: a tap on the thread takes it back');
+  // A drag can't cross a piece between two knots, only the piece since the last one; a tap or Backspace can.
+  assert.deepStrictEqual(await page.evaluate(() => {
+    const was = ng.line, p2 = ng.path.indexOf(ng.knots[1]);
+    ng.line = ng.path.slice(0, p2 + 3);
+    const r = [nTo(ng.path[p2 - 1]), ng.line.length - p2, nTo(ng.path[p2 + 1]), ng.line.length - p2];
+    ng.line = ng.path.slice(0, p2 + 3);
+    r.push(nTo(ng.path[p2 - 1], true), ng.line.length - p2);
+    ng.line = ng.path.slice(0, p2 + 3);
+    r.push(nTo(ng.path[p2]), nTo(ng.path[p2 - 1]), ng.line.length - p2);   // back to 2, on into 1→2
+    ng.line = was;
+    return r;
+  }), [false, 3, true, 2, true, 0, true, true, 0], 'nit: a fixed piece stops a drag, a tap goes back, back on a knot opens the piece before');
   await page.click('#nUndoBtn');
   assert.strictEqual(await nLine(), nPath.slice(0, 12).join(), 'nit: Poništi undoes the last drag');
   await nDrag(nPath.slice(11));
