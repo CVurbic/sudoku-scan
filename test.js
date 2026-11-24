@@ -366,7 +366,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.deepStrictEqual(board[2].slice(0, 4), ['p1:1|P0|0:00', 'p2:2|P1|0:00', 'p2:2|P2|0:00', ':4|P3|0:00'], 'board: top, shared place, medals');
   assert.ok(/^me apart:7\|Chris\|\d+:\d\d$/.test(board[2][5]), 'board: your row ' + board[2][5]);
   // The climb before it: all six faster, nobody to pass → landed at once, everyone dark, the place as the board's.
-  assert.deepStrictEqual(await page.evaluate(() => [lboard.dataset.climb, lbClimb.hidden, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbPlot.querySelectorAll('.cdot.ahead').length, lbLive.ariaHidden]),
+  assert.deepStrictEqual(await page.evaluate(() => [lboard.dataset.climb, lbClimb.hidden, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbPlot.querySelectorAll('.cfig.ahead').length, lbLive.ariaHidden]),
     ['done', false, '7.', '7. od 7 danas', 'Riješeno, i to se broji', 6, null], 'climb: nobody slower, straight to the place');
   // The queue: kept offline, sent when back; a second send of the same (409) is done with too.
   const queue = await page.evaluate(async () => {
@@ -402,11 +402,26 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     const mid = [lboard.dataset.climb, lbLive.ariaHidden];
     lbPlot.dispatchEvent(new MouseEvent('click'));   // an svg has no .click()
     await wait(() => lboard.dataset.climb === 'done');
-    const r = [...mid, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbClock.textContent, lbPlot.querySelectorAll('.cdot.beaten').length, lbPlot.querySelectorAll('.cdot.ahead').length, lbList.children.length];
+    const r = [...mid, lbPlace.textContent, lbLine.textContent, lbSub.textContent, lbClock.textContent, lbPlot.querySelectorAll('.cfig.beaten').length, lbPlot.querySelectorAll('.cfig.ahead').length, lbList.children.length];
     lbDb.splice(lbDb.findIndex(x => x.level === 2), 5);
     return r;
   });
   assert.deepStrictEqual(climb, [null, 'true', '4.', '4. od 6 danas', 'Iza tebe: 2 igrača', '0:05', 2, 3, 6], 'climb: tapped, landed on the board\'s place');
+  // The top three: the run stops at 4th, the podium takes over; tapped, it lands at once (2nd: the third flies off; 1st: crowned).
+  const podium = await page.evaluate(async () => {
+    const wait = f => new Promise(r => { const t = () => f() ? r() : setTimeout(t, 20); t(); }), out = [];
+    lbDb.push(...[1000, 2000, 3000, 9e6, 8e6].map((ms, i) => ({ day: dayKey(), level: 2, name: 'Q' + i, ms, device: 'q' + i })));
+    for (const ms of [1500, 500]) {
+      lbShow(dayKey(), 2, ms);
+      await wait(() => !lbClimb.hidden && lboard.dataset.climb !== 'done');
+      lbPlot.dispatchEvent(new MouseEvent('click'));
+      await wait(() => lboard.dataset.climb === 'done');
+      out.push([lbPlace.textContent, lbPlace.className, lbLine.textContent, lbSub.textContent, lbPlot.querySelectorAll('.cstep').length, [...lbPlot.querySelectorAll('.ccrown')].at(-1).style.opacity]);
+    }
+    lbDb.splice(lbDb.findIndex(x => x.level === 2), 5);
+    return out;
+  });
+  assert.deepStrictEqual(podium, [['2.', 'p2', '2. od 6 danas', 'Q2 ispada s postolja', 3, '0'], ['1.', 'p1', '1. od 6 danas', 'Q0 pada s trona', 3, '1']], 'climb: the podium');
   await page.click('#solvedMenu');
   // The menu's Ljestvica: the strip's day, one level: top eight + you (marked where your own record says so),
   // medals on the podium; another level; yesterday from the strip. Under it, your places on the last 7 days.
@@ -726,7 +741,10 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   assert.strictEqual(await page.evaluate(() => pg.waste.length), 1, 'pas: no undo on the daily');
   // a column's card onto another (set up: 9♦ under 10♠ there), by a tap, then one dragged back
   const C = n => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'].indexOf(n.slice(0, -1)) + 13 * 'SHDC'.indexOf(n.slice(-1));
-  await page.evaluate(([a, b, c]) => { pg.cols[0] = [a]; pg.cols[1] = [pg.cols[1][0], b]; pg.cols[2] = [pg.cols[2][0], pg.cols[2][1], c]; pg.down[0] = 0; drawPas(); }, [C('9D'), C('10S'), C('10C')]);
+  // swapped in, not copied: the day's deal may already show one of them (24. 11.: a 9♦ face up in column 5 took the tap)
+  await page.evaluate(put => { put.forEach((card, k) => { const old = pg.cols[k][k];
+    for (const pile of [...pg.cols, pg.waste, pg.stock]) { const i = pile.indexOf(card); if (i >= 0) pile[i] = old; }
+    pg.cols[k][k] = card; }); pg.down[0] = 0; drawPas(); document.getAnimations().forEach(a => a.finish()); }, [C('9D'), C('10S'), C('10C')]);   // a swapped card slides (FLIP): tap where it lands
   await page.mouse.click(...await pAt('[data-at="c0.0"]'));
   assert.deepStrictEqual(await page.evaluate(() => [pg.cols[0].length, pg.cols[1].length]), [0, 3], 'pas: a tap sends the card to a column it fits');
   await new Promise(r => setTimeout(r, 300));   // the slide (FLIP) over

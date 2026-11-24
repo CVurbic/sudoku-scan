@@ -454,77 +454,172 @@ async function lbShow(day, level, ms) {
   const mine = times.findIndex(r => r.name === name && r.ms === ms);   // your own row is in (sent above): the others without it
   runClimb(times.filter((_, i) => i !== mine), ms, ask, () => $('lbList').replaceChildren(...b.rows));
 }
-// The climb. others: [{ name, ms }] today at this level, without you. Few (under 20 with you): a dot each, the
-// name of the one just passed, the place; more: a histogram and the percent slower than you. Waits for the card
-// to be open (Dinango and Nit open it later); a tap on the line, reduced motion, nobody to pass or the card
-// closed: straight to the end. then(): the top five, once it has landed.
+// The climb. others: [{ name, ms }] today at this level, without you. A line, the slow end left, the fast right:
+// you run right from the slow end. Few (under 20 with you): a stick figure each, knocked flat as you pass, the
+// name of the one just passed, the place; more: a histogram and the percent slower than you. In the top three the
+// run stops at 4th and the podium (2-1-3) takes over: you fly in as a spinning ball and take your step, the one hit
+// flies to the next step down and knocks that one on, the third flies off ("Ajme!"); first gets a crown (mockup
+// notes/mockups/podij.html, V2 Let). Waits for the card to be open (Dinango and Nit open it later); a tap on the
+// line, reduced motion, nobody to pass or the card closed: everything left at once. then(): the top five, once landed.
 function runClimb(others, ms, ask, then) {
-  const W = 320, Y = 52, n = others.length, few = n + 1 < 20, all = [...others.map(o => o.ms), ms].sort((a, b) => a - b);
+  others = [...others].sort((a, b) => a.ms - b.ms);
+  const W = 320, G = 96, Z = 1.3, n = others.length, few = n + 1 < 20, all = [...others.map(o => o.ms), ms].sort((a, b) => a - b);
   // the slow end: the slowest (few) or the 95th percentile, so one left open overnight does not squash the rest
   let lo = all[0], hi = Math.max(ms, few ? all.at(-1) : all[Math.floor(.95 * (all.length - 1))]);
   const pad = (hi - lo) * .08 || 5000; lo -= pad; hi += pad;
-  const x = s => 14 + (Math.min(hi, Math.max(lo, s)) - lo) / (hi - lo) * (W - 28);
-  const faster = others.filter(o => o.ms < ms).length, place = faster + 1;
-  let marks = '';
-  if (few) marks = others.map((o, i) => `<circle class="cdot" cx="${x(o.ms)}" cy="${Y}" r="8" style="transition-delay:0s,0s,${i * 50}ms"/>`).join('');
-  else {
-    const B = 24, w = (hi - lo) / B, bins = Array(B).fill(0), bw = (W - 28) / B;
-    others.forEach(o => bins[Math.max(0, Math.min(B - 1, (o.ms - lo) / w | 0))]++);
-    const mx = Math.max(...bins);
-    marks = bins.map((c, i) => c ? `<rect class="cbar" data-ms="${lo + (i + .5) * w}" x="${14 + i * bw + 1}" y="${Y - c / mx * 32}" width="${bw - 2}" height="${c / mx * 32}" rx="1.5" style="transition-delay:0s,0s,${i * 16}ms"/>` : '').join('');
-  }
-  $('lbPlot').innerHTML = `<line class="cax" x1="0" x2="${W}" y1="${Y}" y2="${Y}"/>${marks}
-    <g id="lbCur"><line class="cmk" x1="0" x2="0" y1="16" y2="${Y}"/><circle class="cme" cx="0" cy="${Y}" r="${few ? 10 : 7}"/><text class="cyou" x="0" y="11">ti</text></g>
-    <text class="ctk" x="0" y="82">brže</text><text class="ctk" x="${W}" y="82" text-anchor="end">sporije</text>`;
-  const items = [...$('lbPlot').querySelectorAll('.cdot, .cbar')].map((el, i) => ({ el, ms: few ? others[i].ms : +el.dataset.ms, name: few ? others[i].name : '' }));
-  const live = $('lbLive'), cur = $('lbCur'), bump = (el, s, d) => el.animate([{ transform: 'scale(1)' }, { transform: `scale(${s})` }, { transform: 'scale(1)' }], { duration: d, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+  const x = s => 16 + (hi - Math.min(hi, Math.max(lo, s))) / (hi - lo) * (W - 32);
+  const faster = others.filter(o => o.ms < ms).length, place = faster + 1, top3 = place <= 3;
+  const plot = $('lbPlot'), live = $('lbLive'), gone = () => ask !== climbAsk;
+  const mk = (tag, a, parent = plot) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in a) e.setAttribute(k, a[k]); parent.append(e); return e; };
+  const short = s => s.length > 9 ? s.slice(0, 8) + '…' : s;
   const set = (s, p, sub) => {
     $('lbClock').textContent = lvClock(lbNow?.level, s);
-    cur.setAttribute('transform', `translate(${x(s)} 0)`);
     $('lbPlace').textContent = few ? p + '.' : Math.round(100 * others.filter(o => o.ms > s).length / n) + '%';
     $('lbLine').textContent = few ? `od ${n + 1} danas` : 'igrača sporije';
     if (sub !== undefined) $('lbSub').textContent = sub;
   };
-  const end = () => {
-    if (ask !== climbAsk) return;
-    items.forEach(i => { i.el.classList.toggle('beaten', i.ms > ms); i.el.classList.toggle('ahead', i.ms < ms); });
-    set(ms, place, !n ? 'Prvi danas' : few ? (n - faster ? `Iza tebe: ${players(n - faster)}` : 'Riješeno, i to se broji') : `${players(n + 1)} danas`);
-    $('lbPlace').className = few && place <= 3 ? 'p' + place : '';
-    $('lbLine').textContent = few ? `${place}. od ${n + 1} danas` : 'igrača sporije';   // the percent is in the circle
+  const bump = (el, s, d) => !skip && el.animate([{ transform: 'scale(1)' }, { transform: `scale(${s})` }, { transform: 'scale(1)' }], { duration: d, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+
+  // A small tween engine: the figures are SVG attributes, redrawn each frame. skip runs whatever is left at once.
+  let anims = [], figs = [], skip = reduced() || (place === n + 1 && !top3), landed = false;   // last: nothing to pass
+  const lerp = (a, b, k) => a + (b - a) * k, EO = t => 1 - (1 - t) ** 3, EQ = t => 1 - (1 - t) ** 4, back = t => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;
+  const run = (d, fn, ease = t => t) => new Promise(res => anims.push({ t0: performance.now(), d, fn, ease, res }));
+  const wait = d => run(d, () => {});
+  const tw = (f, to, d, ease = EO) => { const from = {}; for (const k in to) from[k] = f[k]; return run(d, k => { for (const p in to) f[p] = lerp(from[p], to[p], k); }, ease); };
+  // a jump: x straight on, y on a parabola h above the line between the ends; the props in to along with it
+  const arc = (f, x1, y1, h, d, to = {}, each) => { const x0 = f.x, y0 = f.y, from = {}; for (const k in to) from[k] = f[k];
+    return run(d, k => { f.x = lerp(x0, x1, k); f.y = lerp(y0, y1, k) - h * 4 * k * (1 - k); for (const p in to) f[p] = lerp(from[p], to[p], k); each?.(k); }); };
+  const frame = now => {
+    if (gone()) return;
+    if (!$('solved').open) skip = true;
+    for (const a of [...anims]) { const k = skip || !a.d ? 1 : Math.min(1, (now - a.t0) / a.d); a.fn(a.ease(k), k); if (k === 1) { anims.splice(anims.indexOf(a), 1); a.res(); } }
+    figs.forEach(f => f.draw());
+    if (!landed || anims.length) requestAnimationFrame(frame);
+  };
+  // a stick figure, feet at (x, y); r turns it around (0, rc); sx/sy squash it from the feet
+  const fig = (parent, label, me) => {
+    const root = mk('g', { class: 'cfig' + (me ? ' cme' : '') }, parent), body = mk('g', {}, root), limbs = {};
+    mk('circle', { cy: -21, r: 4.3 }, body); mk('line', { y1: -16.7, y2: -7 }, body);
+    for (const [k, y, l] of [['aL', -14.5, 8], ['aR', -14.5, 8], ['lL', -7, 7], ['lR', -7, 7]]) { limbs[k] = [mk('g', {}, body), y]; mk('line', { y2: l }, limbs[k][0]); }
+    if (label) mk('text', { y: me ? -36 : -30 }, body).textContent = label;
+    const crown = me && mk('path', { class: 'ccrown p1', d: 'M-5 -27l1.5-6 2 3 1.5-4 1.5 4 2-3 1.5 6z' }, body);
+    const f = { x: 0, y: G, r: 0, rc: 0, sx: 1, sy: 1, o: 1, aL: 12, aR: -12, lL: 8, lR: -8, cr: 0, ph: 0, el: root, draw() {
+      root.setAttribute('transform', `translate(${f.x.toFixed(2)} ${f.y.toFixed(2)}) rotate(${f.r.toFixed(1)} 0 ${f.rc})`);
+      body.setAttribute('transform', `scale(${(f.sx * Z).toFixed(3)} ${(f.sy * Z).toFixed(3)})`); root.style.opacity = f.o;
+      for (const k in limbs) limbs[k][0].setAttribute('transform', `translate(0 ${limbs[k][1]}) rotate(${f[k].toFixed(1)})`);
+      if (crown) { crown.style.opacity = f.cr; crown.setAttribute('transform', `translate(0 ${(-18 * (1 - f.cr)).toFixed(1)})`); }
+    } };
+    figs.push(f); return f;
+  };
+  const stand = (f, d = 180) => tw(f, { aL: 12, aR: -12, lL: 8, lR: -8, r: 0, sx: 1, sy: 1 }, d);
+  const stride = (f, dx) => { f.ph += dx * .34; const s = Math.sin(f.ph); f.lL = 34 * s; f.lR = -34 * s; f.aL = -30 * s; f.aR = 30 * s; };
+  const flail = f => k => { f.aL = 140 + 40 * Math.sin(k * 30); f.aR = -140 - 40 * Math.cos(k * 30); };
+  const puff = (cx, cy) => { for (let i = 0; i < 5; i++) { const a = Math.PI * (1 + i / 4), c = mk('circle', { class: 'cpuff', r: 1.8 });
+    run(380, k => { c.setAttribute('cx', cx + Math.cos(a) * 11 * k); c.setAttribute('cy', cy + Math.sin(a) * 6 * k); c.style.opacity = 1 - k; }, EO).then(() => c.remove()); } };
+  const axis = scene => { mk('line', { class: 'cax', x1: 0, x2: W, y1: G, y2: G }, scene); return scene; };
+
+  // The run: everyone today on the line; you from the slow end to your time, or to 4th when the podium waits.
+  const people = [], bars = [];
+  const race = async () => {
+    const scene = axis(mk('g', { class: 'cscene' })), end = top3 ? (others[2].ms + others[3].ms) / 2 : ms;
+    mk('text', { class: 'ctk', y: 114 }, scene).textContent = 'sporije';
+    mk('text', { class: 'ctk', x: W, y: 114, 'text-anchor': 'end' }, scene).textContent = 'brže';
+    if (few) others.forEach((o, i) => { const f = Object.assign(fig(scene), { x: x(o.ms), ms: o.ms, name: o.name, o: 0 }); people.push(f); wait(i * 40).then(() => tw(f, { o: 1 }, 260)); });
+    else {
+      const B = 24, w = (hi - lo) / B, bins = Array(B).fill(0), bw = (W - 32) / B;
+      others.forEach(o => bins[Math.max(0, Math.min(B - 1, (hi - o.ms) / w | 0))]++);
+      const mx = Math.max(...bins);
+      bins.forEach((c, i) => c && bars.push(Object.assign(mk('rect', { class: 'cbar', x: 16 + i * bw + 1, y: G - c / mx * 34, width: bw - 2, height: c / mx * 34, rx: 1.5 }, scene), { ms: hi - (i + .5) * w })));
+    }
+    const me = fig(scene, 'ti', true); me.x = x(hi) - 6; me.r = 7;
+    await wait(450); if (gone()) return;
+    let last = me.x, shown = n + 1, sub;
+    await run(2200, e => {
+      const s = hi + (end - hi) * e;
+      me.x = x(s); stride(me, me.x - last); last = me.x;
+      people.forEach(f => { if (f.ms > s && !f.down) { f.down = 1; f.el.classList.add('beaten'); sub = 'Iza tebe: ' + f.name; puff(f.x - 12, G - 2);
+        tw(f, { r: -90, lL: -40, lR: -70, aL: 70, aR: 20 }, 420, back); } });   // knocked flat, backwards
+      bars.forEach(b => b.classList.toggle('beaten', b.ms > s));
+      const p = others.filter(o => o.ms < s).length + 1;
+      set(s, p, sub);
+      if (few && p !== shown) bump($('lbPlace'), 1.15, 220);
+      shown = p;
+    }, EQ);
+    if (gone()) return;
+    await stand(me);
+    if (top3) { await wait(400); scene.classList.add('out'); return; }
+    if (place === n + 1) return tw(me, { aL: 75, aR: -75 }, 220, back);   // last: a shrug
+    me.aL = 150; me.aR = -150; await arc(me, me.x, G, 10, 300); await stand(me);   // a little hop
+  };
+
+  // The podium: you take your step, everyone below you one step down, the third off the podium.
+  const podium = async () => {
+    const L = { 1: [160, 54], 2: [106, 67], 3: [214, 78] }, scene = axis(mk('g', { class: 'cscene out' })), occ = {};
+    for (const i of [1, 2, 3]) {
+      const [cx, top] = L[i], o = others[i - 1];
+      mk('rect', { class: 'cstep', x: cx - 26, y: top, width: 52, height: G - top + 1, rx: 3 }, scene);
+      mk('rect', { class: 'cpod p' + i, x: cx - 26, y: top, width: 52, height: 4, rx: 2 }, scene);
+      mk('text', { class: 'cnum', x: cx, y: top + 20 }, scene).textContent = i;
+      if (o) occ[i] = Object.assign(fig(scene, short(o.name)), { x: cx, y: top });
+    }
+    const me = fig(scene, 'ti', true); me.x = -12; me.r = 7;
+    scene.getBoundingClientRect(); scene.classList.remove('out');
+    await wait(300); if (gone()) return;
+    let last = me.x;
+    await run(500, k => { me.x = lerp(-12, 40, k); stride(me, me.x - last); last = me.x; }, EO);
+    await stand(me, 140); if (gone()) return;
+    const c0 = n > 3 ? (others[2].ms + others[3].ms) / 2 : hi;
+    const into = async (a, i) => {   // a flies, spinning, onto step i; whoever stood there flies on
+      const [cx, top] = L[i], b = occ[i], mine = a === me;
+      a.rc = -15;
+      if (mine) { await tw(a, { sx: .8, sy: .8, aL: 160, aR: -160, lL: 100, lR: -100 }, 160); run(600, k => $('lbClock').textContent = lvClock(lbNow?.level, lerp(c0, ms, k)), EO); }
+      await arc(a, cx - 4, top, mine ? 34 : 28, mine ? 440 : 480, { r: a.r + (mine ? 720 : 360) }, mine ? null : flail(a));
+      if (gone()) return;
+      a.r = 0; occ[i] = a;
+      if (b) { puff(cx + 6, top - 12); skip || $('solved').animate([{}, { translate: '-4px 2px' }, { translate: '4px -2px' }, { translate: '-2px 1px' }, {}], 260); }
+      const next = !b ? null : i < 3 ? into(b, i + 1) : (async () => {   // the third: off the screen
+        b.rc = -15;
+        const bub = mk('g', { class: 'cbub', transform: `translate(${b.x + 14} ${b.y - 40})` });
+        mk('rect', { x: -18, y: -11, width: 36, height: 16, rx: 8 }, bub); mk('text', { y: 1 }, bub).textContent = 'Ajme!';
+        run(900, (k, t) => bub.style.opacity = t < .75 ? Math.min(1, t * 8) : (1 - t) * 4).then(() => bub.remove());
+        await arc(b, W + 90, -70, 30, 760, { r: 900 }, flail(b)); b.o = 0;
+      })();
+      await tw(a, { x: cx, y: top, sx: 1, sy: 1, aL: mine ? 150 : 12, aR: mine ? -150 : -12, lL: 8, lR: -8 }, 260, back);
+      a.rc = 0;
+      await next;
+    };
+    await into(me, place);
+    if (place === 1) await tw(me, { cr: 1 }, 380, back);
+  };
+
+  const land = () => {
+    if (gone()) return;
+    people.forEach(f => f.el.classList.toggle('ahead', f.ms < ms));
+    bars.forEach(b => { b.classList.toggle('beaten', b.ms > ms); b.classList.toggle('ahead', b.ms < ms); });
+    set(ms, place, !n ? 'Prvi danas' : top3 && place === 1 ? `${others[0].name} pada s trona` : top3 && n >= 3 ? `${others[2].name} ispada s postolja`
+      : few || top3 ? (n - faster ? `Iza tebe: ${players(n - faster)}` : 'Riješeno, i to se broji') : `${players(n + 1)} danas`);
+    if (top3) $('lbPlace').textContent = place + '.';
+    $('lbPlace').className = top3 ? 'p' + place : '';
+    $('lbLine').textContent = few || top3 ? `${place}. od ${n + 1} danas` : 'igrača sporije';   // the percent is in the circle
     live.ariaHidden = null;
-    if (!reduced()) bump($('lbPlace'), 1.25, 300);
+    bump($('lbPlace'), 1.25, 300);
     $('lboard').dataset.climb = 'done';
+    landed = true;
     then();
   };
+  plot.replaceChildren();
   $('lbClimb').hidden = false;
-  $('lbClimb').classList.remove('show');
   $('lbPlace').className = '';
   live.ariaHidden = 'true';   // the count on its way is noise to a screen reader; the place, once landed
-  set(hi, others.filter(o => o.ms < hi).length + 1, few ? '' : `${players(n + 1)} danas`);
-  let skip = reduced() || place === n + 1;   // nobody slower: nothing to pass
-  $('lbPlot').onclick = () => skip = true;
-  const start = () => {
-    if (ask !== climbAsk) return;
+  set(hi, n + 1, few ? '' : `${players(n + 1)} danas`);
+  plot.onclick = () => skip = true;
+  const start = async () => {
+    if (gone()) return;
     if (!$('solved').open) return setTimeout(start, 100);
-    $('lbClimb').classList.add('show');   // everyone in, grey: nobody knows yet
-    if (skip) return end();
-    setTimeout(() => {
-      const t0 = performance.now(), DUR = 2000;
-      let shown = 0;
-      const frame = now => {
-        if (ask !== climbAsk) return;
-        if (skip || !$('solved').open) return end();
-        const k = Math.min(1, (now - t0) / DUR), s = hi + (ms - hi) * (1 - Math.pow(1 - k, 4));   // ease-out quart: slow near the end
-        const p = others.filter(o => o.ms < s).length + 1;
-        let sub;
-        items.forEach(i => { if (i.ms > s && !i.el.classList.contains('beaten')) { i.el.classList.add('beaten'); if (few) { sub = 'Iza tebe: ' + i.name; bump(i.el, 1.35, 280); } } });
-        set(s, p, sub);
-        if (few && shown && p !== shown) bump($('lbPlace'), 1.15, 220);
-        shown = p;
-        if (k < 1) requestAnimationFrame(frame); else setTimeout(end, 350);   // a beat of stillness, then the landing
-      };
-      requestAnimationFrame(frame);
-    }, 450);
+    requestAnimationFrame(frame);
+    if (!top3 || n > 3) await race();   // in the top three with three or fewer others nobody is left to pass
+    if (top3 && !gone()) await podium();
+    land();
   };
   start();
 }
