@@ -9,9 +9,9 @@
 :root {
   color-scheme: light dark;
   --ground: #f4f3f1; --surface: #ffffff; --raised: #e9e8e5; --control: #cfcecb;
-  --text: #121212; --muted: #5e5e5b; --pencil: #4b5057;   /* own entries: graphite, givens: ink */
+  --text: #121212; --muted: #5e5e5b; --pencil: #4b5057;   /* notes: graphite; own entries: blue ink, givens: black on grey */
   --line: #d4d3cf; --box: #121212;                       /* cell lines / 3×3 box lines */
-  --printed: #dcdbd7;                                    /* cells with a printed digit */
+  --printed: #cfcdc8;                                    /* cells with a printed digit */
   --primary: #141414; --on-primary: #ffffff;
   --hue: #1d5fbf; --area: #e3ebf8; --focus: #bfd2f1; --peer: #efeeeb; --same: #d3dff3;
   --positive: #1f6f3a; --hint-bg: #cdebd6;
@@ -33,7 +33,7 @@
 :root[data-theme="dark"] { color-scheme: dark;
   --ground: #111110; --surface: #1b1b1a; --raised: #282826; --control: #3d3d3a;
   --text: #f0efec; --muted: #a9a8a3; --pencil: #c4c7cc;
-  --line: #353533; --box: #d9d8d4; --printed: #33332f;
+  --line: #353533; --box: #d9d8d4; --printed: #3d3d38;
   --primary: #f0efec; --on-primary: #121212;
   --hue: #7fa8f0; --area: #1a2638; --focus: #284572; --peer: #2c2c2a; --same: #23395c;
   --positive: #6fcf8f; --hint-bg: #173a23;
@@ -50,7 +50,7 @@
   :root:not([data-theme="light"]) {
     --ground: #111110; --surface: #1b1b1a; --raised: #282826; --control: #3d3d3a;
     --text: #f0efec; --muted: #a9a8a3; --pencil: #c4c7cc;
-    --line: #353533; --box: #d9d8d4; --printed: #33332f;
+    --line: #353533; --box: #d9d8d4; --printed: #3d3d38;
     --primary: #f0efec; --on-primary: #121212;
     --hue: #7fa8f0; --area: #1a2638; --focus: #284572; --peer: #2c2c2a; --same: #23395c;
     --positive: #6fcf8f; --hint-bg: #173a23;
@@ -243,7 +243,7 @@ span.hrow { display: flex; align-items: center; }   /* a row that opens nothing 
   border: 2px solid var(--box); border-radius: 4px; overflow: hidden; background: var(--surface); container-type: inline-size; }
 #grid input { appearance: none; width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
-  background-color: var(--surface); color: var(--pencil); caret-color: transparent; text-align: center;
+  background-color: var(--surface); color: var(--hue); caret-color: transparent; text-align: center;
   font-family: var(--font); font-weight: 400; line-height: 1.5; font-size: clamp(18px, 6vw, 32px); font-size: 6.4cqi;
   text-decoration-thickness: 2px; text-underline-offset: 0.14em; outline: none; }   /* no transition: picking and lighting happen hundreds of times */
 #grid input:nth-child(9n) { border-right: 0; }
@@ -676,6 +676,9 @@ button:disabled, #file:disabled + label[for="file"].btn { background: var(--rais
 #cands > span { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.4cqi; color: var(--muted);
   font-size: 2.6cqi; font-weight: 500; line-height: 1; text-align: center; align-items: center; }
 #cands.mine > span { color: var(--pencil); }   /* the user's own notes, not the computed candidates */
+/* The highlighted digit (light) in the notes too: blue and bold, by its spot in the 3×3 (empty spots stay empty). */
+#cands[data-hit="1"] > span > :nth-child(1), #cands[data-hit="2"] > span > :nth-child(2), #cands[data-hit="3"] > span > :nth-child(3), #cands[data-hit="4"] > span > :nth-child(4), #cands[data-hit="5"] > span > :nth-child(5), #cands[data-hit="6"] > span > :nth-child(6), #cands[data-hit="7"] > span > :nth-child(7), #cands[data-hit="8"] > span > :nth-child(8), #cands[data-hit="9"] > span > :nth-child(9) {
+  color: var(--hue); font-weight: 700; font-size: 1.35em; }
 /* A step-by-step "why" (X-Wing, Y-Wing): the candidates it points at (k), rules out (x) or sets aside (off),
    and lines between cells, each drawn once when its part opens. */
 #cands .k { color: var(--hue); font-size: 1.45em; font-weight: 700; }

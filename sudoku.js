@@ -119,6 +119,7 @@ function light(k) {
     x.classList.toggle('peer', k !== null && PEERS[k].includes(i));
     x.classList.toggle('same', !!v && x.value === v);
   });
+  $('cands').dataset.hit = v;
 }
 
 // Notes: the user's own small digits per cell (pad "Bilješke"); undo: the board before each change.
