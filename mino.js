@@ -1,8 +1,9 @@
 // --- Minolovac: open every cell without a mine; a number says how many mines touch its cell. A mine costs
-// 30 s and the game goes on. One a day (9 × 12, 20 mines), the same for everyone, opened at the same cell
-// (made from the date, like Nit's); Nova igra in three sizes. Some boards ask for a guess: part of the game.
+// 30 s and the game goes on. One a day per level (up to 26. 11. 2026 one, 9 × 12 / 20), the same for everyone,
+// opened at the same cell (made from the date); Nova igra in the same sizes. Some boards ask for a guess: part of the game.
+// At most 10 wide: a phone's finger (mockups/minolovac-razine.html V3); a wide screen lays the board on its side.
 // A board: { w, h, lv, mines: cells, start: the cell opened first (no mine on it or around it) }. ---
-const M_LV = [['Lagano', 9, 9, 10], ['Srednje', 9, 12, 20], ['Teško', 10, 14, 30]], M_DAILY = 1, M_FINE = 30000;
+const M_LV = [['Lagano', 9, 12, 16], ['Srednje', 10, 15, 28], ['Teško', 10, 18, 40]], M_BOARD = [11, 12, 13], M_FINE = 30000;
 const mNear = (k, w, h) => {
   const r = k / w | 0, c = k % w, out = [];
   for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++)
@@ -40,14 +41,22 @@ const mNew = b => { const g = { ...b, open: [], flag: [], hits: [], elapsed: 0, 
 const M_FLAG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 17V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 3.5l9 3.5-9 3.5z" fill="var(--negative)"/></svg>';
 const M_MINE = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v15M2.5 10h15M4.7 4.7l10.6 10.6M15.3 4.7L4.7 15.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="10" r="5.2" fill="currentColor"/></svg>';
 let mg = null;   // the game on screen
-const mSave = () => { try { localStorage[mg.date ? 'minoDaily' : 'minoGame'] = JSON.stringify(mg); } catch {} };
-const minoDone = () => tLoad('minoDone') || {};   // date → ms (with the fines) of each solved daily
+// The dailies: one per level and day (minoDaily0-2); a game: minoGame.
+const mSave = () => { try { localStorage[mg.date ? 'minoDaily' + mg.lv : 'minoGame'] = JSON.stringify(mg); } catch {} };
+// date → ms (with the fines) of each solved daily: one number up to 26. 11. 2026, then [ms or null] per level (read with tDoneMs).
+const minoDone = () => tLoad('minoDone') || {};
 const mOpenView = which => { try { localStorage.minoOn = which; } catch {} go('mino'); };
-// The Igre tile: today's daily, made on the day's first open.
-function openMino() {
-  mg = tLoad('minoDaily');
-  if (mg?.date !== dayKey()) { mg = { ...mNew(mMake('mino#' + dayKey(), M_DAILY)), date: dayKey() }; mSave(); }
-  mOpenView('daily');
+function mDay(lv) {
+  let g = tLoad('minoDaily' + lv);
+  if (g?.date !== dayKey()) { g = { ...mNew(mMake(`mino#${lv}#${dayKey()}`, lv)), date: dayKey() }; try { localStorage['minoDaily' + lv] = JSON.stringify(g); } catch {} }
+  return g;
+}
+const mToday = () => [0, 1, 2].map(lv => { const g = tLoad('minoDaily' + lv); return g?.date === dayKey() ? g : null; });   // without making any
+// Today's daily at a level; none given: the first not solved (all solved: Teško).
+function openMino(lv) {
+  if (lv === undefined) { lv = mToday().findIndex(g => !g?.solvedAt); if (lv < 0) lv = 2; }
+  mg = mDay(lv);
+  mOpenView('daily' + lv);
 }
 // Nova igra: a random board at level lv (the last one played if none); one started earlier at that level goes on.
 function minoGame(lv) {
@@ -57,22 +66,28 @@ function minoGame(lv) {
   if (!mg || mg.solvedAt || mg.lv !== lv) { mg = mNew(mMake('m' + Math.random(), lv)); mSave(); }
   mOpenView('game');
 }
-$('tileMino').onclick = openMino;
+$('tileMino').onclick = () => openMino();
 $('minoBack').onclick = () => go('games');
 $('minoNew').querySelectorAll('button').forEach((b, i) => { b.prepend(stairs(i)); b.onclick = () => minoGame(i); });
 
+// A wide screen (the board beside its controls) lays a tall board on its side: drawn transposed, the same board.
+const mWide = matchMedia('(min-width: 880px)');
+const mLay = () => mWide.matches && mg.h > mg.w;
+const mAt = d => mLay() ? (d % mg.h) * mg.w + (d / mg.h | 0) : d;   // the cell drawn d-th
+mWide.onchange = () => view === 'mino' && drawMino();
 function drawMino() {
-  const b = $('mb'), shown = new Set(mg.solvedAt ? mg.mines : mg.flag);
-  b.style.setProperty('--w', mg.w);
-  b.style.setProperty('--h', mg.h);
-  b.ariaLabel = `Ploča ${mg.w} × ${mg.h}, ${mg.mines.length} mina`;
-  b.innerHTML = Array.from({ length: mg.w * mg.h }, (_, k) => {
+  const b = $('mb'), shown = new Set(mg.solvedAt ? mg.mines : mg.flag), lay = mLay();
+  b.style.setProperty('--w', lay ? mg.h : mg.w);
+  b.style.setProperty('--h', lay ? mg.w : mg.h);
+  b.ariaLabel = `Ploča ${lay ? mg.h : mg.w} × ${lay ? mg.w : mg.h}, ${mg.mines.length} mina`;
+  b.innerHTML = Array.from({ length: mg.w * mg.h }, (_, d) => {
+    const k = mAt(d);
     if (mg.hits.includes(k)) return `<i class="x">${M_MINE}</i>`;
     if (mg.open.includes(k)) { const n = mCount(mg, k); return `<i class="o${n ? ' k' + n : ''}">${n || ''}</i>`; }
     return `<i class="u">${shown.has(k) ? M_FLAG : ''}</i>`;
   }).join('');
-  $('minoName').textContent = mg.date ? 'Minolovac · dnevni' : `Minolovac · ${M_LV[mg.lv][0]}`;
-  $('minoSide').textContent = mg.date ? new Date(mg.date + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
+  $('minoName').textContent = `Minolovac · ${M_LV[mg.lv][0]}`;
+  $('minoSide').textContent = mg.date ? 'dnevni · ' + new Date(mg.date + 'T12:00').toLocaleDateString('hr', { day: 'numeric', month: 'numeric' }) : '';
   $('minoLeft').lastChild.textContent = mg.solvedAt ? 0 : mg.mines.length - mg.flag.length - mg.hits.length;
   $('minoTimer').textContent = clock(mg.elapsed);
   $('minoNew').hidden = !mg.solvedAt;
@@ -81,7 +96,7 @@ function drawMino() {
 // Input. Mouse: left opens (a number: its neighbours), right flags. Finger: a tap opens, held 400 ms flags
 // (a ring fills meanwhile); a finger that moves off is no tap. The browser's own long-press menu never shows.
 let mPress = null;   // { k, x, y, el, timer }
-const mCell = e => { const el = e.target.closest('#mb > i'); return el ? [...$('mb').children].indexOf(el) : -1; };
+const mCell = e => { const el = e.target.closest('#mb > i'); return el ? mAt([...$('mb').children].indexOf(el)) : -1; };
 function mAct(k, flag) {
   if (k < 0 || mg.solvedAt) return;
   const hits = mg.hits.length;
@@ -112,7 +127,7 @@ $('mb').onpointercancel = mDrop;
 $('mb').oncontextmenu = e => e.preventDefault();
 
 // Solved: the mines show as flags, then the shared card (card = 'mino'): the daily's time with the fines,
-// days in a row and the board (level 5); a game's time.
+// days in a row and the board (levels 11-13; level 5 was the one daily); a game's time.
 const minesWord = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'mina' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'mine' : 'mina'}`;
 function minoSolved() {
   mg.solvedAt = Date.now();
@@ -123,23 +138,31 @@ function minoSolved() {
   $('diffSolved').hidden = $('solvedTechs').hidden = $('lboard').hidden = true;
   const fines = mg.hits.length ? ` (${minesWord(mg.hits.length)}, +${clock(mg.hits.length * M_FINE)})` : '';
   if (mg.date) {
-    const done = minoDone();
-    done[mg.date] = mg.elapsed;
+    const done = minoDone(), L = M_BOARD[mg.lv];
+    done[mg.date] = Object.assign(tDoneMs(done[mg.date]).slice(), { [mg.lv]: mg.elapsed });
     try { localStorage.minoDone = JSON.stringify(done); } catch {}
-    $('solvedText').textContent = `Riješeno za ${clock(mg.elapsed)}${fines} · ${daysWord(streak(Object.keys(done)))} zaredom`;
-    lbNow = { day: mg.date, level: 5, ms: mg.elapsed };
-    if (lbName()) lbQueue(lbNow.day, 5, lbNow.ms);
-    lbShow(lbNow.day, 5, lbNow.ms);
+    $('solvedText').textContent = `${M_LV[mg.lv][0]} · ${clock(mg.elapsed)}${fines} · ${daysWord(streak(Object.keys(done)))} zaredom`;
+    lbNow = { day: mg.date, level: L, ms: mg.elapsed };
+    if (lbName()) lbQueue(lbNow.day, L, lbNow.ms);
+    lbShow(lbNow.day, L, lbNow.ms);
   } else $('solvedText').textContent = `Vrijeme: ${clock(mg.elapsed)}${fines}`;
   minoButtons();
   setTimeout(() => view === 'mino' && $('solved').showModal(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700);
 }
-// The daily: Igre and Podijeli (the place added once the board answers); a game: Igre and the next one.
+// The daily: on to today's next level (Podijeli quiet), all three done: Podijeli (the place added once the board
+// answers); a game: Igre and the next one.
 function minoButtons() {
-  $('solvedClose').hidden = $('solvedLevel').hidden = true;
+  const left = mg.date ? mToday().findIndex(g => !g?.solvedAt) : -1;
+  $('solvedClose').hidden = true;
   $('solvedNext').hidden = !!mg.date;
+  $('solvedLevel').hidden = left < 0;
+  if (left >= 0) {
+    $('solvedLevel').dataset.lvl = left;
+    $('solvedLevel').firstChild.replaceWith(stairs(left));
+    $('solvedLevel').lastChild.textContent = M_LV[left][0];
+  }
   $('solvedShare').hidden = !mg.date;
-  $('solvedShare').classList.remove('quiet');
-  $('solvedShare').lastChild.textContent = 'Podijeli';
-  if (mg.date) dailyShare('Minolovac', mg.date, 5, mg.elapsed);
+  $('solvedShare').classList.toggle('quiet', left >= 0);
+  $('solvedShare').lastChild.textContent = left < 0 ? 'Podijeli' : 'Podijeli rezultat';
+  if (mg.date) dailyShare(`Minolovac ${M_LV[mg.lv][0]}`, mg.date, M_BOARD[mg.lv], mg.elapsed);
 }

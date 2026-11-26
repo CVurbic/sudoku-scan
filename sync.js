@@ -10,7 +10,7 @@
 // ponytail: deletions (Povijest's Obriši) come back from the other devices; tombstones if that bothers anyone.
 
 const SYNC_DONE = ['sudokuDailyDone', 'sudokuDailyLate', 'nitDone', 'minoDone', 'mjDone', 'pasDone', 'tangoDone'];
-const SYNC_BOARD = ['tangoDaily0', 'tangoDaily1', 'tangoDaily2', 'nitDaily', 'minoDaily', 'pasDaily', 'mjDaily'];
+const SYNC_BOARD = ['tangoDaily0', 'tangoDaily1', 'tangoDaily2', 'nitDaily', 'minoDaily0', 'minoDaily1', 'minoDaily2', 'pasDaily', 'mjDaily'];
 const SYNC_LAST = ['sudokuTask', 'tangoGame', 'nitGame', 'minoGame', 'pasGame', 'mjGame', 'sudokuName', 'sudokuTips', 'sudokuQuiet'];
 const SYNC_KEYS = [...SYNC_DONE, ...SYNC_BOARD, ...SYNC_LAST, 'sudokuHistory', 'sudokuDays'];
 const SYNC_SAFE = new Set([...SYNC_DONE, 'sudokuHistory', 'sudokuDays']);   // re-read from localStorage at every write: safe to replace mid-game

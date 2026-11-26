@@ -767,7 +767,8 @@ canvas { max-width: 100%; }
   #nit .controls { grid-area: auto / 2; }
   #mino { display: grid; max-width: none; justify-content: center; align-content: start; column-gap: 48px; padding: 24px 0 32px;
     grid-template-columns: auto 340px; grid-template-rows: repeat(3, auto) 1fr; }
-  #mb { grid-area: 1 / 1 / -1; align-self: start; width: min(var(--col), calc((100dvh - 56px) * var(--w) / var(--h))); }
+  /* not --col's 600px: a board laid on its side (mino.js mLay) takes the width the screen has */
+  #mb { grid-area: 1 / 1 / -1; align-self: start; width: min(1000px, calc(100vw - var(--rail, 0px) - 480px), calc((100dvh - 56px) * var(--w) / var(--h))); }
   #mino > :not(#mb) { grid-column: 2; }
   #mino .controls { grid-area: auto / 2; }
   #minoNew { grid-template-columns: 1fr; }

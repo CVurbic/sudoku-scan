@@ -1155,6 +1155,7 @@ let card = 'sudoku';
 $('solvedLevel').onclick = () => {
   $('solved').close();
   if (card === 'tango' && tNextLv >= 0) return openTango(tNextLv);   // Dinango's next level
+  if (card === 'mino') return openMino(+$('solvedLevel').dataset.lvl);   // Minolovac's
   if (card === 'tango') go('menu');
   openDaily(+$('solvedLevel').dataset.lvl, $('solvedLevel').dataset.day);
 };

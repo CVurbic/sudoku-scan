@@ -654,9 +654,10 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   console.log(`nit: the tile opens the daily, drag (a jump walked: ${jumped} cells), knots in turn, back, Poništi, solved → card (Ljestvica, Podijeli), tile, Povijest, Savjet in a game`);
 
   // 1d3. Minolovac: one board per date and level, its mines off the start and around it. The tile opens today's
-  //      (9 × 12, 20 mines) opened at the start. Mouse: right flags (again unflags), left opens; a number with its
+  //      first daily (Lagano, 9 × 12, 16 mines) opened at the start. Mouse: right flags (again unflags), left opens; a number with its
   //      flags opens the rest around it. Finger: a tap opens, held 400 ms flags. A mine: +30 s, shown, the game goes
-  //      on. A reload goes on; every safe cell open → the card (level 5, the fine in its line), the tile, Povijest; Nova igra.
+  //      on. A reload goes on; every safe cell open → the card (level 11, the fine in its line), on to Srednje (laid on its
+  //      side on a wide screen), the tile, Povijest; Nova igra.
   assert.deepStrictEqual(await page.evaluate(() => [0, 1, 2].flatMap(lv => [...Array(10)].map((_, d) => {
     const a = mMake('mino#2026-11-' + d, lv), [, w, h, n] = M_LV[lv], g = mNew(a);
     return [JSON.stringify(a) === JSON.stringify(mMake('mino#2026-11-' + d, lv)), a.w === w && a.h === h && new Set(a.mines).size === n,
@@ -664,13 +665,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   })).filter(r => r !== 'true,true,true,true')), [], 'mino: same board per date, its size and mines, none at the start, an opening');
   await page.click('#tileMino');
   assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.date === dayKey(), mg.w, mg.h, mg.mines.length, mg.open.includes(mg.start), mb.children.length, minoLeft.textContent]),
-    ['mino', 'Minolovac · dnevni', true, 9, 12, 20, true, 108, '20'], 'mino: the daily, opened at the start');
+    ['mino', 'Minolovac · Lagano', true, 9, 12, 16, true, 108, '16'], 'mino: the daily, opened at the start');
   const mAtCell = k => page.evaluate(k => { const r = mb.children[k].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, k);
   const mClick = async (k, button = 'left') => { const [x, y] = await mAtCell(k); await page.mouse.click(x, y, { button }); };
   const [mSafe, mMine] = await page.evaluate(() => { const edge = k => !mg.open.includes(k) && mNear(k, mg.w, mg.h).some(j => mg.open.includes(j));
     return [[...Array(mg.w * mg.h).keys()].find(k => edge(k) && !mg.mines.includes(k)), mg.mines.find(edge)]; });
   await mClick(mMine, 'right');
-  assert.deepStrictEqual(await page.evaluate(k => [mg.flag.includes(k), !!mb.children[k].querySelector('svg'), minoLeft.textContent], mMine), [true, true, '19'], 'mino: right click flags');
+  assert.deepStrictEqual(await page.evaluate(k => [mg.flag.includes(k), !!mb.children[k].querySelector('svg'), minoLeft.textContent], mMine), [true, true, '15'], 'mino: right click flags');
   await mClick(mMine, 'right');
   assert.strictEqual(await page.evaluate(k => mg.flag.includes(k), mMine), false, 'mino: right click again unflags');
   await mClick(mSafe);
@@ -702,27 +703,39 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     [true, true, true, true, true], 'mino: a mine is +30 s, red, and the game goes on');
   const opened = await page.evaluate(() => mg.open.length);
   await page.reload();
-  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.open.length, mg.hits.length]), ['mino', 'Minolovac · dnevni', opened, 1], 'mino: a reload goes on');
+  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.open.length, mg.hits.length]), ['mino', 'Minolovac · Lagano', opened, 1], 'mino: a reload goes on');
   await page.evaluate(() => [...Array(mg.w * mg.h).keys()].filter(k => !mg.mines.includes(k)).forEach(k => mAct(k, false)));
   await page.waitForFunction(() => solved.open);
-  assert.deepStrictEqual(await page.evaluate(() => [!!mg.solvedAt, /^Riješeno za \d+:\d\d \(1 mina, \+0:30\) · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedNext.hidden,
-    solvedShare.hidden, lboard.hidden, lbNow.level, lbNow.ms === mg.elapsed, shareMsg.text.split('\n')[0].startsWith('Minolovac · '), mb.querySelectorAll('.u svg').length, minoLeft.textContent, minoNew.hidden]),
-    [true, true, 'Igre', true, false, false, 5, true, true, 19, '0', false], 'mino solved: the card with the fine, Ljestvica (level 5), Podijeli; the mines flagged; Nova igra under the board');
-  await page.click('#solvedMenu');
-  assert.deepStrictEqual(await page.evaluate(() => [view, tileMino.lastChild.className, /^✓ \d+:\d\d · 1 dan$/.test(tileMino.lastChild.textContent)]), ['games', 'solved', true], 'mino: the tile says solved');
+  assert.deepStrictEqual(await page.evaluate(() => [!!mg.solvedAt, /^Lagano · \d+:\d\d \(1 mina, \+0:30\) · 1 dan zaredom$/.test(solvedText.textContent), solvedMenu.textContent, solvedNext.hidden,
+    solvedShare.hidden, lboard.hidden, lbNow.level, lbNow.ms === mg.elapsed, shareMsg.text.split('\n')[0].startsWith('Minolovac Lagano · '), mb.querySelectorAll('.u svg').length, minoLeft.textContent, minoNew.hidden,
+    solvedLevel.hidden, solvedLevel.textContent, solvedShare.className]),
+    [true, true, 'Igre', true, false, false, 11, true, true, 15, '0', false, false, 'Srednje', 'quiet'], 'mino solved: the card with the fine, Ljestvica (level 11), on to Srednje; the mines flagged; Nova igra under the board');
+  await page.click('#solvedLevel');
+  assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, mg.date === dayKey(), mg.lv, mg.w, mg.h, mg.mines.length, mb.style.getPropertyValue('--w')]),
+    ['mino', 'Minolovac · Srednje', true, 1, 10, 15, 28, '10'], 'mino: on to today\'s Srednje');
+  // a wide screen: drawn on its side (15 across); a click opens the board's own cell
+  await page.setViewport({ width: 1280, height: 800 });
+  await page.waitForFunction(() => mb.style.getPropertyValue('--w') === '15');
+  const lay = await page.evaluate(() => { const k = [...Array(mg.w * mg.h).keys()].find(k => !mg.open.includes(k) && !mg.mines.includes(k) && k % mg.w !== (k / mg.w | 0));
+    return [k, (k % mg.w) * mg.h + (k / mg.w | 0)]; });
+  await mClick(lay[1]);
+  assert.deepStrictEqual(await page.evaluate(([k, d]) => [mg.open.includes(k), mb.children[d].classList.contains('o'), mb.children.length], lay), [true, true, 150], 'mino: laid on its side, a click opens its cell');
+  await page.setViewport({ width: 800, height: 600 });
+  await page.waitForFunction(() => mb.style.getPropertyValue('--w') === '10');
+  await page.evaluate(() => go('games'));
+  assert.deepStrictEqual(await page.evaluate(() => [tileMino.lastChild.textContent, tileMino.lastChild.className]), ['Dnevni 1 od 3', ''], 'mino: the tile says 1 of 3');
   await page.click('#tabPast');
-  assert.deepStrictEqual(await page.evaluate(() => [minoPast.children.length, minoPastTitle.hidden]), [1, false], 'mino: in Povijest');
+  assert.deepStrictEqual(await page.evaluate(() => [minoPast.children.length, minoPastTitle.hidden, minoPast.querySelector('small').textContent.startsWith('Lagano · ')]), [1, false, true], 'mino: in Povijest');
   await page.click('#tabGames');
-  await page.click('#tileMino');
-  await page.click('#minoNew button:nth-child(3)');
-  assert.deepStrictEqual(await page.evaluate(() => [minoName.textContent, mg.w, mg.h, mg.mines.length, !mg.date, minoNew.hidden]), ['Minolovac · Teško', 10, 14, 30, true, true], 'mino: Nova igra, Teško');
+  await page.evaluate(() => minoGame(2));
+  assert.deepStrictEqual(await page.evaluate(() => [minoName.textContent, mg.w, mg.h, mg.mines.length, !mg.date, minoNew.hidden]), ['Minolovac · Teško', 10, 18, 40, true, true], 'mino: Nova igra, Teško');
   await page.evaluate(() => [...Array(mg.w * mg.h).keys()].filter(k => !mg.mines.includes(k)).forEach(k => mAct(k, false)));
   await page.waitForFunction(() => solved.open);
   assert.deepStrictEqual(await page.evaluate(() => [solvedText.textContent.startsWith('Vrijeme: '), solvedNext.hidden, solvedShare.hidden, lboard.hidden]), [true, false, true, true], 'mino game: the card without a board, Nova igra');
   await page.click('#solvedNext');
   assert.deepStrictEqual(await page.evaluate(() => [view, minoName.textContent, !mg.solvedAt]), ['mino', 'Minolovac · Teško', true], 'mino: Nova igra again at the same level');
   await page.evaluate(() => go('games'));
-  console.log('minolovac: a board per date and level, the tile opens the daily, right click / held finger flags, chord, a mine +30 s, reload, solved → card (level 5), tile, Povijest, Nova igra');
+  console.log('minolovac: a board per date and level, the tile opens the daily, right click / held finger flags, chord, a mine +30 s, reload, solved → card (level 11) → Srednje, laid on its side, tile, Povijest, Nova igra');
 
   // 1d4. Pasijans: a deal per seed (52 different cards, 1–7 in the columns, 24 in the stock); the rules; the solver
   //      picks each day's deal (one it solves) fast; stuck spotted; the board's number (cards first, then time).
@@ -981,8 +994,8 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
   // 1f. A big screen: the rail and Danas; a game folds the rail, leaving it opens it again; the fold is kept.
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluate(() => { localStorage.removeItem('railMini'); go('games'); });
-  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, gSud.querySelectorAll('.glv i').length, dXw.textContent.includes('Knjigovodstvo'), /^✓ \d+:\d\d$/.test(gNit.querySelector('.gbadge').textContent), getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length, /^✓ \d+:\d\d$/.test(gMino.querySelector('.gbadge').textContent), [...document.querySelectorAll('.gcard svg')].length, getComputedStyle(gNit).display]),
-    ['flex', 'none', 3, true, true, 6, true, 6, 'flex'], 'rail: shown, no tab bar, Danas: a card per game with its picture, Nit and Minolovac solved in the badge (three cards a row)');
+  assert.deepStrictEqual(await page.evaluate(() => [getComputedStyle(rail).display, getComputedStyle(tabs).display, gSud.querySelectorAll('.glv i').length, dXw.textContent.includes('Knjigovodstvo'), /^✓ \d+:\d\d$/.test(gNit.querySelector('.gbadge').textContent), getComputedStyle(document.querySelector('.dcards')).gridTemplateColumns.split(' ').length, gMino.querySelector('.gbadge').textContent + ' · ' + gMino.querySelectorAll('.glv i').length, [...document.querySelectorAll('.gcard svg')].length, getComputedStyle(gNit).display]),
+    ['flex', 'none', 3, true, true, 6, '1 od 3 · 3', 6, 'flex'], 'rail: shown, no tab bar, Danas: a card per game with its picture, Nit solved in the badge, Minolovac 1 of 3 with its bars (three cards a row)');
   // every card's podium: three steps, loaded or not, ending on one line in a row
   await page.mouse.move(0, 0);   // no card lifted by hover
   await new Promise(r => setTimeout(r, 300));
@@ -1253,13 +1266,13 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
       tangoDone: { '2026-11-20': 61, '2026-11-23': [30, null, 90] }, pasDone: { '2026-11-23': 5000 },
       sudokuHistory: [{ key: 'a', last: 5 }, { key: 'b', last: 9, done: 'x' }],
       sudokuDays: { '2026-11-23': [board({ elapsed: 50, solvedAt: 1 }), null, board({ elapsed: 10 })] },
-      tangoDaily1: board({ elapsed: 80, solvedAt: 7 }), minoDaily: board({ date: '2026-11-22', elapsed: 99, solvedAt: 3 }),
+      tangoDaily1: board({ elapsed: 80, solvedAt: 7 }), minoDaily1: board({ date: '2026-11-22', elapsed: 99, solvedAt: 3 }),
       tangoGame: { g: 'computer' }, sudokuName: 'Chiki' }, { tangoDaily1: 10, tangoGame: 100 });
     const B = S({ sudokuDailyDone: { '2026-11-20/0': { ms: 400 }, '2026-11-22/2': { ms: 1200 } }, nitDone: { '2026-11-23': 35 },
       tangoDone: { '2026-11-20': [null, 70, 20], '2026-11-23': [25, 44, null] }, pasDone: { '2026-11-23': 3000 },
       sudokuHistory: [{ key: 'b', last: 12, done: 'y' }, { key: 'c', last: 1 }],
       sudokuDays: { '2026-11-23': [board({ elapsed: 20 }), board({ elapsed: 5 }), board({ elapsed: 30 })], '2026-11-22': [null, board({ solvedAt: 2 }), null] },
-      tangoDaily1: board(), minoDaily: board({ elapsed: 4 }),   // the phone only looked at today: fresh, and changed later
+      tangoDaily1: board(), minoDaily1: board({ elapsed: 4 }),   // the phone only looked at today: fresh, and changed later
       tangoGame: { g: 'phone' }, sudokuName: '' }, { tangoDaily1: 999, tangoGame: 50 });
     const AB = syncMerge(A, B), BA = syncMerge(B, A), ABB = syncMerge(AB, B);
     const same = (X, Y) => SYNC_KEYS.every(k => X.v[k] === Y.v[k]);
@@ -1267,7 +1280,7 @@ const server = http.createServer((q, s) => fs.readFile(path.join(__dirname, (u =
     return { commute: SYNC_KEYS.filter(k => k !== 'tangoGame' && AB.v[k] !== BA.v[k]), idem: same(AB, ABB), loses,
       done: J(AB, 'sudokuDailyDone'), nit: J(AB, 'nitDone'), tango: J(AB, 'tangoDone'), pas: J(AB, 'pasDone'),
       hist: J(AB, 'sudokuHistory').map(e => e.key + (e.done || '')), days: J(AB, 'sudokuDays'),
-      td1: J(AB, 'tangoDaily1').solvedAt, mino: J(AB, 'minoDaily').date, game: J(AB, 'tangoGame').g, name: AB.v.sudokuName,
+      td1: J(AB, 'tangoDaily1').solvedAt, mino: J(AB, 'minoDaily1').date, game: J(AB, 'tangoGame').g, name: AB.v.sudokuName,
       unknownLocal: J(syncMerge(S({ tangoGame: { g: 'here' } }), S({ tangoGame: { g: 'there' } })), 'tangoGame').g };
   });
   assert.deepStrictEqual(sy.commute, [], 'sync: the same in either order');

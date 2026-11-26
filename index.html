@@ -134,7 +134,7 @@
       <button class="gcard" id="gDin" data-g="din"><span class="gart"><span class="gbadge"></span><b>Dinango</b></span><span class="gbody"><span class="glv"></span><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <div class="dcard"><div class="dtop" data-tile="tileXw"><b>Križaljke</b></div><button id="dXwDay" hidden><span class="cal"></span><span><b></b><small></small></span></button><ul id="dXw"></ul><button id="dXwGo" class="go"></button></div>
       <button class="gcard" id="gNit" data-g="nit"><span class="gart"><span class="gbadge"></span><b>Nit</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
-      <button class="gcard" id="gMino" data-g="min"><span class="gart"><span class="gbadge"></span><b>Minolovac</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
+      <button class="gcard" id="gMino" data-g="min"><span class="gart"><span class="gbadge"></span><b>Minolovac</b></span><span class="gbody"><span class="glv"></span><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <button class="gcard" id="gPas" data-g="pas"><span class="gart"><span class="gbadge"></span><b>Pasijans</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
       <button class="gcard" id="gMj" data-g="mj"><span class="gart"><span class="gbadge"></span><b>Mahjong</b></span><span class="gbody"><span class="throne"><span class="gline"></span><span class="podium"></span></span></span></button>
     </div>
@@ -440,7 +440,7 @@ if (!openShared()) {   // a shared link wins
     if (task.daily && !daily.solvedAt) openDaily(task.level, task.daily);
   } else if (wasIn === 'tango') localStorage.tangoOn === 'game' ? tangoGame() : openTango(+localStorage.tangoOn?.slice(5) || 0);
   else if (wasIn === 'nit') localStorage.nitOn === 'game' ? nitGame() : openNit();
-  else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino();
+  else if (wasIn === 'mino') localStorage.minoOn === 'game' ? minoGame() : openMino(localStorage.minoOn?.length > 5 ? +localStorage.minoOn[5] : undefined);
   else if (wasIn === 'pas') localStorage.pasOn === 'game' ? pasGame() : openPas();
   else if (wasIn === 'mj') localStorage.mjOn === 'game' ? mjGame() : openMj();
   else if (!XW_OFF && wasIn === 'xwplay' && xwGet('xwGames')[localStorage.xwOn]) xwOpen(localStorage.xwOn);
